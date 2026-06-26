@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Picqer\Barcode\BarcodeGeneratorPNG;
 
+
 // =========================================================
 // Customer Controller
 // =========================================================
