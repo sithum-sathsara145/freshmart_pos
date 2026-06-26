@@ -49,7 +49,7 @@
 
 <div style="display:flex;height:100vh;overflow:hidden">
     {{-- Sidebar --}}
-    <div style="width:210px;background:#161821;border-right:.5px solid #2a2d3a;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto">
+    <div class="app-sidebar" style="width:210px;background:#161821;border-right:.5px solid #2a2d3a;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto">
         {{-- Logo --}}
         <div style="padding:14px 14px 12px;border-bottom:.5px solid #2a2d3a">
             <div style="font-size:15px;font-weight:500;color:#e2e8f0">

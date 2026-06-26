@@ -6,13 +6,18 @@
 @push('styles')
 <style>
 .pos-wrap{display:grid;grid-template-columns:1fr 340px;height:calc(100vh - 56px);background:#0f1117}
-.product-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:12px;overflow-y:auto;align-content:start}
-.prod-card{background:#161821;border:0.5px solid #2a2d3a;border-radius:8px;padding:10px;cursor:pointer;transition:border-color .12s}
+.product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;padding:12px;overflow-y:auto;align-content:start}
+.prod-card{aspect-ratio:1;background:#161821;border:0.5px solid #2a2d3a;border-radius:8px;padding:8px;cursor:pointer;transition:border-color .12s;display:flex;flex-direction:column;gap:4px}
 .prod-card:hover{border-color:#818cf8}
-.prod-img{height:56px;background:#1e2130;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:8px}
-.prod-name{font-size:12px;color:#e2e8f0;font-weight:500;margin-bottom:3px;line-height:1.3}
+.prod-card:focus-visible{outline:2px solid #818cf8;outline-offset:1px}
+.prod-img{flex:1;min-height:0;background:#1e2130;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:30px}
+.prod-img img{width:100%;height:100%;object-fit:cover}
+.prod-name{font-size:12px;color:#e2e8f0;font-weight:500;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .prod-price{font-size:13px;color:#a5b4fc;font-weight:500}
 .prod-stock{font-size:10px;color:#64748b}
+.prod-foot{display:flex;justify-content:space-between;align-items:center}
+/* Full-screen focus mode hides the side navigation */
+body.pos-fullscreen .app-sidebar{display:none}
 .cart-panel{background:#161821;border-left:0.5px solid #2a2d3a;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .cart-list{flex:1;overflow-y:auto;padding:8px 12px;min-height:0}
 .cart-fixed{flex-shrink:0}
@@ -23,6 +28,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 input[type=number]{-moz-appearance:textfield}
 .ci{padding:8px 0;border-bottom:0.5px solid #1a1d2a}
 .ci:last-child{border-bottom:none}
+.ci-active{background:#191c2b;box-shadow:inset 2px 0 0 #818cf8;border-radius:4px}
 .ci-name{font-size:12px;color:#e2e8f0;font-weight:500}
 .ci-meta{font-size:11px;color:#64748b;margin-top:1px}
 .ci-row{display:flex;align-items:center;justify-content:space-between;margin-top:5px}
@@ -48,19 +54,43 @@ input[type=number]{-moz-appearance:textfield}
         {{-- Scan bar --}}
         <div class="scan-bar">
             <i class="ti ti-scan" style="font-size:16px;color:#64748b"></i>
-            <input class="scan-input" id="scan-input" x-model="query" autofocus
-                   @focus="numpadTarget='search'"
-                   @keyup.enter="handleScan(query); query=''"
-                   @input.debounce.300ms="searchProducts(query)"
-                   placeholder="Scan barcode or search product...">
-            <button class="np-key action" style="width:100px;height:34px;font-size:12px"
+            <div style="flex:1;position:relative" @click.away="showSuggest=false">
+                <input class="scan-input" id="scan-input" x-model="query" autofocus style="width:100%" title="Search (F2)"
+                       @focus="numpadTarget='search'; if (query) showSuggest=true"
+                       @input.debounce.200ms="searchProducts(query)"
+                       @keydown.arrow-down.prevent="moveSuggest(1)"
+                       @keydown.arrow-up.prevent="moveSuggest(-1)"
+                       @keydown.enter.prevent="chooseSuggest()"
+                       @keydown.escape="showSuggest=false"
+                       placeholder="Scan barcode or search product...">
+                {{-- Auto-suggestions --}}
+                <div x-show="showSuggest && suggestions.length" x-cloak
+                     style="position:absolute;top:40px;left:0;right:0;background:#161821;border:.5px solid #2a2d3a;border-radius:6px;z-index:40;max-height:300px;overflow-y:auto;box-shadow:0 10px 28px rgba(0,0,0,.5)">
+                    <template x-for="(s, i) in suggestions" :key="s.id">
+                        <div @click="chooseSuggestAt(i)" @mouseenter="suggestIdx=i"
+                             :style="i===suggestIdx ? 'background:#1e2130' : 'background:transparent'"
+                             style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer;border-bottom:.5px solid #1a1d2a">
+                            <div style="min-width:0">
+                                <div style="font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="s.name"></div>
+                                <div style="font-size:10px;color:#64748b" x-text="(s.barcode || 'No code') + '  ·  Stock: ' + s.stock"></div>
+                            </div>
+                            <div style="font-size:12px;color:#a5b4fc;font-weight:500;white-space:nowrap;margin-left:8px" x-text="'Rs. ' + parseFloat(s.price).toLocaleString()"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <button class="np-key action" style="width:92px;height:34px;font-size:12px"
                     @click="openCouponModal()">
                 <i class="ti ti-tag" style="font-size:13px"></i> Coupon
             </button>
-            <button class="np-key" style="width:110px;height:34px;font-size:12px"
+            <button class="np-key" style="width:104px;height:34px;font-size:12px" title="Customer (F9)"
                     @click="openCustomerSearch()">
                 <i class="ti ti-user" style="font-size:13px"></i>
                 <span x-text="customer ? customer.name.split(' ')[0] : 'Customer'"></span>
+            </button>
+            <button class="np-key" style="width:40px;height:34px" @click="toggleFullscreen()"
+                    :title="isFullscreen ? 'Exit full screen (F8)' : 'Full screen (F8)'">
+                <i :class="isFullscreen ? 'ti ti-arrows-minimize' : 'ti ti-arrows-maximize'" style="font-size:15px"></i>
             </button>
         </div>
 
@@ -75,15 +105,20 @@ input[type=number]{-moz-appearance:textfield}
         {{-- Product grid --}}
         <div class="product-grid" id="product-grid">
             <template x-for="p in products" :key="p.id">
-                <div class="prod-card" @click="addToCart(p)">
-                    <div class="prod-img" x-text="p.emoji ?? '📦'"></div>
+                <div class="prod-card" @click="addToCart(p)" tabindex="0" @keydown.enter="addToCart(p)">
+                    <div class="prod-img">
+                        <template x-if="p.image"><img :src="p.image" alt=""></template>
+                        <template x-if="!p.image"><span>📦</span></template>
+                    </div>
                     <div class="prod-name" x-text="p.name"></div>
-                    <div class="prod-price" x-text="'Rs. ' + parseFloat(p.price).toLocaleString()"></div>
-                    <div class="prod-stock" x-text="'Stock: ' + p.stock"></div>
+                    <div class="prod-foot">
+                        <span class="prod-price" x-text="'Rs. ' + parseFloat(p.price).toLocaleString()"></span>
+                        <span class="prod-stock" x-text="'×' + p.stock"></span>
+                    </div>
                 </div>
             </template>
             <template x-if="products.length === 0">
-                <div style="grid-column:span 3;text-align:center;color:#4a5568;padding:32px;font-size:13px">
+                <div style="grid-column:1/-1;text-align:center;color:#4a5568;padding:32px;font-size:13px">
                     <i class="ti ti-search" style="font-size:28px;display:block;margin-bottom:8px"></i>
                     No products found
                 </div>
@@ -132,7 +167,7 @@ input[type=number]{-moz-appearance:textfield}
                 </div>
             </template>
             <template x-for="(item, idx) in cart" :key="idx">
-                <div class="ci">
+                <div class="ci" :id="'cart-item-'+idx" :class="{ 'ci-active': idx === activeIdx }">
                     <div style="display:flex;justify-content:space-between;align-items:start">
                         <div class="ci-name" x-text="item.name"></div>
                         <i class="ti ti-x" style="font-size:13px;color:#ef4444;cursor:pointer;margin-left:6px"
@@ -188,10 +223,10 @@ input[type=number]{-moz-appearance:textfield}
         {{-- Numpad --}}
         <div class="cart-fixed" style="padding:8px 12px;border-top:0.5px solid #2a2d3a">
             <div style="background:#0f1117;border:0.5px solid #2a2d3a;border-radius:6px;padding:6px 10px;margin-bottom:8px">
-                <div style="font-size:10px;color:#64748b">Cash received</div>
+                <div style="font-size:10px;color:#64748b">Cash received <span style="color:#475569">(F3)</span></div>
                 <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
                     <span style="font-size:14px;color:#64748b">Rs.</span>
-                    <input type="text" inputmode="decimal" x-model="cashStr"
+                    <input type="text" inputmode="decimal" id="cash-input" x-model="cashStr"
                            @focus="numpadTarget='cash'; $event.target.select()"
                            @input="cashStr = cashStr.replace(/[^0-9.]/g,'').replace(/(\..*)\./g,'$1')"
                            style="width:130px;background:transparent;border:none;outline:none;color:#e2e8f0;font-size:20px;font-weight:500;text-align:right;font-family:inherit;padding:0">
@@ -207,7 +242,7 @@ input[type=number]{-moz-appearance:textfield}
                 <div class="np-key" @click="np('4')">4</div>
                 <div class="np-key" @click="np('5')">5</div>
                 <div class="np-key" @click="np('6')">6</div>
-                <div class="np-key action" @click="npExact()">Exact</div>
+                <div class="np-key action" @click="npExact()" title="Exact cash (F7)">Exact</div>
                 <div class="np-key" @click="np('1')">1</div>
                 <div class="np-key" @click="np('2')">2</div>
                 <div class="np-key" @click="np('3')">3</div>
@@ -228,6 +263,7 @@ input[type=number]{-moz-appearance:textfield}
     </div>
 
     {{-- New customer modal --}}
+    <template x-teleport="body">
     <div x-show="showCustomerModal" x-cloak @keydown.escape.window="showCustomerModal=false" @click.self="showCustomerModal=false"
          style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
         <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:330px">
@@ -264,8 +300,10 @@ input[type=number]{-moz-appearance:textfield}
             </div>
         </div>
     </div>
+    </template>
 
     {{-- Sale success popup --}}
+    <template x-teleport="body">
     <div x-show="showSaleModal" x-cloak @keydown.escape.window="showSaleModal=false"
          style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
         <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:22px;width:320px;text-align:center">
@@ -284,12 +322,14 @@ input[type=number]{-moz-appearance:textfield}
             </div>
             <div style="display:flex;gap:8px">
                 <button @click="showSaleModal=false" style="flex:1;height:38px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:7px;color:#94a3b8;font-size:13px;cursor:pointer">Close</button>
-                <button @click="printReceipt()" style="flex:1;height:38px;background:#312e81;border:.5px solid #534AB7;border-radius:7px;color:#a5b4fc;font-size:13px;font-weight:500;cursor:pointer">Next <i class="ti ti-arrow-right" style="font-size:13px"></i></button>
+                <button x-ref="printBtn" @click="printReceipt()" style="flex:1;height:38px;background:#312e81;border:.5px solid #534AB7;border-radius:7px;color:#a5b4fc;font-size:13px;font-weight:500;cursor:pointer">Next <i class="ti ti-arrow-right" style="font-size:13px"></i></button>
             </div>
         </div>
     </div>
+    </template>
 
     {{-- Card payment popup --}}
+    <template x-teleport="body">
     <div x-show="showCardModal" x-cloak @keydown.escape.window="showCardModal=false" @click.self="showCardModal=false"
          style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
         <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:20px;width:300px">
@@ -298,16 +338,40 @@ input[type=number]{-moz-appearance:textfield}
             </div>
             <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="'Amount: Rs. ' + total.toLocaleString()"></div>
             <label style="font-size:11px;color:#64748b">Last 4 digits of card *</label>
-            <input x-model="cardLast4" inputmode="numeric" maxlength="4" placeholder="1234" class="cust-input"
+            <input x-ref="cardInput" x-model="cardLast4" inputmode="numeric" maxlength="4" placeholder="1234" class="cust-input"
                    style="margin-top:4px;text-align:center;letter-spacing:5px;font-size:16px"
-                   @input="cardLast4 = cardLast4.replace(/\D/g,'').slice(0,4)" @keydown.enter="confirmCard()">
+                   @input="cardLast4 = cardLast4.replace(/\D/g,'').slice(0,4); if (cardLast4.length === 4) $nextTick(() => $refs.cardBtn.focus())"
+                   @keydown.enter="confirmCard()">
             <div style="display:flex;gap:8px;margin-top:4px">
                 <button @click="showCardModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
-                <button @click="confirmCard()" :disabled="cardLast4.length !== 4"
+                <button x-ref="cardBtn" @click="confirmCard()" :disabled="cardLast4.length !== 4"
+                        @keydown.backspace.prevent="cardLast4 = cardLast4.slice(0,-1); $refs.cardInput.focus()"
                         style="flex:1;height:36px;background:#534AB7;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Pay by card</button>
             </div>
         </div>
     </div>
+    </template>
+
+    {{-- Cash payment popup --}}
+    <template x-teleport="body">
+    <div x-show="showCashModal" x-cloak @keydown.escape.window="showCashModal=false" @click.self="showCashModal=false"
+         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:20px;width:300px">
+            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+                <i class="ti ti-cash" style="color:#4ade80"></i> Cash payment
+            </div>
+            <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:8px;padding:12px;margin-bottom:14px">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-bottom:5px"><span>Total</span><span x-text="'Rs. ' + total.toLocaleString()"></span></div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-bottom:5px"><span>Cash received</span><span x-text="'Rs. ' + cashNum.toLocaleString()"></span></div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:#4ade80;font-weight:500;padding-top:6px;border-top:.5px solid #2a2d3a"><span>Change</span><span x-text="'Rs. ' + Math.max(0, cashNum - total).toLocaleString()"></span></div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button @click="showCashModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+                <button x-ref="cashBtn" @click="confirmCash()" style="flex:1;height:36px;background:#1D9E75;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Complete sale</button>
+            </div>
+        </div>
+    </div>
+    </template>
 </div>
 
 @push('scripts')
@@ -320,9 +384,40 @@ function posScreen() {
         category: '',
         query: '',
         numpadTarget: 'cash',   // which field the on-screen numpad types into
+        showSuggest: false,
+        suggestIdx: 0,
+        isFullscreen: false,
 
         init() {
             this.loadProducts('');
+
+            window.addEventListener('keydown', (e) => {
+                // Physical numpad + / - adjust the active cart item (when no popup is open)
+                if (!this.anyModalOpen) {
+                    if (e.code === 'NumpadAdd') { e.preventDefault(); this.bumpActive(1); return; }
+                    if (e.code === 'NumpadSubtract') { e.preventDefault(); this.bumpActive(-1); return; }
+                }
+                // Function-key shortcuts for the most-used actions
+                switch (e.key) {
+                    case 'F2': e.preventDefault(); document.getElementById('scan-input')?.focus(); break;
+                    case 'F3': if (!this.anyModalOpen) { e.preventDefault(); document.getElementById('cash-input')?.focus(); } break;
+                    case 'F4': if (!this.anyModalOpen) { e.preventDefault(); this.pay('cash'); } break;
+                    case 'F6': if (!this.anyModalOpen) { e.preventDefault(); this.pay('card'); } break;
+                    case 'F7': if (!this.anyModalOpen) { e.preventDefault(); this.npExact(); document.getElementById('cash-input')?.focus(); } break;
+                    case 'F8': e.preventDefault(); this.toggleFullscreen(); break;
+                    case 'F9': if (!this.anyModalOpen) { e.preventDefault(); this.openCustomerSearch(); } break;
+                }
+            });
+
+            // Keep state in sync if the user leaves fullscreen via Esc/F11
+            document.addEventListener('fullscreenchange', () => {
+                if (!document.fullscreenElement) { document.body.classList.remove('pos-fullscreen'); this.isFullscreen = false; }
+            });
+
+            // Auto-focus inside popups for a fast keyboard workflow
+            this.$watch('showCardModal', v => { if (v) this.$nextTick(() => this.$refs.cardInput?.focus()); });
+            this.$watch('showCashModal', v => { if (v) this.$nextTick(() => this.$refs.cashBtn?.focus()); });
+            this.$watch('showSaleModal', v => { if (v) this.$nextTick(() => this.$refs.printBtn?.focus()); });
         },
 
         async loadProducts(q) {
@@ -335,7 +430,34 @@ function posScreen() {
         },
 
         // called by the search/scan input (debounced)
-        searchProducts(q) { this.loadProducts(q); },
+        searchProducts(q) {
+            this.loadProducts(q);
+            this.showSuggest = !!q;
+            this.suggestIdx = 0;
+        },
+
+        get suggestions() { return this.products.slice(0, 8); },
+
+        moveSuggest(d) {
+            const n = this.suggestions.length;
+            if (!n) return;
+            this.showSuggest = true;
+            this.suggestIdx = (this.suggestIdx + d + n) % n;
+        },
+
+        chooseSuggest() {
+            if (this.showSuggest && this.suggestions[this.suggestIdx]) {
+                this.addToCart(this.suggestions[this.suggestIdx]);
+                this.query = '';
+                this.showSuggest = false;
+                this.suggestIdx = 0;
+            } else if (this.query) {
+                this.handleScan(this.query);
+                this.query = '';
+            }
+        },
+
+        chooseSuggestAt(i) { this.suggestIdx = i; this.chooseSuggest(); },
 
         filterCategory(id, el) {
             this.category = id ?? '';
@@ -356,6 +478,7 @@ function posScreen() {
         },
 
         cart: [],
+        activeIdx: -1,          // cart item the +/- keys act on
         customer: null,
         cashStr: '0',
         couponCode: '',
@@ -367,6 +490,7 @@ function posScreen() {
         lastSale: null,
         showCardModal: false,
         cardLast4: '',
+        showCashModal: false,
 
         get cartCount() { return this.cart.reduce((a, i) => a + i.qty, 0); },
         get subtotal() { return this.cart.reduce((a, i) => a + i.price * i.qty, 0); },
@@ -384,21 +508,47 @@ function posScreen() {
         get cashDisplay() { return parseFloat(this.cashStr).toLocaleString(); },
 
         addToCart(product) {
-            const existing = this.cart.find(i => i.id === product.id);
-            if (existing) {
-                existing.qty++;
+            const i = this.cart.findIndex(x => x.id === product.id);
+            if (i !== -1) {
+                this.cart[i].qty++;
+                this.activeIdx = i;
             } else {
                 this.cart.push({ ...product, qty: 1 });
+                this.activeIdx = this.cart.length - 1;
             }
+            this.$nextTick(() => this.scrollToActive());
+        },
+
+        // Adjust the active item's quantity; remove it when it hits 0.
+        bumpActive(d) {
+            if (this.activeIdx < 0 || !this.cart[this.activeIdx]) return;
+            this.cart[this.activeIdx].qty += d;
+            if (this.cart[this.activeIdx].qty <= 0) {
+                this.cart.splice(this.activeIdx, 1);
+                this.activeIdx = Math.min(this.activeIdx, this.cart.length - 1);
+            }
+            if (this.activeIdx >= 0) this.$nextTick(() => this.scrollToActive());
+        },
+
+        scrollToActive() {
+            const el = document.getElementById('cart-item-' + this.activeIdx);
+            if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         },
 
         changeQty(idx, d) {
+            this.activeIdx = idx;
             this.cart[idx].qty += d;
-            if (this.cart[idx].qty <= 0) this.cart.splice(idx, 1);
+            if (this.cart[idx].qty <= 0) {
+                this.cart.splice(idx, 1);
+                this.activeIdx = Math.min(idx, this.cart.length - 1);
+            }
         },
 
-        removeItem(idx) { this.cart.splice(idx, 1); },
-        clearCart() { this.cart = []; this.discountInput = ''; this.discountMode = 'amount'; this.taxPercent = ''; this.couponCode = ''; this.cashStr = '0'; },
+        removeItem(idx) {
+            this.cart.splice(idx, 1);
+            if (this.activeIdx >= this.cart.length) this.activeIdx = this.cart.length - 1;
+        },
+        clearCart() { this.cart = []; this.activeIdx = -1; this.discountInput = ''; this.discountMode = 'amount'; this.taxPercent = ''; this.couponCode = ''; this.cashStr = '0'; },
 
         np(v) {
             if (this.numpadTarget === 'search') {
@@ -504,11 +654,16 @@ function posScreen() {
             if (this.cart.length === 0) { alert('Cart is empty!'); return; }
             if (method === 'cash') {
                 if (this.cashNum < this.total) { alert('Insufficient cash amount!'); return; }
-                this.processPayment('cash');
+                this.showCashModal = true;   // confirm before completing
             } else if (method === 'card') {
                 this.cardLast4 = '';
                 this.showCardModal = true;   // capture last 4 digits first
             }
+        },
+
+        confirmCash() {
+            this.showCashModal = false;
+            this.processPayment('cash');
         },
 
         confirmCard() {
@@ -565,6 +720,21 @@ function posScreen() {
                 window.open(`/pos/receipt/${this.lastSale.sale_id}`, '_blank', 'width=380,height=600');
             }
             this.showSaleModal = false;
+        },
+
+        get anyModalOpen() { return this.showCustomerModal || this.showSaleModal || this.showCardModal || this.showCashModal; },
+
+        toggleFullscreen() {
+            const el = document.documentElement;
+            if (!document.fullscreenElement) {
+                if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+                document.body.classList.add('pos-fullscreen');
+                this.isFullscreen = true;
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+                document.body.classList.remove('pos-fullscreen');
+                this.isFullscreen = false;
+            }
         },
     };
 }

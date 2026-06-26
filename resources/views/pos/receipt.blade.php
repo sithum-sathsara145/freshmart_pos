@@ -140,5 +140,10 @@ body{font-family:'Courier New',Courier,monospace;font-size:11.5px;color:#000;bac
     </div>
 </div>
 
+<script>
+    // Open the print dialog automatically so the cashier can print straight away
+    window.addEventListener('load', () => setTimeout(() => window.print(), 250));
+</script>
+
 </body>
 </html>
