@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Staff extends Model
 {
+    protected $table = 'staff';
+
     protected $fillable = ['user_id', 'branch_id', 'name', 'phone', 'email', 'address', 'role', 'basic_salary', 'join_date', 'status'];
 
     public function branch(): BelongsTo

@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Payroll extends Model
 {
+    protected $table = 'payroll';
+
     protected $fillable = ['staff_id', 'month', 'year', 'basic_salary', 'overtime_pay', 'allowances', 'deductions', 'epf_employee', 'epf_employer', 'etf', 'net_salary', 'status', 'paid_at'];
 
     public function staff(): BelongsTo
