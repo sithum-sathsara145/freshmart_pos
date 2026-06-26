@@ -18,6 +18,7 @@ use App\Http\Controllers\StockController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\HRM\StaffController;
 use App\Http\Controllers\HRM\AttendanceController;
@@ -29,6 +30,7 @@ use App\Http\Controllers\OnlineOrderController;
 use App\Http\Controllers\WebsiteController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\BarcodeController;
+use App\Http\Controllers\BannerController;
 use App\Http\Controllers\PosController;
 
 
@@ -56,9 +58,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/barcodes/bulk-print', [BarcodeController::class, 'bulkPrint'])->name('barcodes.bulk');
 
     // Product sub-modules
-    Route::resource('brands', BrandController::class);
-    Route::resource('categories', CategoryController::class);
-    Route::resource('variations', VariationController::class);
+    Route::resource('brands', BrandController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
+    Route::resource('categories', CategoryController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
+    Route::resource('variations', VariationController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
 
     // Stock
     Route::get('/stock', [StockController::class, 'index'])->name('stock.index');
@@ -108,7 +110,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/accounts/transfer', [AccountController::class, 'transfer'])->name('accounts.transfer');
 
     // Expenses
-    Route::resource('expense-categories', ExpenseController::class . 'CategoryController');
+    Route::resource('expense-categories', ExpenseCategoryController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
     Route::resource('expenses', ExpenseController::class);
 
     // Reports
@@ -149,7 +151,7 @@ Route::middleware(['auth'])->group(function () {
     // Website Setup
     Route::get('/website', [WebsiteController::class, 'index'])->name('website.index');
     Route::post('/website/settings', [WebsiteController::class, 'saveSettings'])->name('website.settings');
-    Route::resource('/website/banners', WebsiteController::class . 'BannerController');
+    Route::resource('website/banners', BannerController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
 
     // Settings
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
