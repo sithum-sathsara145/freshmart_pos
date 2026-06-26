@@ -26,7 +26,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password'          => 'hashed',
+            'password' => 'hashed',
         ];
     }
 
@@ -41,9 +41,5 @@ class User extends Authenticatable
     public function staff()
     {
         return $this->hasOne(Staff::class);
-    }
-    public function sales()
-    {
-        return $this->hasMany(Sale::class);
     }
 }
