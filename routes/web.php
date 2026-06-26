@@ -31,6 +31,7 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\BarcodeController;
 use App\Http\Controllers\PosController;
 
+
 // Auth
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
@@ -153,9 +154,9 @@ Route::middleware(['auth'])->group(function () {
     // Settings
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
     Route::post('/settings', [SettingController::class, 'save'])->name('settings.save');
-    Route::resource('/settings/branches', SettingController::class . 'BranchController');
-    Route::resource('/settings/counters', SettingController::class . 'CounterController');
-    Route::resource('/settings/users', SettingController::class . 'UserController');
+    // Route::resource('/settings/branches', SettingController::class . 'BranchController');
+    // Route::resource('/settings/counters', SettingController::class . 'CounterController');
+    // Route::resource('/settings/users', SettingController::class . 'UserController');
 
     // API endpoints (for POS screen AJAX)
     Route::prefix('api')->group(function () {
