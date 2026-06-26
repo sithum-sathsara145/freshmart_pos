@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Attendance extends Model
 {
+    protected $table = 'attendance';
+
     protected $fillable = ['staff_id', 'date', 'time_in', 'time_out', 'worked_hours', 'overtime_hours', 'status'];
 
     public function staff(): BelongsTo

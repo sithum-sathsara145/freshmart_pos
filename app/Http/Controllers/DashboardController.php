@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\Purchase;
 use App\Models\Product;
 use App\Models\Stock;
