@@ -96,6 +96,9 @@ class PosController extends Controller
             'items.*.price'  => 'required|numeric|min:0',
             'payment_method' => 'required|in:cash,card,credit,mixed',
             'paid_amount'    => 'required|numeric|min:0',
+            'discount_amount'=> 'nullable|numeric|min:0',
+            'tax_amount'     => 'nullable|numeric|min:0',
+            'card_last4'     => 'nullable|digits:4',
         ]);
 
         DB::beginTransaction();
@@ -128,7 +131,15 @@ class PosController extends Controller
             $taxAmount  = collect($request->items)->sum(function ($item) {
                 return ($item['price'] * $item['qty']) * ($item['tax_percent'] ?? 0) / 100;
             });
-            $total      = $subtotal - $discountAmount + $taxAmount;
+            // Manual discount / tax entered at the POS take precedence
+            if ($request->filled('discount_amount')) {
+                $discountAmount = max(0, (float) $request->discount_amount);
+            }
+            if ($request->filled('tax_amount')) {
+                $taxAmount = max(0, (float) $request->tax_amount);
+            }
+
+            $total      = max(0, $subtotal - $discountAmount + $taxAmount);
             $paidAmount = min($request->paid_amount, $total);
             $change     = max(0, $request->paid_amount - $total);
 
@@ -186,8 +197,13 @@ class PosController extends Controller
                                   ->where('type', 'cash')
                                   ->first();
                 if ($account) {
+                    // For card payments, use the last 4 digits as the transaction reference
+                    $reference = ($request->payment_method === 'card' && $request->filled('card_last4'))
+                        ? 'CARD-' . $request->card_last4 . '-' . $sale->id
+                        : 'PAY-' . strtoupper(Str::random(8));
+
                     Payment::create([
-                        'reference_no' => 'PAY-' . strtoupper(Str::random(8)),
+                        'reference_no' => $reference,
                         'type'         => 'payment_in',
                         'account_id'   => $account->id,
                         'party_type'   => 'customer',

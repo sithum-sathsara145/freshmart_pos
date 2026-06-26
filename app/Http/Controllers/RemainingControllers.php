@@ -86,6 +86,24 @@ class CustomerController extends Controller
                 ->get(['id', 'name', 'phone', 'loyalty_points'])
         );
     }
+
+    // Create a customer from the POS screen and return it as JSON.
+    public function apiStore(Request $request)
+    {
+        $data = $request->validate([
+            'name'  => 'required|string|max:150',
+            'phone' => 'nullable|string|max:30',
+            'email' => 'nullable|email',
+        ]);
+
+        $customer = Customer::create($data);
+
+        return response()->json([
+            'id'    => $customer->id,
+            'name'  => $customer->name,
+            'phone' => $customer->phone,
+        ], 201);
+    }
 }
 
 // =========================================================

@@ -191,8 +191,11 @@
                 <i class="ti ti-map-pin" style="font-size:12px;margin-right:3px"></i>
                 {{ auth()->user()->branch?->name ?? 'No branch' }}
             </div>
-            {{-- Date --}}
-            <div style="font-size:11px;color:#64748b">{{ now()->format('D, d M Y') }}</div>
+            {{-- Date & time (live) --}}
+            <div style="font-size:11px;color:#64748b;display:flex;align-items:center;gap:5px">
+                <i class="ti ti-clock" style="font-size:12px"></i>
+                <span id="live-datetime">{{ now()->format('D, d M Y · h:i:s A') }}</span>
+            </div>
         </div>
 
         {{-- Page content --}}
@@ -216,6 +219,21 @@
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    const el = document.getElementById('live-datetime');
+    if (!el) return;
+    function tick() {
+        const d = new Date();
+        const date = d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+        const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        el.textContent = date + ' · ' + time;
+    }
+    tick();
+    setInterval(tick, 1000);
+})();
+</script>
 
 @stack('scripts')
 </body>

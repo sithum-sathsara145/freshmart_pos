@@ -165,6 +165,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/products/search', [ProductController::class, 'apiSearch']);
         Route::get('/products/{id}', [ProductController::class, 'apiShow']);
         Route::get('/customers/search', [CustomerController::class, 'apiSearch']);
+        Route::post('/customers', [CustomerController::class, 'apiStore']);
         Route::get('/stock/{product_id}/{branch_id}', [StockController::class, 'apiGetStock']);
         Route::get('/dashboard/stats', [DashboardController::class, 'apiStats']);
     });
