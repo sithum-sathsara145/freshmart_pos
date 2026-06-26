@@ -29,7 +29,11 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
-        }
+        },
+        "classmap": [
+            "app/Http/Controllers/RemainingControllers.php",
+            "app/Http/Controllers/HRM/HrmControllers.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
