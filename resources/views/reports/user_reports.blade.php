@@ -1,0 +1,41 @@
+{{-- reports/user_reports.blade.php --}}
+@extends('layouts.app')
+@section('title','User Reports')
+@section('page-title','Reports — User / Cashier Reports')
+@section('content')
+<div style="padding:14px 16px">
+<form method="GET" style="display:flex;gap:8px;margin-bottom:14px">
+    <input type="date" name="from_date" value="{{ $from }}" style="height:34px;background:#161821;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;padding:0 8px;outline:none">
+    <input type="date" name="to_date" value="{{ $to }}" style="height:34px;background:#161821;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;padding:0 8px;outline:none">
+    <button type="submit" style="height:34px;padding:0 12px;background:#312e81;color:#a5b4fc;border:.5px solid #534AB7;border-radius:6px;font-size:12px;cursor:pointer">Apply</button>
+</form>
+<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;overflow:hidden">
+<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="border-bottom:.5px solid #2a2d3a">
+        @foreach(['Cashier / User','Sales count','Sales value','Cash collected','Returns','Avg. bill'] as $h)
+        <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:500;font-size:11px">{{ $h }}</th>
+        @endforeach
+    </tr></thead>
+    <tbody>
+    @forelse($cashiers as $c)
+    <tr style="border-bottom:.5px solid #1a1d2a">
+        <td style="padding:9px 12px">
+            <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:26px;height:26px;background:#1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;color:#60a5fa;font-weight:500">{{ strtoupper(substr($c->user?->name??'?',0,2)) }}</div>
+                <span style="color:#e2e8f0;font-weight:500">{{ $c->user?->name ?? 'Unknown' }}</span>
+            </div>
+        </td>
+        <td style="padding:9px 12px;color:#e2e8f0">{{ number_format($c->sale_count) }}</td>
+        <td style="padding:9px 12px;color:#4ade80;font-weight:500">Rs. {{ number_format($c->total) }}</td>
+        <td style="padding:9px 12px;color:#e2e8f0">Rs. {{ number_format($c->collected) }}</td>
+        <td style="padding:9px 12px;color:#f87171">—</td>
+        <td style="padding:9px 12px;color:#94a3b8">Rs. {{ $c->sale_count > 0 ? number_format($c->total/$c->sale_count) : 0 }}</td>
+    </tr>
+    @empty
+    <tr><td colspan="6" style="padding:32px;text-align:center;color:#4a5568">No data for selected period</td></tr>
+    @endforelse
+    </tbody>
+</table>
+</div>
+</div>
+@endsection
