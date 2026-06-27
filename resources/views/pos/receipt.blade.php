@@ -143,6 +143,8 @@ body{font-family:'Courier New',Courier,monospace;font-size:11.5px;color:#000;bac
 <script>
     // Open the print dialog automatically so the cashier can print straight away
     window.addEventListener('load', () => setTimeout(() => window.print(), 250));
+    // Close the receipt window once the print dialog is dismissed
+    window.addEventListener('afterprint', () => window.close());
 </script>
 
 </body>

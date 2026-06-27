@@ -186,6 +186,11 @@
         {{-- Top bar --}}
         <div class="main-topbar">
             <div style="font-size:14px;font-weight:500;color:#e2e8f0;flex:1">@yield('page-title', 'Dashboard')</div>
+            {{-- Cashier --}}
+            <div style="font-size:11px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;padding:4px 10px;color:#94a3b8">
+                <i class="ti ti-user" style="font-size:12px;margin-right:3px"></i>
+                {{ auth()->user()->name }}
+            </div>
             {{-- Branch indicator --}}
             <div style="font-size:11px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;padding:4px 10px;color:#94a3b8">
                 <i class="ti ti-map-pin" style="font-size:12px;margin-right:3px"></i>

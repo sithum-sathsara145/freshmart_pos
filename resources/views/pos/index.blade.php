@@ -17,7 +17,7 @@
 .prod-stock{font-size:10px;color:#64748b}
 .prod-foot{display:flex;justify-content:space-between;align-items:center}
 /* Full-screen focus mode hides the side navigation */
-body.pos-fullscreen .app-sidebar{display:none}
+body.pos-fullscreen .app-sidebar{display:none!important}
 .cart-panel{background:#161821;border-left:0.5px solid #2a2d3a;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .cart-list{flex:1;overflow-y:auto;padding:8px 12px;min-height:0}
 .cart-fixed{flex-shrink:0}
