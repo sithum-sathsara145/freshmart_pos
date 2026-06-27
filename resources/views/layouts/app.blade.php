@@ -220,6 +220,19 @@
             </div>
             @endif
 
+            @if($errors->any())
+            <div style="background:#7f1d1d;color:#fca5a5;border:.5px solid #991b1b;border-radius:7px;padding:10px 14px;margin:12px 16px;font-size:13px">
+                <div style="display:flex;align-items:center;gap:8px;font-weight:500;margin-bottom:4px">
+                    <i class="ti ti-alert-triangle" style="font-size:16px"></i> Please fix the following:
+                </div>
+                <ul style="margin:4px 0 0;padding-left:26px">
+                    @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+            @endif
+
             @yield('content')
         </div>
     </div>

@@ -72,7 +72,7 @@ input[type=number]{-moz-appearance:textfield}
                              style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer;border-bottom:.5px solid #1a1d2a">
                             <div style="min-width:0">
                                 <div style="font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="s.name"></div>
-                                <div style="font-size:10px;color:#64748b" x-text="(s.barcode || 'No code') + '  ·  Stock: ' + s.stock"></div>
+                                <div style="font-size:10px;color:#64748b" x-text="'SKU ' + s.sku + '  ·  ' + (s.barcode || 'No barcode') + '  ·  Stock: ' + s.stock"></div>
                             </div>
                             <div style="font-size:12px;color:#a5b4fc;font-weight:500;white-space:nowrap;margin-left:8px" x-text="'Rs. ' + parseFloat(s.price).toLocaleString()"></div>
                         </div>

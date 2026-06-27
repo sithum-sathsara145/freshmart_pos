@@ -24,6 +24,26 @@ class Product extends Model
         'show_in_online_store' => 'boolean',
     ];
 
+    // Every product has a required, unique 6-digit SKU (an editable item code, not
+    // the database primary key). Auto-generate one when created without it.
+    protected static function booted(): void
+    {
+        static::creating(function (Product $product) {
+            if (empty($product->sku)) {
+                $product->sku = static::generateSku();
+            }
+        });
+    }
+
+    public static function generateSku(): string
+    {
+        do {
+            $sku = (string) random_int(100000, 999999);
+        } while (static::where('sku', $sku)->exists());
+
+        return $sku;
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);

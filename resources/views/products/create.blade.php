@@ -37,11 +37,17 @@
         </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
         <div>
-            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Barcode / SKU</label>
-            <input type="text" name="barcode" value="{{ old('barcode') }}" placeholder="Scan or leave blank to auto-generate"
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Barcode</label>
+            <input type="text" name="barcode" value="{{ old('barcode') }}" placeholder="Scan or auto"
                 style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+        </div>
+        <div>
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">SKU (6 digits)</label>
+            <input type="text" name="sku" value="{{ old('sku') }}" maxlength="6" inputmode="numeric" placeholder="Auto if blank"
+                style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+            @error('sku')<div style="color:#f87171;font-size:10px;margin-top:3px">{{ $message }}</div>@enderror
         </div>
         <div>
             <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Unit *</label>

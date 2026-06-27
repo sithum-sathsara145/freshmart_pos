@@ -126,7 +126,7 @@ CREATE TABLE products (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     barcode VARCHAR(100) UNIQUE,
-    sku VARCHAR(100),
+    sku CHAR(6) NOT NULL UNIQUE,
     category_id BIGINT UNSIGNED,
     brand_id BIGINT UNSIGNED,
     unit VARCHAR(50) DEFAULT 'piece',

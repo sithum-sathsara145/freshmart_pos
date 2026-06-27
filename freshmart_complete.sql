@@ -163,7 +163,7 @@ CREATE TABLE products (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     barcode VARCHAR(100) UNIQUE,
-    sku VARCHAR(100),
+    sku CHAR(6) NULL,
     category_id BIGINT UNSIGNED,
     brand_id BIGINT UNSIGNED,
     unit VARCHAR(50) DEFAULT 'Piece',
@@ -772,6 +772,11 @@ INSERT INTO products (name, barcode, category_id, brand_id, unit, purchase_price
 ('Dettol Soap 75g',               '8901388072092', 7, 4,  'Bar',     95.00,  120.00,  20, 1, 'active', 1),
 ('Anchor Yoghurt Strawberry 80g', '8901234500050', 3, 1,  'Cup',     75.00,   95.00,  18, 1, 'active', 1),
 ('Morning Fresh Dishwash 400ml',  '9310333113268', 8, 4,  'Bottle', 290.00,  360.00,  10, 1, 'active', 1);
+
+-- Assign unique 6-digit SKUs to every product, then enforce NOT NULL + UNIQUE
+SET @sku := 100000;
+UPDATE products SET sku = (@sku := @sku + 1) ORDER BY id;
+ALTER TABLE products MODIFY sku CHAR(6) NOT NULL, ADD UNIQUE KEY uk_products_sku (sku);
 
 -- ── STOCK ─────────────────────────────────────────────────
 INSERT INTO stock (product_id, branch_id, quantity) VALUES

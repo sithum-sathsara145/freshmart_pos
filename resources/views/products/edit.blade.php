@@ -10,13 +10,28 @@
 <div>
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px;margin-bottom:12px">
     <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Basic information</div>
-    @foreach([['name','Product name','text'],['barcode','Barcode / SKU','text'],['description','Description','text']] as [$n,$l,$t])
+    @foreach([['name','Product name','text'],['barcode','Barcode','text'],['description','Description','text']] as [$n,$l,$t])
     <div style="margin-bottom:10px">
         <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">{{ $l }}</label>
         <input type="{{ $t }}" name="{{ $n }}" value="{{ old($n,$product->$n) }}"
             style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
     </div>
     @endforeach
+    <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">SKU (6 digits) — item code</label>
+        <input type="text" name="sku" value="{{ old('sku',$product->sku) }}" maxlength="6" inputmode="numeric"
+            style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+        @error('sku')<div style="color:#f87171;font-size:10px;margin-top:3px">{{ $message }}</div>@enderror
+    </div>
+    @php $units = ['Piece','Kg','Gram','Litre','Pack','Box','Dozen']; if(!in_array($product->unit, $units)) $units[] = $product->unit; @endphp
+    <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Unit *</label>
+        <select name="unit" style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+            @foreach($units as $u)
+            <option value="{{ $u }}" {{ old('unit',$product->unit)==$u?'selected':'' }}>{{ $u }}</option>
+            @endforeach
+        </select>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div><label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Category</label>
             <select name="category_id" style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">

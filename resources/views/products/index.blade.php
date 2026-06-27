@@ -69,7 +69,7 @@
                     </div>
                     <div>
                         <div style="color:#e2e8f0;font-weight:500">{{ $p->name }}</div>
-                        <div style="color:#64748b;font-size:10px">{{ $p->unit }}</div>
+                        <div style="color:#64748b;font-size:10px"><span style="color:#818cf8;font-family:monospace">SKU {{ $p->sku }}</span> · {{ $p->unit }}</div>
                     </div>
                 </div>
             </td>

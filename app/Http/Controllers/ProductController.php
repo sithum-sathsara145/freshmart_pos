@@ -62,7 +62,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name'            => 'required|string|max:255',
             'barcode'         => 'nullable|string|unique:products,barcode',
-            'sku'             => 'nullable|string|max:100',
+            'sku'             => 'nullable|digits:6|unique:products,sku',
             'category_id'     => 'nullable|exists:categories,id',
             'brand_id'        => 'nullable|exists:brands,id',
             'unit'            => 'required|string|max:50',
@@ -142,7 +142,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name'            => 'required|string|max:255',
             'barcode'         => 'nullable|string|unique:products,barcode,' . $product->id,
-            'sku'             => 'nullable|string|max:100',
+            'sku'             => 'nullable|digits:6|unique:products,sku,' . $product->id,
             'category_id'     => 'nullable|exists:categories,id',
             'brand_id'        => 'nullable|exists:brands,id',
             'unit'            => 'required|string|max:50',
@@ -202,6 +202,7 @@ class ProductController extends Controller
                 ->map(fn($p) => [
                     'id'          => $p->id,
                     'name'        => $p->name,
+                    'sku'         => $p->sku,
                     'barcode'     => $p->barcode,
                     'price'       => (float) $p->sale_price,
                     'purchase_price' => (float) $p->purchase_price,
