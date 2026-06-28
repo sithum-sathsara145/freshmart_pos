@@ -24,6 +24,11 @@ body.pos-fullscreen .app-sidebar{display:none!important}
 [x-cloak]{display:none!important}
 .cust-input{width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:8px 10px;outline:none;margin-bottom:8px;font-family:inherit}
 .amt-input{width:92px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:12px;padding:4px 8px;text-align:right;outline:none;font-family:inherit}
+.calc-key{height:42px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:7px;color:#e2e8f0;font-size:15px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.calc-key:hover{background:#252840}
+.calc-key.op{background:#312e81;color:#a5b4fc;border-color:#534AB7}
+.sc-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid #1a1d2a;font-size:12px}
+.sc-key{font-family:monospace;font-size:11px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:4px;padding:2px 7px;color:#a5b4fc}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 input[type=number]{-moz-appearance:textfield}
 .ci{padding:8px 0;border-bottom:0.5px solid #1a1d2a}
@@ -88,9 +93,22 @@ input[type=number]{-moz-appearance:textfield}
                 <i class="ti ti-user" style="font-size:13px"></i>
                 <span x-text="customer ? customer.name.split(' ')[0] : 'Customer'"></span>
             </button>
+            <button class="np-key" style="width:92px;height:34px;font-size:12px"
+                    :style="counterOpen ? 'background:#14532d;color:#4ade80;border-color:#166534' : 'background:#3f1d1d;color:#fca5a5;border-color:#7f1d1d'"
+                    @click="counterOpen ? closeCounterPrompt() : openCounterPrompt()"
+                    :title="counterOpen ? 'Close counter' : 'Open counter'">
+                <i class="ti ti-cash" style="font-size:13px"></i>
+                <span x-text="counterOpen ? 'Close' : 'Open'"></span>
+            </button>
             <button class="np-key" style="width:40px;height:34px" @click="toggleFullscreen()"
                     :title="isFullscreen ? 'Exit full screen (F8)' : 'Full screen (F8)'">
                 <i :class="isFullscreen ? 'ti ti-arrows-minimize' : 'ti ti-arrows-maximize'" style="font-size:15px"></i>
+            </button>
+            <button class="np-key" style="width:36px;height:34px" @click="showCalc=true" title="Calculator">
+                <i class="ti ti-calculator" style="font-size:15px"></i>
+            </button>
+            <button class="np-key" style="width:36px;height:34px" @click="showShortcuts=true" title="Keyboard shortcuts (F1)">
+                <i class="ti ti-keyboard" style="font-size:15px"></i>
             </button>
         </div>
 
@@ -372,9 +390,185 @@ input[type=number]{-moz-appearance:textfield}
         </div>
     </div>
     </template>
+
+    {{-- Open counter popup (required — blocks POS until a session is open) --}}
+    <template x-teleport="body">
+    <div x-show="showOpenModal" x-cloak
+         style="position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:18px;width:340px;max-height:92vh;overflow-y:auto">
+            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:4px;display:flex;align-items:center;gap:6px">
+                <i class="ti ti-cash" style="color:#4ade80"></i> Open counter
+            </div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:12px">Count the cash float — type a count, press <b style="color:#94a3b8">Tab</b> for the next.</div>
+            <div x-show="prevClose" x-cloak style="font-size:11px;color:#fbbf24;background:#3a2c0c;border:.5px solid #78531a;border-radius:6px;padding:6px 9px;margin-bottom:10px">
+                Last close was <b x-text="'Rs. ' + (prevClose ? prevClose.balance.toLocaleString() : '')"></b> — the drawer should match this.
+            </div>
+            <template x-for="d in denoms" :key="d">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                    <span style="width:58px;font-size:12px;color:#94a3b8;text-align:right">Rs. <span x-text="d.toLocaleString()"></span></span>
+                    <span style="color:#475569">×</span>
+                    <input type="text" inputmode="numeric" class="amt-input denom-open" style="width:64px;text-align:center"
+                           x-model="openDenoms[d]" @focus="$event.target.select()"
+                           @input="openDenoms[d] = String(openDenoms[d]).replace(/\D/g,'')">
+                    <span style="flex:1;text-align:right;font-size:12px;color:#e2e8f0" x-text="'Rs. ' + (d * (parseInt(openDenoms[d])||0)).toLocaleString()"></span>
+                </div>
+            </template>
+            <div style="display:flex;justify-content:space-between;font-size:14px;color:#e2e8f0;font-weight:600;padding-top:8px;margin-top:6px;border-top:.5px solid #2a2d3a">
+                <span>Opening float</span><span x-text="'Rs. ' + openTotal.toLocaleString()"></span>
+            </div>
+            <div x-show="openError" x-cloak x-text="openError" style="color:#f87171;font-size:11px;margin-top:8px"></div>
+            <div style="display:flex;gap:8px;margin-top:14px">
+                <a href="{{ route('dashboard') }}" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none">Exit POS</a>
+                <button @click="submitOpen()" style="flex:1;height:36px;background:#14532d;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Open counter</button>
+            </div>
+        </div>
+    </div>
+    </template>
+
+    {{-- Close counter popup --}}
+    <template x-teleport="body">
+    <div x-show="showCloseModal" x-cloak @keydown.escape.window="!closeResult && (showCloseModal=false)" @click.self="!closeResult && (showCloseModal=false)"
+         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:18px;width:340px;max-height:92vh;overflow-y:auto">
+            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+                <i class="ti ti-lock" style="color:#fbbf24"></i> Close counter
+            </div>
+
+            {{-- Counting form --}}
+            <template x-if="!closeResult">
+            <div>
+                <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
+                    <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-bottom:4px"><span>Opening float</span><span x-text="'Rs. ' + openingBalance.toLocaleString()"></span></div>
+                    <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-bottom:4px"><span>Cash sales</span><span x-text="'Rs. ' + cashSalesSoFar.toLocaleString()"></span></div>
+                    <div style="display:flex;justify-content:space-between;color:#e2e8f0;font-weight:600;padding-top:5px;border-top:.5px solid #2a2d3a"><span>Expected in drawer</span><span x-text="'Rs. ' + closeExpected.toLocaleString()"></span></div>
+                </div>
+                <div style="font-size:11px;color:#64748b;margin-bottom:8px">Count the cash now — type a count, <b style="color:#94a3b8">Tab</b> for the next:</div>
+                <template x-for="d in denoms" :key="d">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                        <span style="width:58px;font-size:12px;color:#94a3b8;text-align:right">Rs. <span x-text="d.toLocaleString()"></span></span>
+                        <span style="color:#475569">×</span>
+                        <input type="text" inputmode="numeric" class="amt-input denom-close" style="width:64px;text-align:center"
+                               x-model="closeDenoms[d]" @focus="$event.target.select()"
+                               @input="closeDenoms[d] = String(closeDenoms[d]).replace(/\D/g,'')">
+                        <span style="flex:1;text-align:right;font-size:12px;color:#e2e8f0" x-text="'Rs. ' + (d * (parseInt(closeDenoms[d])||0)).toLocaleString()"></span>
+                    </div>
+                </template>
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:#e2e8f0;font-weight:600;padding-top:8px;margin-top:6px;border-top:.5px solid #2a2d3a"><span>Counted</span><span x-text="'Rs. ' + closeTotal.toLocaleString()"></span></div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-top:4px"
+                     :style="closeVariance===0 ? 'color:#4ade80' : 'color:#f87171'">
+                    <span x-text="closeVariance===0 ? 'Balanced' : (closeVariance>0 ? 'Over by' : 'Short by')"></span>
+                    <span x-text="'Rs. ' + Math.abs(closeVariance).toLocaleString()"></span>
+                </div>
+                <div x-show="closeError" x-cloak x-text="closeError" style="color:#f87171;font-size:11px;margin-top:8px"></div>
+                <div style="display:flex;gap:8px;margin-top:14px">
+                    <button @click="showCloseModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+                    <button @click="submitClose()" style="flex:1;height:36px;background:#7f1d1d;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Close counter</button>
+                </div>
+            </div>
+            </template>
+
+            {{-- Result --}}
+            <template x-if="closeResult">
+            <div style="text-align:center">
+                <div style="width:48px;height:48px;border-radius:50%;background:#14532d;display:flex;align-items:center;justify-content:center;margin:4px auto 12px">
+                    <i class="ti ti-check" style="font-size:24px;color:#4ade80"></i>
+                </div>
+                <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:12px">Counter closed</div>
+                <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:8px;padding:12px;margin-bottom:14px;text-align:left;font-size:12px">
+                    <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-bottom:4px"><span>Expected</span><span x-text="closeResult ? 'Rs. ' + closeResult.expected.toLocaleString() : ''"></span></div>
+                    <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-bottom:4px"><span>Counted</span><span x-text="closeResult ? 'Rs. ' + closeResult.counted.toLocaleString() : ''"></span></div>
+                    <div style="display:flex;justify-content:space-between;font-weight:600;padding-top:5px;border-top:.5px solid #2a2d3a"
+                         :style="(closeResult && closeResult.variance===0) ? 'color:#4ade80' : 'color:#f87171'">
+                        <span x-text="!closeResult ? '' : (closeResult.variance===0 ? 'Balanced' : (closeResult.variance>0 ? 'Over by' : 'Short by'))"></span>
+                        <span x-text="closeResult ? 'Rs. ' + Math.abs(closeResult.variance).toLocaleString() : ''"></span>
+                    </div>
+                </div>
+                <button @click="window.location.href = dashboardUrl" style="width:100%;height:38px;background:#312e81;border:.5px solid #534AB7;border-radius:7px;color:#a5b4fc;font-size:13px;font-weight:600;cursor:pointer">Done</button>
+            </div>
+            </template>
+        </div>
+    </div>
+    </template>
+
+    {{-- Keyboard shortcuts popup --}}
+    <template x-teleport="body">
+    <div x-show="showShortcuts" x-cloak @keydown.escape.window="showShortcuts=false" @click.self="showShortcuts=false"
+         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:18px;width:360px;max-height:88vh;overflow-y:auto">
+            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+                <i class="ti ti-keyboard" style="color:#818cf8"></i> Keyboard shortcuts
+            </div>
+            @foreach([
+                ['F1','Show this help'],
+                ['F2','Focus search'],
+                ['F3','Focus cash received'],
+                ['F4','Cash payment'],
+                ['F6','Card payment'],
+                ['F7','Set exact cash'],
+                ['F8','Toggle full screen'],
+                ['F9','Customer search / add'],
+                ['Numpad + / −','Active item quantity'],
+                ['↑ / ↓ + Enter','Pick a search suggestion'],
+                ['Tab','Next count field (counter popups)'],
+                ['Esc','Close a popup'],
+            ] as [$k,$desc])
+            <div class="sc-row"><span style="color:#94a3b8">{{ $desc }}</span><span class="sc-key">{{ $k }}</span></div>
+            @endforeach
+            <button @click="showShortcuts=false" style="width:100%;height:36px;margin-top:14px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Close</button>
+        </div>
+    </div>
+    </template>
+
+    {{-- Calculator popup --}}
+    <template x-teleport="body">
+    <div x-show="showCalc" x-cloak @keydown.escape.window="showCalc=false" @click.self="showCalc=false"
+         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:16px;width:280px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <div style="font-size:13px;font-weight:600;color:#e2e8f0;display:flex;align-items:center;gap:6px"><i class="ti ti-calculator" style="color:#818cf8"></i> Calculator</div>
+                <i class="ti ti-x" @click="showCalc=false" style="font-size:15px;color:#64748b;cursor:pointer"></i>
+            </div>
+            <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:8px;padding:8px 12px;margin-bottom:10px;text-align:right">
+                <div style="font-size:11px;color:#475569;min-height:14px" x-text="calcSub"></div>
+                <div style="font-size:26px;color:#e2e8f0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="calcDisplay"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+                <button class="calc-key" @click="calcClear()" style="color:#f87171">C</button>
+                <button class="calc-key" @click="calcBackspace()"><i class="ti ti-backspace"></i></button>
+                <button class="calc-key op" @click="calcOperator('/')">÷</button>
+                <button class="calc-key op" @click="calcOperator('*')">×</button>
+                <button class="calc-key" @click="calcDigit('7')">7</button>
+                <button class="calc-key" @click="calcDigit('8')">8</button>
+                <button class="calc-key" @click="calcDigit('9')">9</button>
+                <button class="calc-key op" @click="calcOperator('-')">−</button>
+                <button class="calc-key" @click="calcDigit('4')">4</button>
+                <button class="calc-key" @click="calcDigit('5')">5</button>
+                <button class="calc-key" @click="calcDigit('6')">6</button>
+                <button class="calc-key op" @click="calcOperator('+')">+</button>
+                <button class="calc-key" @click="calcDigit('1')">1</button>
+                <button class="calc-key" @click="calcDigit('2')">2</button>
+                <button class="calc-key" @click="calcDigit('3')">3</button>
+                <button class="calc-key op" style="grid-row:span 2" @click="calcEquals()">=</button>
+                <button class="calc-key" style="grid-column:span 2" @click="calcDigit('0')">0</button>
+                <button class="calc-key" @click="calcDot()">.</button>
+            </div>
+        </div>
+    </div>
+    </template>
 </div>
 
 @push('scripts')
+<script>
+window.__POS = {
+    denoms: @json($denominations),
+    hasCounter: {{ $counter ? 'true' : 'false' }},
+    dashboardUrl: '{{ route('dashboard') }}',
+    counterOpen: {{ $openSession ? 'true' : 'false' }},
+    openingBalance: {{ $openSession ? (float) $openSession->opening_balance : 0 }},
+    cashSalesSoFar: {{ $openSession ? (float) ($openSession->cash_sales_so_far ?? 0) : 0 }},
+    prevClose: @json($lastClose ? ['balance' => (float) $lastClose->closing_balance, 'denoms' => ($lastClose->closing_denoms ?? [])] : null),
+};
+</script>
 <script>
 // Unified POS screen component: products + cart in one Alpine scope
 function posScreen() {
@@ -399,6 +593,7 @@ function posScreen() {
                 }
                 // Function-key shortcuts for the most-used actions
                 switch (e.key) {
+                    case 'F1': e.preventDefault(); this.showShortcuts = !this.showShortcuts; break;
                     case 'F2': e.preventDefault(); document.getElementById('scan-input')?.focus(); break;
                     case 'F3': if (!this.anyModalOpen) { e.preventDefault(); document.getElementById('cash-input')?.focus(); } break;
                     case 'F4': if (!this.anyModalOpen) { e.preventDefault(); this.pay('cash'); } break;
@@ -418,6 +613,13 @@ function posScreen() {
             this.$watch('showCardModal', v => { if (v) this.$nextTick(() => this.$refs.cardInput?.focus()); });
             this.$watch('showCashModal', v => { if (v) this.$nextTick(() => this.$refs.cashBtn?.focus()); });
             this.$watch('showSaleModal', v => { if (v) this.$nextTick(() => this.$refs.printBtn?.focus()); });
+            this.$watch('showOpenModal', v => { if (v) this.$nextTick(() => document.querySelector('.denom-open')?.focus()); });
+            this.$watch('showCloseModal', v => { if (v && !this.closeResult) this.$nextTick(() => document.querySelector('.denom-close')?.focus()); });
+
+            // Block POS use until a counter session is open
+            if (this.hasCounter && !this.counterOpen) {
+                this.$nextTick(() => this.openCounterPrompt());
+            }
         },
 
         async loadProducts(q) {
@@ -491,6 +693,30 @@ function posScreen() {
         showCardModal: false,
         cardLast4: '',
         showCashModal: false,
+
+        // ── Counter session ──────────────────────────────
+        denoms: (window.__POS && window.__POS.denoms) || [5000,2000,1000,500,100,50,20,10,5,2,1],
+        hasCounter: !!(window.__POS && window.__POS.hasCounter),
+        dashboardUrl: (window.__POS && window.__POS.dashboardUrl) || '/dashboard',
+        counterOpen: !!(window.__POS && window.__POS.counterOpen),
+        openingBalance: (window.__POS && window.__POS.openingBalance) || 0,
+        cashSalesSoFar: (window.__POS && window.__POS.cashSalesSoFar) || 0,
+        prevClose: (window.__POS && window.__POS.prevClose) || null,
+        showOpenModal: false,
+        showCloseModal: false,
+        openDenoms: {},
+        closeDenoms: {},
+        openError: '',
+        closeError: '',
+        closeResult: null,
+
+        // ── Tools: shortcuts help + calculator ───────────
+        showShortcuts: false,
+        showCalc: false,
+        calcDisplay: '0',
+        calcAcc: null,
+        calcOp: null,
+        calcFresh: true,
 
         get cartCount() { return this.cart.reduce((a, i) => a + i.qty, 0); },
         get subtotal() { return this.cart.reduce((a, i) => a + i.price * i.qty, 0); },
@@ -652,6 +878,7 @@ function posScreen() {
 
         pay(method) {
             if (this.cart.length === 0) { alert('Cart is empty!'); return; }
+            if (this.hasCounter && !this.counterOpen) { this.openCounterPrompt(); return; }
             if (method === 'cash') {
                 if (this.cashNum < this.total) { alert('Insufficient cash amount!'); return; }
                 this.showCashModal = true;   // confirm before completing
@@ -705,6 +932,7 @@ function posScreen() {
 
                 if (data.success) {
                     this.lastSale = data;        // { sale_id, invoice_no, total, change }
+                    if (method === 'cash') this.cashSalesSoFar += Number(data.total) || 0;
                     this.showSaleModal = true;
                     this.clearCart();
                 } else {
@@ -722,7 +950,7 @@ function posScreen() {
             this.showSaleModal = false;
         },
 
-        get anyModalOpen() { return this.showCustomerModal || this.showSaleModal || this.showCardModal || this.showCashModal; },
+        get anyModalOpen() { return this.showCustomerModal || this.showSaleModal || this.showCardModal || this.showCashModal || this.showOpenModal || this.showCloseModal || this.showCalc || this.showShortcuts; },
 
         toggleFullscreen() {
             const el = document.documentElement;
@@ -735,6 +963,105 @@ function posScreen() {
                 document.body.classList.remove('pos-fullscreen');
                 this.isFullscreen = false;
             }
+        },
+
+        // ── Counter open / close ─────────────────────────
+        denomsTotal(obj) {
+            return this.denoms.reduce((s, d) => s + d * (parseInt(obj[d]) || 0), 0);
+        },
+        get openTotal() { return this.denomsTotal(this.openDenoms); },
+        get closeTotal() { return this.denomsTotal(this.closeDenoms); },
+        get closeExpected() { return this.openingBalance + this.cashSalesSoFar; },
+        get closeVariance() { return Math.round((this.closeTotal - this.closeExpected) * 100) / 100; },
+
+        openCounterPrompt() {
+            this.openError = '';
+            this.openDenoms = {};
+            this.denoms.forEach(d => { this.openDenoms[d] = (this.prevClose && this.prevClose.denoms && this.prevClose.denoms[d]) || 0; });
+            this.showOpenModal = true;
+        },
+
+        closeCounterPrompt() {
+            this.closeError = '';
+            this.closeResult = null;
+            this.closeDenoms = {};
+            this.denoms.forEach(d => { this.closeDenoms[d] = 0; });
+            this.showCloseModal = true;
+        },
+
+        async submitOpen() {
+            this.openError = '';
+            try {
+                const res = await fetch('/pos/counter/open', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                    body: JSON.stringify({ denoms: this.openDenoms }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.counterOpen = true;
+                    this.openingBalance = data.opening;
+                    this.cashSalesSoFar = 0;
+                    this.showOpenModal = false;
+                } else { this.openError = data.message || 'Could not open counter.'; }
+            } catch (e) { this.openError = 'Could not open counter. Try again.'; }
+        },
+
+        async submitClose() {
+            this.closeError = '';
+            try {
+                const res = await fetch('/pos/counter/close', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                    body: JSON.stringify({ denoms: this.closeDenoms }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.counterOpen = false;
+                    this.prevClose = { balance: data.counted, denoms: { ...this.closeDenoms } };
+                    this.closeResult = data;   // show the result view; "Done" returns to dashboard
+                } else { this.closeError = data.message || 'Could not close counter.'; }
+            } catch (e) { this.closeError = 'Could not close counter. Try again.'; }
+        },
+
+        // ── Calculator ───────────────────────────────────
+        get calcSub() {
+            if (this.calcAcc === null) return '';
+            const sym = { '+': '+', '-': '−', '*': '×', '/': '÷' }[this.calcOp] || '';
+            return this.calcAcc + ' ' + sym;
+        },
+        calcDigit(d) {
+            if (this.calcFresh) { this.calcDisplay = d; this.calcFresh = false; }
+            else { this.calcDisplay = this.calcDisplay === '0' ? d : this.calcDisplay + d; }
+        },
+        calcDot() {
+            if (this.calcFresh) { this.calcDisplay = '0.'; this.calcFresh = false; }
+            else if (!this.calcDisplay.includes('.')) { this.calcDisplay += '.'; }
+        },
+        calcOperator(op) {
+            if (this.calcOp !== null && !this.calcFresh) this.calcEquals();
+            this.calcAcc = parseFloat(this.calcDisplay) || 0;
+            this.calcOp = op;
+            this.calcFresh = true;
+        },
+        calcEquals() {
+            if (this.calcOp === null) return;
+            const a = this.calcAcc, b = parseFloat(this.calcDisplay) || 0;
+            let r = 0;
+            if (this.calcOp === '+') r = a + b;
+            else if (this.calcOp === '-') r = a - b;
+            else if (this.calcOp === '*') r = a * b;
+            else if (this.calcOp === '/') r = b === 0 ? 0 : a / b;
+            this.calcDisplay = String(Math.round(r * 1e6) / 1e6);
+            this.calcAcc = null;
+            this.calcOp = null;
+            this.calcFresh = true;
+        },
+        calcClear() { this.calcDisplay = '0'; this.calcAcc = null; this.calcOp = null; this.calcFresh = true; },
+        calcBackspace() {
+            if (this.calcFresh) return;
+            this.calcDisplay = this.calcDisplay.length > 1 ? this.calcDisplay.slice(0, -1) : '0';
+            if (this.calcDisplay === '0') this.calcFresh = true;
         },
     };
 }

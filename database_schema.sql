@@ -41,6 +41,29 @@ CREATE TABLE counters (
     FOREIGN KEY (branch_id) REFERENCES branches(id)
 );
 
+-- Counter cash sessions (open/close with denomination breakdown + reconciliation)
+CREATE TABLE counter_sessions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    counter_id BIGINT UNSIGNED NOT NULL,
+    branch_id BIGINT UNSIGNED NULL,
+    opened_by BIGINT UNSIGNED NULL,
+    closed_by BIGINT UNSIGNED NULL,
+    opening_balance DECIMAL(15,2) NOT NULL DEFAULT 0,
+    opening_denoms TEXT NULL,
+    cash_sales DECIMAL(15,2) NULL,
+    expected_closing DECIMAL(15,2) NULL,
+    closing_balance DECIMAL(15,2) NULL,
+    closing_denoms TEXT NULL,
+    variance DECIMAL(15,2) NULL,
+    status ENUM('open','closed') NOT NULL DEFAULT 'open',
+    opened_at TIMESTAMP NULL,
+    closed_at TIMESTAMP NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    INDEX idx_counter_status (counter_id, status),
+    FOREIGN KEY (counter_id) REFERENCES counters(id)
+);
+
 -- ============================================
 -- USERS & ROLES (Spatie Permission)
 -- ============================================

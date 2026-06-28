@@ -19,6 +19,7 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\ExpenseCategoryController;
+use App\Http\Controllers\CounterSessionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\HRM\StaffController;
 use App\Http\Controllers\HRM\AttendanceController;
@@ -48,6 +49,8 @@ Route::middleware(['auth'])->group(function () {
     // POS Screen
     Route::get('/pos', [PosController::class, 'index'])->name('pos');
     Route::post('/pos/sale', [PosController::class, 'storeSale'])->name('pos.sale');
+    Route::post('/pos/counter/open', [PosController::class, 'openCounter'])->name('pos.counter.open');
+    Route::post('/pos/counter/close', [PosController::class, 'closeCounter'])->name('pos.counter.close');
     Route::get('/pos/products/search', [PosController::class, 'searchProducts'])->name('pos.products.search');
     Route::get('/pos/products/barcode/{barcode}', [PosController::class, 'findByBarcode'])->name('pos.barcode');
     Route::get('/pos/receipt/{id}', [PosController::class, 'receipt'])->name('pos.receipt');
@@ -112,6 +115,9 @@ Route::middleware(['auth'])->group(function () {
     // Expenses
     Route::resource('expense-categories', ExpenseCategoryController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
     Route::resource('expenses', ExpenseController::class);
+
+    // Counter cash sessions (open/close history)
+    Route::resource('counter-sessions', CounterSessionController::class)->only(['index', 'show']);
 
     // Reports
     Route::prefix('reports')->name('reports.')->group(function () {

@@ -10,19 +10,143 @@ use App\Models\Stock;
 use App\Models\Account;
 use App\Models\Payment;
 use App\Models\Coupon;
+use App\Models\Counter;
+use App\Models\CounterSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class PosController extends Controller
 {
+    // Sri Lankan rupee denominations (notes then coins)
+    private const DENOMINATIONS = [5000, 2000, 1000, 500, 100, 50, 20, 10, 5, 2, 1];
+
     public function index()
     {
         $categories = \App\Models\Category::orderBy('name')->get();
         $branch = auth()->user()->branch;
         $counter = auth()->user()->counter;
 
-        return view('pos.index', compact('categories', 'branch', 'counter'));
+        $openSession = null;
+        $lastClose   = null;
+        if ($counter) {
+            $openSession = CounterSession::where('counter_id', $counter->id)
+                ->where('status', 'open')->latest('opened_at')->first();
+
+            if ($openSession) {
+                // live expected cash so far = opening + cash sales since open
+                $openSession->cash_sales_so_far = $this->cashSalesSince($counter->id, $openSession->opened_at);
+            } else {
+                $lastClose = CounterSession::where('counter_id', $counter->id)
+                    ->where('status', 'closed')->latest('closed_at')->first();
+            }
+        }
+
+        return view('pos.index', compact('categories', 'branch', 'counter', 'openSession', 'lastClose')
+            + ['denominations' => self::DENOMINATIONS]);
+    }
+
+    // Cash collected at a counter since a given time (what should be in the drawer from sales)
+    private function cashSalesSince(int $counterId, $since): float
+    {
+        return (float) Sale::where('counter_id', $counterId)
+            ->where('payment_method', 'cash')
+            ->where('created_at', '>=', $since)
+            ->sum('paid_amount');
+    }
+
+    // Open the counter for the current session with a counted opening float
+    public function openCounter(Request $request)
+    {
+        $counter = auth()->user()->counter;
+        if (! $counter) {
+            return response()->json(['success' => false, 'message' => 'No counter assigned to your account.'], 422);
+        }
+
+        if (CounterSession::where('counter_id', $counter->id)->where('status', 'open')->exists()) {
+            return response()->json(['success' => false, 'message' => 'Counter is already open.'], 422);
+        }
+
+        $denoms  = $this->cleanDenoms($request->input('denoms', []));
+        $opening = $this->denomsTotal($denoms);
+
+        DB::transaction(function () use ($counter, $denoms, $opening) {
+            CounterSession::create([
+                'counter_id'      => $counter->id,
+                'branch_id'       => $counter->branch_id,
+                'opened_by'       => auth()->id(),
+                'opening_balance' => $opening,
+                'opening_denoms'  => $denoms,
+                'status'          => 'open',
+                'opened_at'       => now(),
+            ]);
+            $counter->update(['status' => 'open', 'cash_balance' => $opening]);
+        });
+
+        return response()->json(['success' => true, 'opening' => $opening, 'message' => 'Counter opened.']);
+    }
+
+    // Close the counter: reconcile counted cash against opening + cash sales
+    public function closeCounter(Request $request)
+    {
+        $counter = auth()->user()->counter;
+        $session = $counter
+            ? CounterSession::where('counter_id', $counter->id)->where('status', 'open')->latest('opened_at')->first()
+            : null;
+
+        if (! $session) {
+            return response()->json(['success' => false, 'message' => 'No open counter session to close.'], 422);
+        }
+
+        $denoms    = $this->cleanDenoms($request->input('denoms', []));
+        $counted   = $this->denomsTotal($denoms);
+        $cashSales = $this->cashSalesSince($counter->id, $session->opened_at);
+        $expected  = (float) $session->opening_balance + $cashSales;
+        $variance  = round($counted - $expected, 2);
+
+        DB::transaction(function () use ($session, $counter, $denoms, $counted, $cashSales, $expected, $variance) {
+            $session->update([
+                'closed_by'        => auth()->id(),
+                'closing_denoms'   => $denoms,
+                'closing_balance'  => $counted,
+                'cash_sales'       => $cashSales,
+                'expected_closing' => $expected,
+                'variance'         => $variance,
+                'status'           => 'closed',
+                'closed_at'        => now(),
+            ]);
+            $counter->update(['status' => 'closed', 'cash_balance' => $counted]);
+        });
+
+        return response()->json([
+            'success'   => true,
+            'opening'   => (float) $session->opening_balance,
+            'cash_sales'=> $cashSales,
+            'expected'  => $expected,
+            'counted'   => $counted,
+            'variance'  => $variance,
+            'message'   => 'Counter closed.',
+        ]);
+    }
+
+    // Keep only valid denomination => quantity pairs
+    private function cleanDenoms(array $input): array
+    {
+        $out = [];
+        foreach (self::DENOMINATIONS as $d) {
+            $qty = (int) ($input[$d] ?? 0);
+            if ($qty > 0) $out[$d] = $qty;
+        }
+        return $out;
+    }
+
+    private function denomsTotal(array $denoms): float
+    {
+        $total = 0;
+        foreach ($denoms as $denom => $qty) {
+            $total += (int) $denom * (int) $qty;
+        }
+        return (float) $total;
     }
 
     // Ajax: search products for POS screen
@@ -100,6 +224,12 @@ class PosController extends Controller
             'tax_amount'     => 'nullable|numeric|min:0',
             'card_last4'     => 'nullable|digits:4',
         ]);
+
+        // An assigned counter must have an open session before any sale
+        $counterId = auth()->user()->counter_id;
+        if ($counterId && ! CounterSession::where('counter_id', $counterId)->where('status', 'open')->exists()) {
+            return response()->json(['success' => false, 'message' => 'Open the counter before making sales.'], 422);
+        }
 
         DB::beginTransaction();
 

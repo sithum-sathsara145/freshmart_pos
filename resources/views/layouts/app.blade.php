@@ -133,6 +133,9 @@
             <a href="{{ route('expenses.index') }}" class="sidebar-link {{ request()->routeIs('expenses*') ? 'active' : '' }}">
                 <i class="ti ti-credit-card"></i>Expenses
             </a>
+            <a href="{{ route('counter-sessions.index') }}" class="sidebar-link {{ request()->routeIs('counter-sessions*') ? 'active' : '' }}">
+                <i class="ti ti-coin"></i>Counter Sessions
+            </a>
 
             <div class="sidebar-section">Reports</div>
             <a href="{{ route('reports.profit_loss') }}" class="sidebar-link {{ request()->routeIs('reports.*') ? 'active' : '' }}">
