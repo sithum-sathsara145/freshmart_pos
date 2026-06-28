@@ -56,6 +56,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/pos/receipt/{id}', [PosController::class, 'receipt'])->name('pos.receipt');
 
     // Products
+    // Must be declared before the resource so it isn't captured by /products/{product}.
+    Route::get('/products/upload-signature', [ProductController::class, 'uploadSignature'])->name('products.upload-signature');
     Route::resource('products', ProductController::class);
     Route::get('/products/{product}/print-barcode', [BarcodeController::class, 'print'])->name('products.barcode');
     Route::post('/barcodes/bulk-print', [BarcodeController::class, 'bulkPrint'])->name('barcodes.bulk');

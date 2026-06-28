@@ -50,6 +50,32 @@ class ProductController extends Controller
         return view('products.index', compact('products', 'categories', 'brands', 'stats'));
     }
 
+    // Signed params for direct browser → Cloudinary uploads (keeps the secret server-side).
+    public function uploadSignature()
+    {
+        try {
+            return response()->json(app(CloudinaryService::class)->signedUploadParams());
+        } catch (\Throwable $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Validation rules for the image upload. A browser-supplied URL must point at
+     * our own Cloudinary cloud, so a client can't store an arbitrary external image.
+     * max:255 matches the products.image column width.
+     */
+    private function imageRules(): array
+    {
+        $prefix = 'https://res.cloudinary.com/' . config('services.cloudinary.cloud_name') . '/';
+
+        return [
+            'image'           => 'nullable|image|max:5120',
+            'image_url'       => 'nullable|string|max:255|starts_with:' . $prefix,
+            'image_public_id' => 'nullable|string|max:255',
+        ];
+    }
+
     public function create()
     {
         $categories     = Category::orderBy('name')->get();
@@ -76,18 +102,35 @@ class ProductController extends Controller
             'opening_stock'   => 'nullable|numeric|min:0',
             'description'     => 'nullable|string',
             'status'          => 'required|in:active,inactive',
-            'image'           => 'nullable|image|max:2048',
             'show_in_online_store' => 'boolean',
-        ]);
+        ] + $this->imageRules());
         $validated['show_in_online_store'] = $request->boolean('show_in_online_store');
+        // image / image_public_id are set explicitly below from whichever upload path ran.
+        unset($validated['image_url'], $validated['image_public_id']);
 
+        $uploadedPublicId = null;   // track for cleanup if the DB write fails
         DB::beginTransaction();
         try {
-            // Upload image to Cloudinary
-            if ($request->hasFile('image')) {
-                $up = app(CloudinaryService::class)->upload($request->file('image')->getRealPath());
+            if ($request->filled('image_url')) {
+                // Browser already uploaded straight to Cloudinary — just store the result.
+                $validated['image']           = $request->input('image_url');
+                $validated['image_public_id'] = $request->input('image_public_id');
+                $uploadedPublicId             = $request->input('image_public_id');
+            } elseif ($request->hasFile('image')) {
+                // Fallback: direct upload didn't run, so upload from the server.
+                try {
+                    $up = app(CloudinaryService::class)->upload($request->file('image')->getRealPath());
+                } catch (\Throwable $e) {
+                    DB::rollBack();
+                    $msg = $e->getMessage();   // already user-friendly from the service
+                    if ($request->wantsJson()) {
+                        return response()->json(['message' => $msg], 422);
+                    }
+                    return back()->with('error', $msg)->withInput();
+                }
                 $validated['image']           = $up['url'];
                 $validated['image_public_id'] = $up['public_id'];
+                $uploadedPublicId             = $up['public_id'];
             }
 
             // Auto-generate barcode if not provided
@@ -109,11 +152,24 @@ class ProductController extends Controller
             }
 
             DB::commit();
-            return redirect()->route('products.index')->with('success', "Product '{$product->name}' added successfully.");
+            $msg = "Product '{$product->name}' added successfully.";
+            if ($request->wantsJson()) {
+                session()->flash('success', $msg);
+                return response()->json(['redirect' => route('products.index')]);
+            }
+            return redirect()->route('products.index')->with('success', $msg);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Failed to save product: ' . $e->getMessage())->withInput();
+            // Don't leave an orphaned image on Cloudinary when the product wasn't saved.
+            if ($uploadedPublicId) {
+                app(CloudinaryService::class)->delete($uploadedPublicId);
+            }
+            $msg = 'Failed to save product: ' . $e->getMessage();
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $msg], 422);
+            }
+            return back()->with('error', $msg)->withInput();
         }
     }
 
@@ -158,26 +214,53 @@ class ProductController extends Controller
             'min_stock'       => 'nullable|integer|min:0',
             'description'     => 'nullable|string',
             'status'          => 'required|in:active,inactive',
-            'image'           => 'nullable|image|max:2048',
             'show_in_online_store' => 'boolean',
-        ]);
+        ] + $this->imageRules());
         $validated['show_in_online_store'] = $request->boolean('show_in_online_store');
+        unset($validated['image_url'], $validated['image_public_id']);
 
-        if ($request->hasFile('image')) {
+        if ($request->filled('image_url')) {
+            // Browser uploaded a new image straight to Cloudinary.
+            $newPublicId = $request->input('image_public_id');
+            if ($product->image_public_id && $product->image_public_id !== $newPublicId) {
+                app(CloudinaryService::class)->delete($product->image_public_id);   // drop the old
+            }
+            $validated['image']           = $request->input('image_url');
+            $validated['image_public_id'] = $newPublicId;
+        } elseif ($request->hasFile('image')) {
             try {
                 $cloud = app(CloudinaryService::class);
-                $cloud->delete($product->image_public_id);   // remove the old Cloudinary image
-                $up = $cloud->upload($request->file('image')->getRealPath());
+                $up = $cloud->upload($request->file('image')->getRealPath());   // upload new first
+                $cloud->delete($product->image_public_id);                      // then drop the old
                 $validated['image']           = $up['url'];
                 $validated['image_public_id'] = $up['public_id'];
             } catch (\Throwable $e) {
-                return back()->with('error', 'Image upload failed: ' . $e->getMessage())->withInput();
+                $msg = 'Image upload failed: ' . $e->getMessage();
+                if ($request->wantsJson()) {
+                    return response()->json(['message' => $msg], 422);
+                }
+                return back()->with('error', $msg)->withInput();
             }
+        } elseif ($request->boolean('remove_image')) {
+            // User cleared the image without picking a new one.
+            $cloud = app(CloudinaryService::class);
+            if ($product->image_public_id) {
+                $cloud->delete($product->image_public_id);
+            } elseif ($product->image && ! str_starts_with($product->image, 'http')) {
+                Storage::disk('public')->delete($product->image);
+            }
+            $validated['image']           = null;
+            $validated['image_public_id'] = null;
         }
 
         $product->update($validated);
 
-        return redirect()->route('products.index')->with('success', "Product '{$product->name}' updated.");
+        $msg = "Product '{$product->name}' updated.";
+        if ($request->wantsJson()) {
+            session()->flash('success', $msg);
+            return response()->json(['redirect' => route('products.index')]);
+        }
+        return redirect()->route('products.index')->with('success', $msg);
     }
 
     public function destroy(Product $product)
