@@ -159,6 +159,7 @@ CREATE TABLE products (
     discount_percent DECIMAL(5,2) DEFAULT 0,
     min_stock INT DEFAULT 5,
     image VARCHAR(255),
+    image_public_id VARCHAR(255),
     description TEXT,
     show_in_online_store TINYINT(1) DEFAULT 0,
     status ENUM('active','inactive') DEFAULT 'active',

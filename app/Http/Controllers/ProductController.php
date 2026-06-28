@@ -6,7 +6,9 @@ use App\Models\Product;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Stock;
+use App\Models\SaleItem;
 use App\Models\VariationType;
+use App\Services\CloudinaryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -77,12 +79,15 @@ class ProductController extends Controller
             'image'           => 'nullable|image|max:2048',
             'show_in_online_store' => 'boolean',
         ]);
+        $validated['show_in_online_store'] = $request->boolean('show_in_online_store');
 
         DB::beginTransaction();
         try {
-            // Handle image upload
+            // Upload image to Cloudinary
             if ($request->hasFile('image')) {
-                $validated['image'] = $request->file('image')->store('products', 'public');
+                $up = app(CloudinaryService::class)->upload($request->file('image')->getRealPath());
+                $validated['image']           = $up['url'];
+                $validated['image_public_id'] = $up['public_id'];
             }
 
             // Auto-generate barcode if not provided
@@ -115,7 +120,7 @@ class ProductController extends Controller
     public function show(Product $product)
     {
         $branchId = auth()->user()->branch_id;
-        $product->load(['category', 'brand', 'variations.variationValue.variationType']);
+        $product->load(['category', 'brand']);
         $product->current_stock = $product->stockForBranch($branchId);
 
         // Sales history
@@ -156,11 +161,18 @@ class ProductController extends Controller
             'image'           => 'nullable|image|max:2048',
             'show_in_online_store' => 'boolean',
         ]);
+        $validated['show_in_online_store'] = $request->boolean('show_in_online_store');
 
         if ($request->hasFile('image')) {
-            // Delete old image
-            if ($product->image) Storage::disk('public')->delete($product->image);
-            $validated['image'] = $request->file('image')->store('products', 'public');
+            try {
+                $cloud = app(CloudinaryService::class);
+                $cloud->delete($product->image_public_id);   // remove the old Cloudinary image
+                $up = $cloud->upload($request->file('image')->getRealPath());
+                $validated['image']           = $up['url'];
+                $validated['image_public_id'] = $up['public_id'];
+            } catch (\Throwable $e) {
+                return back()->with('error', 'Image upload failed: ' . $e->getMessage())->withInput();
+            }
         }
 
         $product->update($validated);
@@ -175,7 +187,12 @@ class ProductController extends Controller
             return back()->with('error', 'Cannot delete — product has sales history.');
         }
 
-        if ($product->image) Storage::disk('public')->delete($product->image);
+        $cloud = app(CloudinaryService::class);
+        if ($product->image_public_id) {
+            $cloud->delete($product->image_public_id);
+        } elseif ($product->image && ! str_starts_with($product->image, 'http')) {
+            Storage::disk('public')->delete($product->image);
+        }
         $product->delete();
 
         return redirect()->route('products.index')->with('success', 'Product deleted.');
@@ -209,7 +226,7 @@ class ProductController extends Controller
                     'tax_percent' => (float) $p->tax_percent,
                     'unit'        => $p->unit,
                     'stock'       => $p->stockForBranch($branchId),
-                    'image'       => $p->image ? asset('storage/' . $p->image) : null,
+                    'image'       => $p->imageUrl(),
                     'category'    => $p->category?->name,
                 ])
         );
@@ -221,6 +238,7 @@ class ProductController extends Controller
         return response()->json([
             'id'          => $product->id,
             'name'        => $product->name,
+            'sku'         => $product->sku,
             'barcode'     => $product->barcode,
             'price'       => (float) $product->sale_price,
             'tax_percent' => (float) $product->tax_percent,

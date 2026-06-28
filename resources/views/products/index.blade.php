@@ -62,7 +62,7 @@
                 <div style="display:flex;align-items:center;gap:8px">
                     <div style="width:34px;height:34px;background:#1e2130;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
                         @if($p->image)
-                        <img src="{{ asset('storage/'.$p->image) }}" style="width:34px;height:34px;border-radius:6px;object-fit:cover">
+                        <img src="{{ $p->imageUrl() }}" style="width:34px;height:34px;border-radius:6px;object-fit:cover">
                         @else
                         <i class="ti ti-package" style="color:#818cf8;font-size:16px"></i>
                         @endif

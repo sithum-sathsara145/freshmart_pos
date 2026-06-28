@@ -20,7 +20,7 @@ use App\Models\Banner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Picqer\Barcode\BarcodeGeneratorPNG;
+use Picqer\Barcode\BarcodeGeneratorSVG;
 
 
 // =========================================================
@@ -296,7 +296,7 @@ class BarcodeController extends Controller
 {
     public function print(Product $product)
     {
-        $generator = new BarcodeGeneratorPNG();
+        $generator = new BarcodeGeneratorSVG();
         $barcode   = base64_encode($generator->getBarcode($product->barcode ?? $product->id, $generator::TYPE_CODE_128));
         $settings  = Setting::pluck('value', 'key_name');
 
@@ -307,7 +307,7 @@ class BarcodeController extends Controller
     {
         $request->validate(['product_ids' => 'required|array', 'copies' => 'required|integer|min:1|max:100']);
         $products  = Product::whereIn('id', $request->product_ids)->get();
-        $generator = new BarcodeGeneratorPNG();
+        $generator = new BarcodeGeneratorSVG();
         $settings  = Setting::pluck('value', 'key_name');
 
         $barcodes = $products->map(fn($p) => [

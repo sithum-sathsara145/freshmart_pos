@@ -28,7 +28,7 @@ body{font-family:Arial,sans-serif;background:#fff;display:flex;align-items:cente
     <div class="label">
         <div class="biz">{{ $settings['business_name'] ?? 'FreshMart' }}</div>
         <div class="prod-name">{{ Str::limit($product->name, 24) }}</div>
-        <img class="barcode-img" src="data:image/png;base64,{{ $barcode }}" alt="barcode">
+        <img class="barcode-img" src="data:image/svg+xml;base64,{{ $barcode }}" alt="barcode">
         <div class="barcode-num">{{ $product->barcode }}</div>
         <div class="price">Rs. {{ number_format($product->sale_price) }}</div>
     </div>

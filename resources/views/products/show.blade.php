@@ -12,7 +12,7 @@
 <div style="display:grid;grid-template-columns:260px 1fr;gap:12px">
 <div>
     @if($product->image)
-    <img src="{{ asset('storage/'.$product->image) }}" style="width:100%;border-radius:8px;margin-bottom:10px">
+    <img src="{{ $product->imageUrl() }}" style="width:100%;border-radius:8px;margin-bottom:10px">
     @else
     <div style="width:100%;height:180px;background:#161821;border:.5px solid #2a2d3a;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:10px"><i class="ti ti-package" style="color:#818cf8;font-size:40px"></i></div>
     @endif

@@ -12,7 +12,7 @@ class Product extends Model
     protected $fillable = [
         'name', 'barcode', 'sku', 'category_id', 'brand_id',
         'unit', 'purchase_price', 'sale_price', 'tax_percent',
-        'discount_percent', 'min_stock', 'image', 'description',
+        'discount_percent', 'min_stock', 'image', 'image_public_id', 'description',
         'show_in_online_store', 'status', 'created_by',
     ];
 
@@ -72,6 +72,16 @@ class Product extends Model
     public function stocks(): HasMany
     {
         return $this->hasMany(Stock::class);
+    }
+
+    // Full URL for the product image — Cloudinary URLs are absolute, legacy
+    // uploads are relative paths on the public disk.
+    public function imageUrl(): ?string
+    {
+        if (! $this->image) {
+            return null;
+        }
+        return str_starts_with($this->image, 'http') ? $this->image : asset('storage/' . $this->image);
     }
 
     public function stockForBranch(int $branchId): float
