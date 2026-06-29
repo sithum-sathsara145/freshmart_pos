@@ -4,6 +4,7 @@
 @section('page-title','Product Manager')
 
 @section('content')
+@push('styles')<style>details > summary::-webkit-details-marker{display:none}</style>@endpush
 <div style="padding:14px 16px">
 
 {{-- Stats --}}
@@ -34,6 +35,24 @@
         </select>
         <button type="submit" style="height:34px;padding:0 12px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Filter</button>
     </form>
+    @php $exportFilters = request()->only('search','category_id','brand_id','status'); @endphp
+    <details style="position:relative">
+        <summary style="height:34px;padding:0 12px;background:#1e2130;color:#94a3b8;border:.5px solid #2a2d3a;border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;cursor:pointer;list-style:none">
+            <i class="ti ti-file-export" style="font-size:13px"></i>Export
+        </summary>
+        <div style="position:absolute;right:0;top:38px;background:#161821;border:.5px solid #2a2d3a;border-radius:6px;z-index:20;min-width:150px;overflow:hidden;box-shadow:0 8px 22px rgba(0,0,0,.4)">
+            <a href="{{ route('products.export', array_merge($exportFilters, ['format'=>'csv'])) }}" style="display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:12px;color:#94a3b8;text-decoration:none">
+                <i class="ti ti-file-text" style="font-size:13px"></i>Export as CSV</a>
+            <a href="{{ route('products.export', array_merge($exportFilters, ['format'=>'xlsx'])) }}" style="display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:12px;color:#94a3b8;text-decoration:none;border-top:.5px solid #2a2d3a">
+                <i class="ti ti-file-spreadsheet" style="font-size:13px"></i>Export as Excel</a>
+        </div>
+    </details>
+    <a href="{{ route('products.import') }}" style="height:34px;padding:0 12px;background:#1e2130;color:#94a3b8;border:.5px solid #2a2d3a;border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
+        <i class="ti ti-file-import" style="font-size:13px"></i>Import
+    </a>
+    <a href="{{ route('barcodes.labels') }}" style="height:34px;padding:0 12px;background:#1e2130;color:#94a3b8;border:.5px solid #2a2d3a;border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
+        <i class="ti ti-barcode" style="font-size:13px"></i>Print labels
+    </a>
     <a href="{{ route('products.create') }}" style="height:34px;padding:0 12px;background:#312e81;color:#a5b4fc;border:.5px solid #534AB7;border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
         <i class="ti ti-plus" style="font-size:13px"></i>Add Product
     </a>

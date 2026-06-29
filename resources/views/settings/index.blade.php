@@ -13,6 +13,8 @@
         ['receipt','ti-receipt','Receipt setup'],
         ['tax','ti-percent','Tax settings'],
         ['hardware','ti-printer','Hardware'],
+        ['scale','ti-scale','Scale barcodes'],
+        ['apikeys','ti-key','API keys'],
         ['backup','ti-database','Backup'],
     ] as [$key,$icon,$label])
     <div onclick="showSection('{{ $key }}')" id="nav-{{ $key }}"
@@ -24,6 +26,7 @@
     @endforeach
 </div>
 
+<div style="min-width:0">
 <form method="POST" action="{{ route('settings.save') }}">
 @csrf
 <div id="sec-business" class="settings-section">
@@ -127,6 +130,85 @@
 </div>
 </div>
 
+<div id="sec-scale" class="settings-section" style="display:none">
+<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px">
+    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:4px">Scale barcodes (weighed items)</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:14px">
+        For items sold by weight, where the scale prints an embedded EAN-13 barcode (GS1 prefix “2”).
+        Ordinary product barcodes are never affected. Defaults match the common CAS / Essae scales used in Sri Lanka —
+        change them only if your scale is programmed differently.
+    </div>
+
+    @php
+        $scl = fn($k,$d) => $settings[$k] ?? $d;
+        $sinp = 'width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none';
+        $slbl = 'display:block;font-size:11px;color:#64748b;margin-bottom:4px';
+    @endphp
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+            <label style="{{ $slbl }}">Enable scale barcodes</label>
+            <select name="scale_enabled" style="{{ $sinp }}">
+                <option value="0" {{ $scl('scale_enabled','0')==='0'?'selected':'' }}>Disabled</option>
+                <option value="1" {{ $scl('scale_enabled','0')==='1'?'selected':'' }}>Enabled</option>
+            </select>
+        </div>
+        <div>
+            <label style="{{ $slbl }}">Embedded value</label>
+            <select name="scale_embed" style="{{ $sinp }}">
+                <option value="price"  {{ $scl('scale_embed','price')==='price'?'selected':'' }}>Price (total)</option>
+                <option value="weight" {{ $scl('scale_embed','price')==='weight'?'selected':'' }}>Weight</option>
+            </select>
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px">
+        <div>
+            <label style="{{ $slbl }}">Prefix</label>
+            <input type="text" name="scale_prefix" value="{{ $scl('scale_prefix','2') }}" style="{{ $sinp }}">
+        </div>
+        <div>
+            <label style="{{ $slbl }}">Total length</label>
+            <input type="number" name="scale_total_length" value="{{ $scl('scale_total_length','13') }}" min="6" max="14" style="{{ $sinp }}">
+        </div>
+        <div>
+            <label style="{{ $slbl }}">PLU digits</label>
+            <input type="number" name="scale_plu_length" value="{{ $scl('scale_plu_length','5') }}" min="1" max="8" style="{{ $sinp }}">
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+        <div>
+            <label style="{{ $slbl }}">Value digits</label>
+            <input type="number" name="scale_value_length" value="{{ $scl('scale_value_length','5') }}" min="1" max="8" style="{{ $sinp }}">
+        </div>
+        <div>
+            <label style="{{ $slbl }}">Value divisor</label>
+            <input type="number" name="scale_value_divisor" value="{{ $scl('scale_value_divisor','100') }}" min="1" step="1" style="{{ $sinp }}">
+        </div>
+    </div>
+
+    <div style="font-size:11px;color:#64748b;margin-top:10px;line-height:1.5">
+        <b style="color:#94a3b8">Divisor</b> — the embedded number is divided by this to get the real amount.
+        Price with cents → <b>100</b>; price in whole rupees → <b>1</b>; weight in grams → <b>1000</b>.<br>
+        <b style="color:#94a3b8">PLU</b> links to a product's <i>Scale PLU</i> field (set on the product's edit page).
+    </div>
+
+    <div style="border-top:.5px solid #2a2d3a;margin-top:14px;padding-top:14px">
+        <div style="font-size:12px;color:#e2e8f0;font-weight:500;margin-bottom:2px">Internal item barcodes</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:10px;line-height:1.5">
+            Auto-generated for store-made items with no manufacturer barcode (just leave a product's barcode blank).
+            Uses the GS1 in-store range, so it never clashes with real product barcodes. Keep it within
+            <b style="color:#94a3b8">20–29</b> and different from the scale prefix above.
+        </div>
+        <div style="max-width:200px">
+            <label style="{{ $slbl }}">Internal barcode prefix</label>
+            <input type="text" name="internal_barcode_prefix" value="{{ $scl('internal_barcode_prefix','21') }}" inputmode="numeric" style="{{ $sinp }}">
+        </div>
+    </div>
+</div>
+</div>
+
 <div id="sec-backup" class="settings-section" style="display:none">
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px">
     <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Backup & data</div>
@@ -190,10 +272,65 @@
 </div>
 </div>
 
-<div style="margin-top:14px">
+<div id="main-save-bar" style="margin-top:14px">
     <button type="submit" style="height:36px;padding:0 20px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer">
         <i class="ti ti-check" style="font-size:13px;margin-right:4px"></i>Save settings
     </button>
+</div>
+</form>
+
+{{-- API keys — separate form posting to the encrypted endpoint --}}
+<form method="POST" action="{{ route('settings.api-keys.save') }}">
+@csrf
+<div id="sec-apikeys" class="settings-section" style="display:none">
+<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px">
+    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:4px">API keys</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:14px;display:flex;align-items:center;gap:6px">
+        <i class="ti ti-lock" style="font-size:13px;color:#4ade80"></i>
+        Secret values are encrypted before storage and never shown again — leave a field blank to keep its current value.
+    </div>
+
+    @php $inp = 'width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none'; @endphp
+    @foreach($apiCredentials as $groupKey => $group)
+    <div style="border:.5px solid #2a2d3a;border-radius:8px;padding:12px;margin-bottom:12px">
+        <div style="font-size:12px;color:#e2e8f0;font-weight:500;margin-bottom:2px">{{ $group['label'] }}</div>
+        @if(!empty($group['description']))
+        <div style="font-size:11px;color:#64748b;margin-bottom:10px">{{ $group['description'] }}</div>
+        @endif
+
+        @foreach($group['fields'] as $fkey => $f)
+        @php
+            $isSecret = !empty($f['secret']);
+            $state    = $apiKeyState[$fkey] ?? [];
+            $isSet    = $isSecret ? ($state['set'] ?? false) : filled($state['value'] ?? '');
+        @endphp
+        <div style="margin-bottom:10px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#64748b;margin-bottom:4px">
+                {{ $f['label'] }}
+                @if($isSecret && $isSet)<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:#14532d;color:#4ade80">Saved</span>@endif
+            </label>
+            @if($isSecret)
+            <input type="password" name="{{ $fkey }}" value="" autocomplete="new-password"
+                placeholder="{{ $isSet ? '•••••••• (leave blank to keep)' : ($f['placeholder'] ?? 'Enter value') }}"
+                style="{{ $inp }}">
+            @if($isSet)
+            <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:#94a3b8;margin-top:5px;cursor:pointer">
+                <input type="checkbox" name="{{ $fkey }}_clear" value="1" style="accent-color:#f87171;width:13px;height:13px"> Clear saved value
+            </label>
+            @endif
+            @else
+            <input type="text" name="{{ $fkey }}" value="{{ $state['value'] ?? '' }}"
+                placeholder="{{ $f['placeholder'] ?? '' }}" style="{{ $inp }}">
+            @endif
+        </div>
+        @endforeach
+    </div>
+    @endforeach
+
+    <button type="submit" style="height:36px;padding:0 20px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer">
+        <i class="ti ti-check" style="font-size:13px;margin-right:4px"></i>Save API keys
+    </button>
+</div>
 </div>
 </form>
 </div>
@@ -209,9 +346,13 @@ function showSection(key) {
     });
     const nav = document.getElementById('nav-' + key);
     nav.style.background = '#1e2130'; nav.style.color = '#a5b4fc'; nav.style.borderLeft = '2px solid #818cf8';
+    // The shared "Save settings" button belongs to the main form — hide it on the API keys tab.
+    const mainSave = document.getElementById('main-save-bar');
+    if (mainSave) mainSave.style.display = (key === 'apikeys') ? 'none' : '';
     currentSection = key;
 }
-showSection('business');
+const initialSection = (location.hash || '').replace('#', '');
+showSection(document.getElementById('sec-' + initialSection) ? initialSection : 'business');
 </script>
 @endpush
 @endsection

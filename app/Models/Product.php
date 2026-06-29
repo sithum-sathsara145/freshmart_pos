@@ -11,7 +11,7 @@ class Product extends Model
 {
     protected $fillable = [
         'name', 'barcode', 'sku', 'category_id', 'brand_id',
-        'unit', 'purchase_price', 'sale_price', 'tax_percent',
+        'unit', 'is_weighed', 'scale_plu', 'purchase_price', 'sale_price', 'tax_percent',
         'discount_percent', 'min_stock', 'image', 'image_public_id', 'description',
         'show_in_online_store', 'status', 'created_by',
     ];
@@ -22,6 +22,7 @@ class Product extends Model
         'tax_percent'     => 'decimal:2',
         'discount_percent'=> 'decimal:2',
         'show_in_online_store' => 'boolean',
+        'is_weighed'      => 'boolean',
     ];
 
     // Every product has a required, unique 6-digit SKU (an editable item code, not

@@ -2,30 +2,49 @@
 
 namespace App\Services;
 
+use App\Models\Setting;
 use Cloudinary\Api\ApiUtils;
 use Cloudinary\Cloudinary;
 
 class CloudinaryService
 {
     private Cloudinary $cloudinary;
+    private ?string $cloudName;
+    private ?string $apiKey;
+    private ?string $apiSecret;
+    private string $folder;
 
     public function __construct()
     {
+        // Prefer credentials saved in Settings (API keys tab); fall back to .env config.
+        $this->cloudName = $this->setting('cloudinary_cloud_name') ?: config('services.cloudinary.cloud_name');
+        $this->apiKey    = $this->setting('cloudinary_api_key', true) ?: config('services.cloudinary.api_key');
+        $this->apiSecret = $this->setting('cloudinary_api_secret', true) ?: config('services.cloudinary.api_secret');
+        $this->folder    = $this->setting('cloudinary_folder') ?: config('services.cloudinary.folder', 'products');
+
         $this->cloudinary = new Cloudinary([
             'cloud' => [
-                'cloud_name' => config('services.cloudinary.cloud_name'),
-                'api_key'    => config('services.cloudinary.api_key'),
-                'api_secret' => config('services.cloudinary.api_secret'),
+                'cloud_name' => $this->cloudName,
+                'api_key'    => $this->apiKey,
+                'api_secret' => $this->apiSecret,
             ],
             'url' => ['secure' => true],
         ]);
     }
 
+    /** Read a saved setting defensively (DB may be unavailable during install/migrations). */
+    private function setting(string $key, bool $secret = false): ?string
+    {
+        try {
+            return $secret ? Setting::getSecret($key) : Setting::get($key);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     public function configured(): bool
     {
-        return (bool) (config('services.cloudinary.cloud_name')
-            && config('services.cloudinary.api_key')
-            && config('services.cloudinary.api_secret'));
+        return (bool) ($this->cloudName && $this->apiKey && $this->apiSecret);
     }
 
     /**
@@ -41,18 +60,18 @@ class CloudinaryService
         }
 
         $timestamp = time();
-        $folder    = config('services.cloudinary.folder', 'products');
+        $folder    = $this->folder;
 
         // Only timestamp + folder are signed; neither value contains & or =, so the
         // signature is identical across signature versions 1 and 2.
         $signature = ApiUtils::signParameters(
             ['folder' => $folder, 'timestamp' => $timestamp],
-            (string) config('services.cloudinary.api_secret')
+            (string) $this->apiSecret
         );
 
         return [
-            'cloud_name' => config('services.cloudinary.cloud_name'),
-            'api_key'    => config('services.cloudinary.api_key'),
+            'cloud_name' => $this->cloudName,
+            'api_key'    => $this->apiKey,
             'timestamp'  => $timestamp,
             'folder'     => $folder,
             'signature'  => $signature,
@@ -72,7 +91,7 @@ class CloudinaryService
 
         try {
             $res = $this->cloudinary->uploadApi()->upload($path, [
-                'folder'        => config('services.cloudinary.folder', 'products'),
+                'folder'        => $this->folder,
                 'resource_type' => 'image',
             ]);
         } catch (\Throwable $e) {

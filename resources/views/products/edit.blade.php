@@ -32,6 +32,20 @@
             @endforeach
         </select>
     </div>
+    <div style="margin-bottom:10px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#e2e8f0;cursor:pointer">
+            <input type="checkbox" name="is_weighed" value="1" {{ old('is_weighed', $product->is_weighed) ? 'checked' : '' }}
+                onchange="document.getElementById('scale-plu-row').style.display=this.checked?'block':'none'"
+                style="accent-color:#818cf8">
+            Weighed item (sold by weight via scale)
+        </label>
+        <div id="scale-plu-row" style="margin-top:8px;{{ old('is_weighed', $product->is_weighed) ? '' : 'display:none' }}">
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Scale PLU — the item code programmed on the scale</label>
+            <input type="text" name="scale_plu" value="{{ old('scale_plu', $product->scale_plu) }}" inputmode="numeric" placeholder="e.g. 12"
+                style="width:160px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+            @error('scale_plu')<div style="color:#f87171;font-size:10px;margin-top:3px">{{ $message }}</div>@enderror
+        </div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div><label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Category</label>
             <select name="category_id" style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">

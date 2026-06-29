@@ -106,6 +106,9 @@
             <a href="{{ route('categories.index') }}" class="sidebar-link">
                 <i class="ti ti-category"></i>Categories
             </a>
+            <a href="{{ route('barcodes.labels') }}" class="sidebar-link {{ request()->routeIs('barcodes.labels') ? 'active' : '' }}">
+                <i class="ti ti-barcode"></i>Barcode labels
+            </a>
 
             <div class="sidebar-section">Inventory</div>
             <a href="{{ route('stock.index') }}" class="sidebar-link {{ request()->routeIs('stock.index') ? 'active' : '' }}">

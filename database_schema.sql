@@ -153,6 +153,8 @@ CREATE TABLE products (
     category_id BIGINT UNSIGNED,
     brand_id BIGINT UNSIGNED,
     unit VARCHAR(50) DEFAULT 'piece',
+    is_weighed TINYINT(1) NOT NULL DEFAULT 0,
+    scale_plu VARCHAR(20) NULL UNIQUE,
     purchase_price DECIMAL(15,2) DEFAULT 0,
     sale_price DECIMAL(15,2) DEFAULT 0,
     tax_percent DECIMAL(5,2) DEFAULT 0,

@@ -671,12 +671,44 @@ function posScreen() {
         // Enter on the scan bar: look up a barcode/name and add the first match
         handleScan(value) {
             if (!value) return;
-            fetch(`/api/products/search?q=${encodeURIComponent(value)}&category=`)
+            const code = value.trim();
+            // Scale/weighed embedded barcodes use GS1 prefix "2" (typically 13 digits, but
+            // the length is configurable) — resolve them via the barcode endpoint, which
+            // returns the weighed quantity. Falls back to a normal search so ordinary
+            // scans/typing are unaffected.
+            if (/^2\d{11,13}$/.test(code)) {
+                fetch(`/pos/products/barcode/${encodeURIComponent(code)}`)
+                    .then(r => r.ok ? r.json() : Promise.reject())
+                    .then(data => this.addScanned(data))
+                    .catch(() => this.searchAdd(code));
+                return;
+            }
+            this.searchAdd(code);
+        },
+
+        searchAdd(code) {
+            fetch(`/api/products/search?q=${encodeURIComponent(code)}&category=`)
                 .then(r => r.json())
                 .then(list => {
                     if (list.length) this.addToCart(list[0]);
-                    else alert('No product found for: ' + value);
+                    else alert('No product found for: ' + code);
                 });
+        },
+
+        // Add a product returned from the barcode endpoint. Weighed items carry their
+        // own quantity (one line per weigh-in), so they aren't merged like unit items.
+        addScanned(data) {
+            if (data && data.weighed) {
+                this.cart.push({
+                    id: data.id, name: data.name, barcode: data.barcode,
+                    price: data.price, tax_percent: data.tax_percent || 0,
+                    unit: data.unit, qty: data.qty, weighed: true,
+                });
+                this.activeIdx = this.cart.length - 1;
+                this.$nextTick(() => this.scrollToActive());
+            } else {
+                this.addToCart(data);
+            }
         },
 
         cart: [],
