@@ -194,6 +194,7 @@ CREATE TABLE products (
     scale_plu VARCHAR(20) NULL UNIQUE,
     purchase_price DECIMAL(15,2) DEFAULT 0,
     sale_price DECIMAL(15,2) DEFAULT 0,
+    mrp DECIMAL(15,2) NOT NULL DEFAULT 0,
     tax_percent DECIMAL(5,2) DEFAULT 0,
     discount_percent DECIMAL(5,2) DEFAULT 0,
     min_stock INT DEFAULT 5,
@@ -265,6 +266,24 @@ CREATE TABLE stock_transfers (
     FOREIGN KEY (from_branch_id) REFERENCES branches(id),
     FOREIGN KEY (to_branch_id) REFERENCES branches(id),
     FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+-- FIFO / batch cost layers (one per purchase line); carries cost + sale price
+CREATE TABLE stock_layers (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    product_id BIGINT UNSIGNED NOT NULL,
+    branch_id BIGINT UNSIGNED NOT NULL,
+    purchase_item_id BIGINT UNSIGNED NULL,
+    batch_no VARCHAR(50) NULL,
+    qty_remaining DECIMAL(15,3) NOT NULL DEFAULT 0,
+    cost DECIMAL(15,2) NOT NULL DEFAULT 0,
+    sale_price DECIMAL(15,2) NOT NULL DEFAULT 0,
+    received_at DATE NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    INDEX idx_layer_lookup (product_id, branch_id, sale_price),
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
 );
 
 -- ============================================================
@@ -352,6 +371,7 @@ CREATE TABLE sale_items (
     product_variation_id BIGINT UNSIGNED,
     quantity DECIMAL(15,3) NOT NULL,
     unit_price DECIMAL(15,2) NOT NULL,
+    cost DECIMAL(15,2) NULL,
     discount_percent DECIMAL(5,2) DEFAULT 0,
     tax_percent DECIMAL(5,2) DEFAULT 0,
     subtotal DECIMAL(15,2) NOT NULL,
@@ -452,6 +472,9 @@ CREATE TABLE purchase_items (
     quantity DECIMAL(15,3) NOT NULL,
     unit_price DECIMAL(15,2) NOT NULL,
     subtotal DECIMAL(15,2) NOT NULL,
+    batch_no VARCHAR(50) NULL,
+    mrp DECIMAL(15,2) NULL,
+    sale_price DECIMAL(15,2) NULL,
     FOREIGN KEY (purchase_id) REFERENCES purchases(id),
     FOREIGN KEY (product_id) REFERENCES products(id)
 );

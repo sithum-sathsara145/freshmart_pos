@@ -370,6 +370,25 @@ input[type=number]{-moz-appearance:textfield}
     </div>
     </template>
 
+    {{-- Price chooser popup (products with multiple in-stock sale prices) --}}
+    <template x-teleport="body">
+    <div x-show="showPriceModal" x-cloak @keydown.escape.window="showPriceModal=false" @click.self="showPriceModal=false"
+         style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:320px">
+            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Choose price</div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="priceChooserProduct?.name"></div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+                <template x-for="opt in priceChooserOptions" :key="opt">
+                    <button type="button" @click="pickPrice(opt)"
+                        style="height:44px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:7px;color:#e2e8f0;font-size:15px;font-weight:600;cursor:pointer"
+                        x-text="'Rs. ' + Number(opt).toLocaleString()"></button>
+                </template>
+            </div>
+            <button type="button" @click="showPriceModal=false" style="width:100%;height:34px;margin-top:12px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+        </div>
+    </div>
+    </template>
+
     {{-- Cash payment popup --}}
     <template x-teleport="body">
     <div x-show="showCashModal" x-cloak @keydown.escape.window="showCashModal=false" @click.self="showCashModal=false"
@@ -765,13 +784,38 @@ function posScreen() {
         get cashNum() { return parseFloat(this.cashStr) || 0; },
         get cashDisplay() { return parseFloat(this.cashStr).toLocaleString(); },
 
+        // ── Multi-price chooser ──
+        showPriceModal: false,
+        priceChooserProduct: null,
+        priceChooserOptions: [],
+
         addToCart(product) {
-            const i = this.cart.findIndex(x => x.id === product.id);
+            // Non-weighed products can have several in-stock prices (same SKU/barcode) — let the cashier pick.
+            const opts = (product && !product.is_weighed && Array.isArray(product.price_options)) ? product.price_options : [];
+            if (opts.length > 1) {
+                this.priceChooserProduct = product;
+                this.priceChooserOptions = opts;
+                this.showPriceModal = true;
+                return;
+            }
+            this.addLine(product, opts.length === 1 ? opts[0] : product.price);
+        },
+
+        pickPrice(price) {
+            this.showPriceModal = false;
+            if (this.priceChooserProduct) this.addLine(this.priceChooserProduct, price);
+            this.priceChooserProduct = null;
+        },
+
+        // Add a line at a specific price; lines of the same product at different prices stay separate.
+        addLine(product, price) {
+            const p = Number(price);
+            const i = this.cart.findIndex(x => x.id === product.id && Number(x.price) === p && !x.weighed);
             if (i !== -1) {
                 this.cart[i].qty++;
                 this.activeIdx = i;
             } else {
-                this.cart.push({ ...product, qty: 1 });
+                this.cart.push({ ...product, price: p, qty: 1 });
                 this.activeIdx = this.cart.length - 1;
             }
             this.$nextTick(() => this.scrollToActive());

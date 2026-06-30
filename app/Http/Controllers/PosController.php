@@ -7,6 +7,7 @@ use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\Customer;
 use App\Models\Stock;
+use App\Models\StockLayer;
 use App\Models\Account;
 use App\Models\Payment;
 use App\Models\Coupon;
@@ -204,11 +205,22 @@ class PosController extends Controller
                           ->where('branch_id', $branchId)
                           ->value('quantity') ?? 0;
 
+            $priceOptions = $product->is_weighed ? [] : StockLayer::where('product_id', $product->id)
+                ->where('branch_id', $branchId)
+                ->where('qty_remaining', '>', 0)
+                ->distinct()
+                ->orderBy('sale_price')
+                ->pluck('sale_price')
+                ->map(fn($v) => (float) $v)
+                ->all();
+
             return response()->json([
                 'id'          => $product->id,
                 'name'        => $product->name,
                 'barcode'     => $product->barcode,
                 'price'       => $product->sale_price,
+                'price_options' => $priceOptions,
+                'is_weighed'  => (bool) $product->is_weighed,
                 'tax_percent' => $product->tax_percent,
                 'unit'        => $product->unit,
                 'stock'       => $stock,
@@ -336,21 +348,23 @@ class PosController extends Controller
                 'notes'          => $request->notes,
             ]);
 
-            // Sale items + stock deduction
+            // Sale items + stock deduction (consume FIFO/WAC cost layers for COGS)
             foreach ($request->items as $item) {
+                $product = Product::find($item['id']);
+                $qty     = (float) $item['qty'];
+                $cogs    = $product
+                    ? \App\Support\Inventory::consume($product, $branchId, $qty, isset($item['price']) ? (float) $item['price'] : null)
+                    : 0;
+
                 SaleItem::create([
                     'sale_id'      => $sale->id,
                     'product_id'   => $item['id'],
-                    'quantity'     => $item['qty'],
+                    'quantity'     => $qty,
                     'unit_price'   => $item['price'],
+                    'cost'         => $cogs,
                     'tax_percent'  => $item['tax_percent'] ?? 0,
-                    'subtotal'     => $item['price'] * $item['qty'],
+                    'subtotal'     => $item['price'] * $qty,
                 ]);
-
-                // Deduct stock
-                Stock::where('product_id', $item['id'])
-                     ->where('branch_id', $branchId)
-                     ->decrement('quantity', $item['qty']);
             }
 
             // Update coupon usage
@@ -433,4 +447,5 @@ class PosController extends Controller
         $num  = $last ? ((int) substr($last, 4)) + 1 : 1;
         return 'INV-' . str_pad($num, 6, '0', STR_PAD_LEFT);
     }
+
 }

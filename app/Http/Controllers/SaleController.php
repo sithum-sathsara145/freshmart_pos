@@ -93,18 +93,20 @@ class SaleController extends Controller
             ]);
 
             foreach ($request->items as $item) {
+                $product = Product::find($item['product_id']);
+                $cogs    = $product
+                    ? \App\Support\Inventory::consume($product, $branchId, (float) $item['quantity'], (float) $item['unit_price'])
+                    : 0;
+
                 SaleItem::create([
                     'sale_id'      => $sale->id,
                     'product_id'   => $item['product_id'],
                     'quantity'     => $item['quantity'],
                     'unit_price'   => $item['unit_price'],
+                    'cost'         => $cogs,
                     'tax_percent'  => $item['tax_percent'] ?? 0,
                     'subtotal'     => $item['quantity'] * $item['unit_price'],
                 ]);
-
-                Stock::where('product_id', $item['product_id'])
-                     ->where('branch_id', $branchId)
-                     ->decrement('quantity', $item['quantity']);
             }
 
             // Loyalty points

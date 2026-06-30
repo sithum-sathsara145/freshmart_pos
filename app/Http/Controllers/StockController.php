@@ -7,6 +7,7 @@ use App\Models\StockAdjustment;
 use App\Models\StockTransfer;
 use App\Models\Product;
 use App\Models\Branch;
+use App\Support\Inventory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -36,11 +37,13 @@ class StockController extends Controller
 
     public function adjustments(Request $request)
     {
-        $adjustments = StockAdjustment::with(['product', 'branch'])
+        $adjustments = StockAdjustment::with(['product', 'createdBy'])
             ->where('branch_id', auth()->user()->branch_id)
             ->latest()->paginate(20);
 
-        return view('stock.adjustments', compact('adjustments'));
+        $products = Product::orderBy('name')->get(['id', 'name', 'sku']);
+
+        return view('stock.adjustments', compact('adjustments', 'products'));
     }
 
     public function storeAdjustment(Request $request)
@@ -55,25 +58,37 @@ class StockController extends Controller
         DB::beginTransaction();
         try {
             $branchId = auth()->user()->branch_id;
+            $product  = Product::findOrFail($request->product_id);
+            $onHand   = (float) (Stock::where('product_id', $product->id)->where('branch_id', $branchId)->value('quantity') ?? 0);
 
+            // The amount actually applied — removals are capped at what's on hand.
+            $requested = (float) $request->quantity;
+            $applied = in_array($request->type, ['add', 'set'], true) ? $requested : min($requested, $onHand);
+
+            // Log the real change, not just the requested amount.
             StockAdjustment::create([
-                ...$request->only(['product_id', 'type', 'quantity', 'reason']),
+                'product_id' => $product->id,
                 'branch_id'  => $branchId,
+                'type'       => $request->type,
+                'quantity'   => $applied,
+                'reason'     => $request->reason,
                 'created_by' => auth()->id(),
             ]);
 
-            $stock = Stock::firstOrCreate(
-                ['product_id' => $request->product_id, 'branch_id' => $branchId],
-                ['quantity'   => 0]
-            );
-
-            match($request->type) {
-                'add'     => $stock->increment('quantity', $request->quantity),
-                'remove',
-                'damage',
-                'expired' => $stock->decrement('quantity', min($request->quantity, $stock->quantity)),
-                'set'     => $stock->update(['quantity' => $request->quantity]),
-            };
+            // Route through Inventory so the cost layers stay in sync with the aggregate.
+            $today = now()->toDateString();
+            if ($request->type === 'add') {
+                Inventory::addLayer($product->id, $branchId, $applied, (float) $product->purchase_price, (float) $product->sale_price, 'ADJUST', $today);
+            } elseif ($request->type === 'set') {
+                $diff = $requested - $onHand;
+                if ($diff > 0) {
+                    Inventory::addLayer($product->id, $branchId, $diff, (float) $product->purchase_price, (float) $product->sale_price, 'ADJUST', $today);
+                } elseif ($diff < 0) {
+                    Inventory::consume($product, $branchId, -$diff);
+                }
+            } else {   // remove / damage / expired
+                Inventory::consume($product, $branchId, $applied);
+            }
 
             DB::commit();
             return back()->with('success', 'Stock adjusted successfully.');
@@ -92,8 +107,9 @@ class StockController extends Controller
             ->latest()->paginate(20);
 
         $branches = Branch::where('status', 'active')->get();
+        $products = Product::orderBy('name')->get(['id', 'name', 'sku']);
 
-        return view('stock.transfers', compact('transfers', 'branches'));
+        return view('stock.transfers', compact('transfers', 'branches', 'products'));
     }
 
     public function storeTransfer(Request $request)
@@ -122,14 +138,12 @@ class StockController extends Controller
                 'created_by' => auth()->id(),
             ]);
 
-            // Deduct from source
-            $sourceStock->decrement('quantity', $request->quantity);
-
-            // Add to destination
-            Stock::updateOrCreate(
-                ['product_id' => $request->product_id, 'branch_id' => $request->to_branch_id],
-                ['quantity'   => DB::raw("quantity + {$request->quantity}")]
-            );
+            // Move cost layers from source to destination (FIFO out, single layer in).
+            $product  = Product::findOrFail($request->product_id);
+            $qty      = (float) $request->quantity;
+            $cogs     = Inventory::consume($product, (int) $request->from_branch_id, $qty);
+            $unitCost = $qty > 0 ? round($cogs / $qty, 2) : (float) $product->purchase_price;
+            Inventory::addLayer($product->id, (int) $request->to_branch_id, $qty, $unitCost, (float) $product->sale_price, 'TRANSFER', now()->toDateString());
 
             DB::commit();
             return back()->with('success', 'Stock transferred successfully.');
@@ -140,9 +154,10 @@ class StockController extends Controller
         }
     }
 
-    public function updateTransferStatus(int $id)
+    public function updateTransferStatus(Request $request, int $id)
     {
-        StockTransfer::findOrFail($id)->update(['status' => request('status')]);
+        $request->validate(['status' => 'required|in:pending,in_transit,completed']);
+        StockTransfer::findOrFail($id)->update(['status' => $request->status]);
         return back()->with('success', 'Transfer status updated.');
     }
 

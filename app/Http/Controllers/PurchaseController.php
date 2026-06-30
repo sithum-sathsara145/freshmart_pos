@@ -7,6 +7,7 @@ use App\Models\PurchaseItem;
 use App\Models\Supplier;
 use App\Models\Product;
 use App\Models\Stock;
+use App\Models\StockLayer;
 use App\Models\Payment;
 use App\Models\Account;
 use Illuminate\Http\Request;
@@ -59,6 +60,9 @@ class PurchaseController extends Controller
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity'   => 'required|numeric|min:0.001',
             'items.*.unit_price' => 'required|numeric|min:0',
+            'items.*.batch_no'   => 'nullable|string|max:50',
+            'items.*.mrp'        => 'nullable|numeric|min:0',
+            'items.*.sale_price' => 'nullable|numeric|min:0',
         ]);
 
         DB::beginTransaction();
@@ -88,22 +92,56 @@ class PurchaseController extends Controller
             ]);
 
             foreach ($request->items as $item) {
-                PurchaseItem::create([
+                $product = Product::find($item['product_id']);
+                $qty     = (float) $item['quantity'];
+                $cost    = (float) $item['unit_price'];
+                $batch   = $item['batch_no'] ?? null;
+                $mrp         = isset($item['mrp']) && $item['mrp'] !== '' ? (float) $item['mrp'] : null;
+                $enteredSale = isset($item['sale_price']) && $item['sale_price'] !== '' ? (float) $item['sale_price'] : null;
+
+                // On-hand before this purchase (aggregate).
+                $onHand = (float) (Stock::where('product_id', $product->id)->where('branch_id', $branchId)->value('quantity') ?? 0);
+
+                if ($product->is_weighed) {
+                    // Weighted-average cost; the sale price is set manually (defaults to current).
+                    $newQty = $onHand + $qty;
+                    $wac = $newQty > 0
+                        ? (($onHand * (float) $product->purchase_price) + ($qty * $cost)) / $newQty
+                        : $cost;
+                    $product->purchase_price = round($wac, 2);
+                    if ($enteredSale !== null) $product->sale_price = $enteredSale;
+                    if ($mrp !== null)         $product->mrp = $mrp;
+                    $product->save();
+
+                    $layerCost = round($wac, 2);                 // weighed COGS uses WAC
+                    $layerSale = (float) $product->sale_price;   // weighed is single-price
+                } else {
+                    // Non-weighed: the layer keeps its own cost + sale price. FIFO (same price,
+                    // varying cost) and multi-price (varying sale price) both fall out of this.
+                    $layerSale = $enteredSale ?? (float) $product->sale_price;
+                    $layerCost = $cost;
+                    if ($mrp !== null)         $product->mrp = $mrp;
+                    if ($enteredSale !== null) $product->sale_price = $enteredSale;   // default = latest
+                    $product->purchase_price = $cost;                                // display latest cost
+                    $product->save();
+                }
+
+                $purchaseItem = PurchaseItem::create([
                     'purchase_id' => $purchase->id,
-                    'product_id'  => $item['product_id'],
-                    'quantity'    => $item['quantity'],
-                    'unit_price'  => $item['unit_price'],
-                    'subtotal'    => $item['quantity'] * $item['unit_price'],
+                    'product_id'  => $product->id,
+                    'quantity'    => $qty,
+                    'unit_price'  => $cost,
+                    'batch_no'    => $batch,
+                    'mrp'         => $mrp,
+                    'sale_price'  => $layerSale,
+                    'subtotal'    => $qty * $cost,
                 ]);
 
-                // Add to stock
-                Stock::updateOrCreate(
-                    ['product_id' => $item['product_id'], 'branch_id' => $branchId],
-                    ['quantity'   => DB::raw("quantity + {$item['quantity']}")]
+                // FIFO / batch cost layer + aggregate on-hand (kept in sync centrally).
+                \App\Support\Inventory::addLayer(
+                    $product->id, $branchId, $qty, $layerCost, $layerSale,
+                    $batch, $request->purchase_date, $purchaseItem->id
                 );
-
-                // Update product purchase price
-                Product::find($item['product_id'])->update(['purchase_price' => $item['unit_price']]);
             }
 
             // Update supplier balance

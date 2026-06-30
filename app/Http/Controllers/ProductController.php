@@ -217,7 +217,11 @@ class ProductController extends Controller
 
                 $opening = $this->importNum($r['opening_stock'] ?? 0);
                 if ($opening > 0) {
-                    Stock::create(['product_id' => $product->id, 'branch_id' => $branchId, 'quantity' => $opening]);
+                    \App\Support\Inventory::addLayer(
+                        $product->id, $branchId, $opening,
+                        (float) $product->purchase_price, (float) $product->sale_price,
+                        'OPENING', now()->toDateString()
+                    );
                 }
                 DB::commit();
 
@@ -404,11 +408,11 @@ class ProductController extends Controller
             // Set opening stock for each branch
             $openingStock = $request->opening_stock ?? 0;
             if ($openingStock > 0) {
-                Stock::create([
-                    'product_id' => $product->id,
-                    'branch_id'  => auth()->user()->branch_id,
-                    'quantity'   => $openingStock,
-                ]);
+                \App\Support\Inventory::addLayer(
+                    $product->id, auth()->user()->branch_id, (float) $openingStock,
+                    (float) $product->purchase_price, (float) $product->sale_price,
+                    'OPENING', now()->toDateString()
+                );
             }
 
             DB::commit();
@@ -554,30 +558,44 @@ class ProductController extends Controller
         $q        = $request->get('q', '');
         $category = $request->get('category');
 
+        $products = Product::with(['category'])
+            ->where('status', 'active')
+            ->when($q, fn($query) => $query->where(function ($query) use ($q) {
+                $query->where('name', 'like', "%$q%")
+                      ->orWhere('barcode', 'like', "%$q%")
+                      ->orWhere('sku', 'like', "%$q%");
+            }))
+            ->when($category, fn($query) => $query->where('category_id', $category))
+            ->limit(30)
+            ->get();
+
+        // Distinct in-stock sale prices per product (the POS price options for multi-price items).
+        $priceMap = \App\Models\StockLayer::whereIn('product_id', $products->pluck('id'))
+            ->where('branch_id', $branchId)
+            ->where('qty_remaining', '>', 0)
+            ->select('product_id', 'sale_price')
+            ->distinct()
+            ->get()
+            ->groupBy('product_id')
+            ->map(fn($g) => $g->pluck('sale_price')->map(fn($v) => (float) $v)->sort()->values()->all());
+
         return response()->json(
-            Product::with(['category'])
-                ->where('status', 'active')
-                ->when($q, fn($query) => $query->where(function ($query) use ($q) {
-                    $query->where('name', 'like', "%$q%")
-                          ->orWhere('barcode', 'like', "%$q%")
-                          ->orWhere('sku', 'like', "%$q%");
-                }))
-                ->when($category, fn($query) => $query->where('category_id', $category))
-                ->limit(30)
-                ->get()
-                ->map(fn($p) => [
-                    'id'          => $p->id,
-                    'name'        => $p->name,
-                    'sku'         => $p->sku,
-                    'barcode'     => $p->barcode,
-                    'price'       => (float) $p->sale_price,
-                    'purchase_price' => (float) $p->purchase_price,
-                    'tax_percent' => (float) $p->tax_percent,
-                    'unit'        => $p->unit,
-                    'stock'       => $p->stockForBranch($branchId),
-                    'image'       => $p->imageUrl(),
-                    'category'    => $p->category?->name,
-                ])
+            $products->map(fn($p) => [
+                'id'          => $p->id,
+                'name'        => $p->name,
+                'sku'         => $p->sku,
+                'barcode'     => $p->barcode,
+                'price'       => (float) $p->sale_price,
+                'price_options' => $p->is_weighed ? [] : ($priceMap[$p->id] ?? []),
+                'purchase_price' => (float) $p->purchase_price,
+                'mrp'         => (float) $p->mrp,
+                'is_weighed'  => (bool) $p->is_weighed,
+                'tax_percent' => (float) $p->tax_percent,
+                'unit'        => $p->unit,
+                'stock'       => $p->stockForBranch($branchId),
+                'image'       => $p->imageUrl(),
+                'category'    => $p->category?->name,
+            ])
         );
     }
 

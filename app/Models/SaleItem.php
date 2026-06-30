@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class SaleItem extends Model
 {
-    protected $fillable = ['sale_id', 'product_id', 'product_variation_id', 'quantity', 'unit_price', 'discount_percent', 'tax_percent', 'subtotal'];
+    protected $fillable = ['sale_id', 'product_id', 'product_variation_id', 'quantity', 'unit_price', 'cost', 'discount_percent', 'tax_percent', 'subtotal'];
 
     public function sale(): BelongsTo
     {
