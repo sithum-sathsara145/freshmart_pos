@@ -331,7 +331,8 @@ CREATE TABLE sales (
 CREATE TABLE sale_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     sale_id BIGINT UNSIGNED NOT NULL,
-    product_id BIGINT UNSIGNED NOT NULL,
+    product_id BIGINT UNSIGNED,
+    name VARCHAR(255),
     product_variation_id BIGINT UNSIGNED,
     quantity DECIMAL(15,3) NOT NULL,
     unit_price DECIMAL(15,2) NOT NULL,

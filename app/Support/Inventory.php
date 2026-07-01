@@ -64,23 +64,33 @@ class Inventory
         $remaining = $qty;
         $cogs      = 0.0;
 
-        $query = StockLayer::where('product_id', $product->id)
-            ->where('branch_id', $branchId)
-            ->where('qty_remaining', '>', 0);
-        if (! $weighed && $salePrice !== null) {
-            $query->where('sale_price', $salePrice);
-        }
+        // Pass 1 takes the chosen sale price's layers (FIFO); pass 2 takes any remaining
+        // layers regardless of price — covers a manually overridden price at the till and
+        // keeps the layers in step with the aggregate.
+        $passes = (! $weighed && $salePrice !== null) ? [$salePrice, null] : [null];
 
-        foreach ($query->orderBy('received_at')->orderBy('id')->get() as $layer) {
+        foreach ($passes as $priceFilter) {
             if ($remaining <= 0) {
                 break;
             }
-            $take = min($remaining, (float) $layer->qty_remaining);
-            if (! $weighed) {
-                $cogs += $take * (float) $layer->cost;
+            $query = StockLayer::where('product_id', $product->id)
+                ->where('branch_id', $branchId)
+                ->where('qty_remaining', '>', 0);
+            if ($priceFilter !== null) {
+                $query->where('sale_price', $priceFilter);
             }
-            $layer->decrement('qty_remaining', $take);
-            $remaining -= $take;
+
+            foreach ($query->orderBy('received_at')->orderBy('id')->get() as $layer) {
+                if ($remaining <= 0) {
+                    break;
+                }
+                $take = min($remaining, (float) $layer->qty_remaining);
+                if (! $weighed) {
+                    $cogs += $take * (float) $layer->cost;
+                }
+                $layer->decrement('qty_remaining', $take);
+                $remaining -= $take;
+            }
         }
 
         if ($weighed) {

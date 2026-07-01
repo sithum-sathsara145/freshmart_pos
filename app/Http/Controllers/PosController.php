@@ -271,7 +271,8 @@ class PosController extends Controller
     {
         $request->validate([
             'items'          => 'required|array|min:1',
-            'items.*.id'     => 'required|exists:products,id',
+            'items.*.id'     => 'nullable|integer|exists:products,id',   // null = custom item
+            'items.*.name'   => 'nullable|string|max:255',
             'items.*.qty'    => 'required|numeric|min:0.001',
             'items.*.price'  => 'required|numeric|min:0',
             'payment_method' => 'required|in:cash,card,credit,mixed',
@@ -285,6 +286,25 @@ class PosController extends Controller
         $counterId = auth()->user()->counter_id;
         if ($counterId && ! CounterSession::where('counter_id', $counterId)->where('status', 'open')->exists()) {
             return response()->json(['success' => false, 'message' => 'Open the counter before making sales.'], 422);
+        }
+
+        // Block overselling — total requested per product (across lines) must fit branch stock.
+        $branchId = auth()->user()->branch_id;
+        $needByProduct = [];
+        foreach ($request->items as $item) {
+            if (! empty($item['id'])) {
+                $needByProduct[$item['id']] = ($needByProduct[$item['id']] ?? 0) + (float) $item['qty'];
+            }
+        }
+        foreach ($needByProduct as $pid => $needed) {
+            $onHand = (float) (Stock::where('product_id', $pid)->where('branch_id', $branchId)->value('quantity') ?? 0);
+            if ($needed - $onHand > 0.0001) {
+                $name = Product::where('id', $pid)->value('name');
+                return response()->json([
+                    'success' => false,
+                    'message' => "Not enough stock for \"{$name}\" — available {$onHand}, requested {$needed}.",
+                ], 422);
+            }
         }
 
         DB::beginTransaction();
@@ -350,8 +370,28 @@ class PosController extends Controller
 
             // Sale items + stock deduction (consume FIFO/WAC cost layers for COGS)
             foreach ($request->items as $item) {
+                $qty = (float) $item['qty'];
+
+                // Custom / one-off item — no catalogue product, no stock movement.
+                if (empty($item['id'])) {
+                    $name = trim((string) ($item['name'] ?? ''));
+                    if ($name === '') {
+                        continue;
+                    }
+                    SaleItem::create([
+                        'sale_id'     => $sale->id,
+                        'product_id'  => null,
+                        'name'        => $name,
+                        'quantity'    => $qty,
+                        'unit_price'  => $item['price'],
+                        'cost'        => 0,
+                        'tax_percent' => $item['tax_percent'] ?? 0,
+                        'subtotal'    => $item['price'] * $qty,
+                    ]);
+                    continue;
+                }
+
                 $product = Product::find($item['id']);
-                $qty     = (float) $item['qty'];
                 $cogs    = $product
                     ? \App\Support\Inventory::consume($product, $branchId, $qty, isset($item['price']) ? (float) $item['price'] : null)
                     : 0;
