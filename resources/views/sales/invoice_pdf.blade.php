@@ -71,8 +71,8 @@ tbody tr:nth-child(even){background:#f8f8fc}
         @foreach($sale->items as $i => $item)
         <tr>
             <td>{{ $i+1 }}</td>
-            <td>{{ $item->product->name }}</td>
-            <td>{{ $item->product->unit }}</td>
+            <td>{{ $item->product?->name ?? $item->name }}</td>
+            <td>{{ $item->product?->unit ?? 'Item' }}</td>
             <td class="right">{{ $item->quantity }}</td>
             <td class="right">Rs. {{ number_format($item->unit_price) }}</td>
             <td class="right">Rs. {{ number_format($item->subtotal) }}</td>

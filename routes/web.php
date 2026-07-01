@@ -56,8 +56,15 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/pos/receipt/{id}', [PosController::class, 'receipt'])->name('pos.receipt');
 
     // Products
+    // Must be declared before the resource so they aren't captured by /products/{product}.
+    Route::get('/products/upload-signature', [ProductController::class, 'uploadSignature'])->name('products.upload-signature');
+    Route::get('/products/import', [ProductController::class, 'importForm'])->name('products.import');
+    Route::get('/products/import/sample', [ProductController::class, 'importSample'])->name('products.import.sample');
+    Route::post('/products/import', [ProductController::class, 'import'])->name('products.import.store');
+    Route::get('/products/export', [ProductController::class, 'export'])->name('products.export');
     Route::resource('products', ProductController::class);
     Route::get('/products/{product}/print-barcode', [BarcodeController::class, 'print'])->name('products.barcode');
+    Route::get('/barcodes/labels', [BarcodeController::class, 'labels'])->name('barcodes.labels');
     Route::post('/barcodes/bulk-print', [BarcodeController::class, 'bulkPrint'])->name('barcodes.bulk');
 
     // Product sub-modules
@@ -162,6 +169,7 @@ Route::middleware(['auth'])->group(function () {
     // Settings
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
     Route::post('/settings', [SettingController::class, 'save'])->name('settings.save');
+    Route::post('/settings/api-keys', [SettingController::class, 'saveApiKeys'])->name('settings.api-keys.save');
     // Route::resource('/settings/branches', SettingController::class . 'BranchController');
     // Route::resource('/settings/counters', SettingController::class . 'CounterController');
     // Route::resource('/settings/users', SettingController::class . 'UserController');

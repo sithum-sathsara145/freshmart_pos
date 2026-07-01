@@ -20,7 +20,7 @@ use App\Models\Banner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Picqer\Barcode\BarcodeGeneratorPNG;
+use Picqer\Barcode\BarcodeGeneratorSVG;
 
 
 // =========================================================
@@ -296,27 +296,55 @@ class BarcodeController extends Controller
 {
     public function print(Product $product)
     {
-        $generator = new BarcodeGeneratorPNG();
+        $generator = new BarcodeGeneratorSVG();
         $barcode   = base64_encode($generator->getBarcode($product->barcode ?? $product->id, $generator::TYPE_CODE_128));
         $settings  = Setting::pluck('value', 'key_name');
 
         return view('barcodes.print', compact('product', 'barcode', 'settings'));
     }
 
+    // Product picker for printing many barcode labels at once.
+    public function labels()
+    {
+        $products = Product::with('category')
+            ->orderBy('name')
+            ->get(['id', 'name', 'sku', 'barcode', 'sale_price', 'category_id', 'status']);
+
+        $categories = \App\Models\Category::orderBy('name')->get(['id', 'name']);
+
+        return view('barcodes.labels', compact('products', 'categories'));
+    }
+
     public function bulkPrint(Request $request)
     {
-        $request->validate(['product_ids' => 'required|array', 'copies' => 'required|integer|min:1|max:100']);
-        $products  = Product::whereIn('id', $request->product_ids)->get();
-        $generator = new BarcodeGeneratorPNG();
-        $settings  = Setting::pluck('value', 'key_name');
-
-        $barcodes = $products->map(fn($p) => [
-            'product' => $p,
-            'barcode' => base64_encode($generator->getBarcode($p->barcode ?? $p->id, $generator::TYPE_CODE_128)),
-            'copies'  => $request->copies,
+        $request->validate([
+            'product_ids'    => 'required|array|min:1',
+            'product_ids.*'  => 'integer|exists:products,id',
+            'copies'         => 'nullable|array',
+            'default_copies' => 'nullable|integer|min:1|max:200',
+            'label_size'     => 'nullable|in:roll58,roll40,a4',
         ]);
 
-        return view('barcodes.bulk_print', compact('barcodes', 'settings'));
+        $default   = (int) $request->input('default_copies', 1);
+        $copiesMap = $request->input('copies', []);
+        $products  = Product::whereIn('id', $request->product_ids)->orderBy('name')->get();
+        $generator = new BarcodeGeneratorSVG();
+        $settings  = Setting::pluck('value', 'key_name');
+
+        $barcodes = $products->map(function ($p) use ($generator, $copiesMap, $default) {
+            $copies = (int) ($copiesMap[$p->id] ?? $default);
+            return [
+                'product' => $p,
+                'barcode' => base64_encode($generator->getBarcode($p->barcode ?? $p->id, $generator::TYPE_CODE_128)),
+                'copies'  => max(1, min(200, $copies)),
+            ];
+        })->values();
+
+        $labelSize = $request->input('label_size', 'a4');
+        $showPrice = $request->boolean('show_price', true);
+        $showName  = $request->boolean('show_name', true);
+
+        return view('barcodes.bulk_print', compact('barcodes', 'settings', 'labelSize', 'showPrice', 'showName'));
     }
 }
 
@@ -332,15 +360,55 @@ class SettingController extends Controller
         $users     = \App\Models\User::with('roles')->get();
         $counters  = \App\Models\Counter::with('branch')->get();
 
-        return view('settings.index', compact('settings', 'branches', 'users', 'counters'));
+        // API keys tab — never expose secret values to the view; only whether they are set.
+        $apiCredentials = config('api_credentials', []);
+        $apiKeyState    = [];
+        foreach ($apiCredentials as $group) {
+            foreach ($group['fields'] as $key => $field) {
+                $apiKeyState[$key] = empty($field['secret'])
+                    ? ['value' => Setting::get($key, '')]
+                    : ['set' => Setting::has($key)];
+            }
+        }
+
+        return view('settings.index', compact(
+            'settings', 'branches', 'users', 'counters', 'apiCredentials', 'apiKeyState'
+        ));
     }
 
     public function save(Request $request)
     {
-        foreach ($request->except(['_token', '_method']) as $key => $value) {
+        // Never let API-key fields flow through the generic plaintext save.
+        $reserved = collect(config('api_credentials', []))
+            ->flatMap(fn ($g) => array_keys($g['fields']))
+            ->flatMap(fn ($k) => [$k, $k . '_clear'])
+            ->all();
+
+        foreach ($request->except(array_merge(['_token', '_method'], $reserved)) as $key => $value) {
             Setting::updateOrCreate(['key_name' => $key], ['value' => $value]);
         }
         return back()->with('success', 'Settings saved.');
+    }
+
+    // Secret values are encrypted at rest; blank fields keep the existing value.
+    public function saveApiKeys(Request $request)
+    {
+        foreach (config('api_credentials', []) as $group) {
+            foreach ($group['fields'] as $key => $field) {
+                if (! empty($field['secret'])) {
+                    if ($request->boolean($key . '_clear')) {
+                        Setting::putSecret($key, null);          // delete the stored secret
+                    } elseif (filled($request->input($key))) {
+                        Setting::putSecret($key, $request->input($key));
+                    }
+                    // blank + not cleared → leave the current value untouched
+                } else {
+                    Setting::put($key, (string) $request->input($key, ''));
+                }
+            }
+        }
+
+        return redirect()->to(route('settings.index') . '#apikeys')->with('success', 'API keys saved.');
     }
 }
 

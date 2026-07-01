@@ -6,6 +6,8 @@ use App\Models\Sale;
 use App\Models\SaleReturn;
 use App\Models\SaleReturnItem;
 use App\Models\Stock;
+use App\Models\Product;
+use App\Support\Inventory;
 use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -67,10 +69,15 @@ class SaleReturnController extends Controller
                     'subtotal'       => $item['quantity'] * $item['unit_price'],
                 ]);
 
-                // Return stock
-                Stock::where('product_id', $item['product_id'])
-                     ->where('branch_id', $sale->branch_id)
-                     ->increment('quantity', $item['quantity']);
+                // Return stock as a fresh layer (re-sellable at the returned price).
+                $product = Product::find($item['product_id']);
+                if ($product) {
+                    Inventory::addLayer(
+                        $product->id, $sale->branch_id, (float) $item['quantity'],
+                        (float) $product->purchase_price, (float) $item['unit_price'],
+                        'RETURN', now()->toDateString()
+                    );
+                }
             }
 
             // Update sale status

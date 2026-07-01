@@ -32,6 +32,20 @@
             @endforeach
         </select>
     </div>
+    <div style="margin-bottom:10px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#e2e8f0;cursor:pointer">
+            <input type="checkbox" name="is_weighed" value="1" {{ old('is_weighed', $product->is_weighed) ? 'checked' : '' }}
+                onchange="document.getElementById('scale-plu-row').style.display=this.checked?'block':'none'"
+                style="accent-color:#818cf8">
+            Weighed item (sold by weight via scale)
+        </label>
+        <div id="scale-plu-row" style="margin-top:8px;{{ old('is_weighed', $product->is_weighed) ? '' : 'display:none' }}">
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Scale PLU — the item code programmed on the scale</label>
+            <input type="text" name="scale_plu" value="{{ old('scale_plu', $product->scale_plu) }}" inputmode="numeric" placeholder="e.g. 12"
+                style="width:160px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+            @error('scale_plu')<div style="color:#f87171;font-size:10px;margin-top:3px">{{ $message }}</div>@enderror
+        </div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div><label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Category</label>
             <select name="category_id" style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
@@ -50,7 +64,7 @@
     @foreach([['purchase_price','Purchase price'],['sale_price','Sale price'],['tax_percent','Tax %'],['discount_percent','Discount %'],['min_stock','Min stock alert']] as [$n,$l])
     <div style="margin-bottom:10px">
         <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">{{ $l }}</label>
-        <input type="number" name="{{ $n }}" value="{{ old($n,$product->$n) }}" step="0.01" min="0"
+        <input type="number" name="{{ $n }}" value="{{ old($n,$product->$n) }}" step="{{ $n === 'min_stock' ? '1' : '0.01' }}" min="0"
             style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
     </div>
     @endforeach
@@ -60,19 +74,14 @@
             <option value="inactive" {{ $product->status==='inactive'?'selected':'' }}>Inactive</option>
         </select>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer;margin-top:12px">
+        <input type="checkbox" name="show_in_online_store" value="1" {{ old('show_in_online_store', $product->show_in_online_store) ? 'checked' : '' }} style="accent-color:#818cf8">
+        Show in online store
+    </label>
 </div>
 </div>
 <div>
-<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px">
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Product image</div>
-    @if($product->image)
-    <img src="{{ asset('storage/'.$product->image) }}" style="width:100%;height:140px;object-fit:cover;border-radius:8px;margin-bottom:8px">
-    @endif
-    <label style="width:100%;height:{{ $product->image?'50px':'140px' }};background:#0f1117;border:.5px dashed #2a2d3a;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#64748b;font-size:12px" for="img-input">
-        <i class="ti ti-upload" style="font-size:16px;margin-right:6px"></i>Change image
-    </label>
-    <input type="file" name="image" id="img-input" accept="image/*" style="display:none">
-</div>
+@include('products._image_field', ['product' => $product])
 </div>
 </div>
 <div style="display:flex;gap:8px;margin-top:14px">

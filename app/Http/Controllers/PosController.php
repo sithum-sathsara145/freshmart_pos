@@ -7,6 +7,7 @@ use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\Customer;
 use App\Models\Stock;
+use App\Models\StockLayer;
 use App\Models\Account;
 use App\Models\Payment;
 use App\Models\Coupon;
@@ -190,24 +191,79 @@ class PosController extends Controller
     // Ajax: find product by barcode (scanner)
     public function findByBarcode(string $barcode)
     {
+        $branchId = auth()->user()->branch_id;
+
+        // 1) Exact match first — covers manufacturer barcodes AND our internal/custom
+        //    store barcodes. Doing this before scale-parsing means a stored barcode can
+        //    never be mis-read as a scale code.
         $product = Product::where('barcode', $barcode)
                           ->where('status', 'active')
-                          ->firstOrFail();
+                          ->first();
 
-        $branchId = auth()->user()->branch_id;
-        $stock = Stock::where('product_id', $product->id)
-                      ->where('branch_id', $branchId)
-                      ->value('quantity') ?? 0;
+        if ($product) {
+            $stock = Stock::where('product_id', $product->id)
+                          ->where('branch_id', $branchId)
+                          ->value('quantity') ?? 0;
 
-        return response()->json([
-            'id'          => $product->id,
-            'name'        => $product->name,
-            'barcode'     => $product->barcode,
-            'price'       => $product->sale_price,
-            'tax_percent' => $product->tax_percent,
-            'unit'        => $product->unit,
-            'stock'       => $stock,
-        ]);
+            $priceOptions = $product->is_weighed ? [] : StockLayer::where('product_id', $product->id)
+                ->where('branch_id', $branchId)
+                ->where('qty_remaining', '>', 0)
+                ->distinct()
+                ->orderBy('sale_price')
+                ->pluck('sale_price')
+                ->map(fn($v) => (float) $v)
+                ->all();
+
+            return response()->json([
+                'id'          => $product->id,
+                'name'        => $product->name,
+                'barcode'     => $product->barcode,
+                'price'       => $product->sale_price,
+                'price_options' => $priceOptions,
+                'is_weighed'  => (bool) $product->is_weighed,
+                'tax_percent' => $product->tax_percent,
+                'unit'        => $product->unit,
+                'stock'       => $stock,
+            ]);
+        }
+
+        // 2) Scale / weighed embedded barcode (prefix "2")? Resolve by PLU and read the
+        //    embedded weight or price. Returns null for ordinary barcodes.
+        $scale = \App\Support\ScaleBarcode::parse($barcode);
+        if ($scale) {
+            $product = Product::where('is_weighed', true)
+                              ->whereRaw('CAST(scale_plu AS UNSIGNED) = ?', [(int) $scale['plu']])
+                              ->where('status', 'active')
+                              ->first();
+
+            if (! $product) {
+                return response()->json(['message' => "No weighed product for PLU {$scale['plu']}."], 404);
+            }
+
+            $unitPrice = (float) $product->sale_price;
+            if ($scale['embed'] === 'weight') {
+                $qty = round($scale['value'], 3);                                   // value is the weight
+            } else {
+                $qty = $unitPrice > 0 ? round($scale['value'] / $unitPrice, 3) : 0; // value is the line price
+            }
+
+            $stock = Stock::where('product_id', $product->id)->where('branch_id', $branchId)->value('quantity') ?? 0;
+
+            return response()->json([
+                'id'          => $product->id,
+                'name'        => $product->name,
+                'barcode'     => $product->barcode,
+                'price'       => $unitPrice,
+                'tax_percent' => $product->tax_percent,
+                'unit'        => $product->unit,
+                'stock'       => $stock,
+                'weighed'     => true,
+                'qty'         => $qty,
+            ]);
+        }
+
+        // 3) Nothing matched.
+        return response()->json(['message' => 'No product found.'], 404);
     }
 
     // Process sale from POS
@@ -215,7 +271,8 @@ class PosController extends Controller
     {
         $request->validate([
             'items'          => 'required|array|min:1',
-            'items.*.id'     => 'required|exists:products,id',
+            'items.*.id'     => 'nullable|integer|exists:products,id',   // null = custom item
+            'items.*.name'   => 'nullable|string|max:255',
             'items.*.qty'    => 'required|numeric|min:0.001',
             'items.*.price'  => 'required|numeric|min:0',
             'payment_method' => 'required|in:cash,card,credit,mixed',
@@ -229,6 +286,25 @@ class PosController extends Controller
         $counterId = auth()->user()->counter_id;
         if ($counterId && ! CounterSession::where('counter_id', $counterId)->where('status', 'open')->exists()) {
             return response()->json(['success' => false, 'message' => 'Open the counter before making sales.'], 422);
+        }
+
+        // Block overselling — total requested per product (across lines) must fit branch stock.
+        $branchId = auth()->user()->branch_id;
+        $needByProduct = [];
+        foreach ($request->items as $item) {
+            if (! empty($item['id'])) {
+                $needByProduct[$item['id']] = ($needByProduct[$item['id']] ?? 0) + (float) $item['qty'];
+            }
+        }
+        foreach ($needByProduct as $pid => $needed) {
+            $onHand = (float) (Stock::where('product_id', $pid)->where('branch_id', $branchId)->value('quantity') ?? 0);
+            if ($needed - $onHand > 0.0001) {
+                $name = Product::where('id', $pid)->value('name');
+                return response()->json([
+                    'success' => false,
+                    'message' => "Not enough stock for \"{$name}\" — available {$onHand}, requested {$needed}.",
+                ], 422);
+            }
         }
 
         DB::beginTransaction();
@@ -292,21 +368,43 @@ class PosController extends Controller
                 'notes'          => $request->notes,
             ]);
 
-            // Sale items + stock deduction
+            // Sale items + stock deduction (consume FIFO/WAC cost layers for COGS)
             foreach ($request->items as $item) {
+                $qty = (float) $item['qty'];
+
+                // Custom / one-off item — no catalogue product, no stock movement.
+                if (empty($item['id'])) {
+                    $name = trim((string) ($item['name'] ?? ''));
+                    if ($name === '') {
+                        continue;
+                    }
+                    SaleItem::create([
+                        'sale_id'     => $sale->id,
+                        'product_id'  => null,
+                        'name'        => $name,
+                        'quantity'    => $qty,
+                        'unit_price'  => $item['price'],
+                        'cost'        => 0,
+                        'tax_percent' => $item['tax_percent'] ?? 0,
+                        'subtotal'    => $item['price'] * $qty,
+                    ]);
+                    continue;
+                }
+
+                $product = Product::find($item['id']);
+                $cogs    = $product
+                    ? \App\Support\Inventory::consume($product, $branchId, $qty, isset($item['price']) ? (float) $item['price'] : null)
+                    : 0;
+
                 SaleItem::create([
                     'sale_id'      => $sale->id,
                     'product_id'   => $item['id'],
-                    'quantity'     => $item['qty'],
+                    'quantity'     => $qty,
                     'unit_price'   => $item['price'],
+                    'cost'         => $cogs,
                     'tax_percent'  => $item['tax_percent'] ?? 0,
-                    'subtotal'     => $item['price'] * $item['qty'],
+                    'subtotal'     => $item['price'] * $qty,
                 ]);
-
-                // Deduct stock
-                Stock::where('product_id', $item['id'])
-                     ->where('branch_id', $branchId)
-                     ->decrement('quantity', $item['qty']);
             }
 
             // Update coupon usage
@@ -389,4 +487,5 @@ class PosController extends Controller
         $num  = $last ? ((int) substr($last, 4)) + 1 : 1;
         return 'INV-' . str_pad($num, 6, '0', STR_PAD_LEFT);
     }
+
 }

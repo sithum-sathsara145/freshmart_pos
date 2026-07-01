@@ -154,9 +154,14 @@ input[type=number]{-moz-appearance:textfield}
                     <i class="ti ti-shopping-cart" style="color:#818cf8;margin-right:4px"></i>
                     Cart <span style="font-size:11px;color:#64748b" x-text="'(' + cartCount + ' items)'"></span>
                 </span>
-                <span style="font-size:11px;color:#ef4444;cursor:pointer" @click="clearCart()">
-                    <i class="ti ti-trash" style="font-size:12px"></i> Clear
-                </span>
+                <div style="display:flex;align-items:center;gap:10px">
+                    <span style="font-size:11px;color:#a5b4fc;cursor:pointer" @click="openCustomItem()" title="Add a one-off / custom item">
+                        <i class="ti ti-plus" style="font-size:12px"></i> Custom item
+                    </span>
+                    <span style="font-size:11px;color:#ef4444;cursor:pointer" @click="clearCart()">
+                        <i class="ti ti-trash" style="font-size:12px"></i> Clear
+                    </span>
+                </div>
             </div>
             {{-- Customer row --}}
             <div style="display:flex;align-items:center;gap:6px;margin-top:8px;background:#0f1117;border:0.5px solid #2a2d3a;border-radius:6px;padding:5px 9px">
@@ -191,7 +196,22 @@ input[type=number]{-moz-appearance:textfield}
                         <i class="ti ti-x" style="font-size:13px;color:#ef4444;cursor:pointer;margin-left:6px"
                            @click="removeItem(idx)"></i>
                     </div>
-                    <div class="ci-meta" x-text="'Rs. ' + parseFloat(item.price).toLocaleString() + ' each'"></div>
+                    <div class="ci-meta">
+                        <template x-if="editPriceIdx !== idx">
+                            <span @click="startEditPrice(idx)" title="Click to change the unit price"
+                                  style="cursor:pointer;border-bottom:1px dashed #475569"
+                                  x-text="'Rs. ' + parseFloat(item.price).toLocaleString() + ' each'"></span>
+                        </template>
+                        <template x-if="editPriceIdx === idx">
+                            <span style="display:inline-flex;align-items:center;gap:4px">
+                                <span style="color:#64748b">Rs.</span>
+                                <input type="number" min="0" step="0.01" x-model.number="item.price" :id="'price-input-'+idx"
+                                       @keydown.enter.stop.prevent="commitPrice(idx)" @keydown.escape="editPriceIdx=-1" @blur="commitPrice(idx)"
+                                       style="width:78px;background:#0f1117;border:.5px solid #534AB7;border-radius:4px;color:#e2e8f0;font-size:11px;padding:2px 6px;outline:none">
+                                <span style="color:#64748b">each</span>
+                            </span>
+                        </template>
+                    </div>
                     <div class="ci-row">
                         <div style="display:flex;align-items:center;gap:5px">
                             <div class="qty-btn" @click="changeQty(idx, -1)">−</div>
@@ -365,6 +385,56 @@ input[type=number]{-moz-appearance:textfield}
                 <button x-ref="cardBtn" @click="confirmCard()" :disabled="cardLast4.length !== 4"
                         @keydown.backspace.prevent="cardLast4 = cardLast4.slice(0,-1); $refs.cardInput.focus()"
                         style="flex:1;height:36px;background:#534AB7;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Pay by card</button>
+            </div>
+        </div>
+    </div>
+    </template>
+
+    {{-- Price chooser popup (products with multiple in-stock sale prices) --}}
+    <template x-teleport="body">
+    <div x-show="showPriceModal" x-cloak @keydown.escape.window="showPriceModal=false" @click.self="showPriceModal=false"
+         style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:320px">
+            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Choose price</div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="priceChooserProduct?.name"></div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+                <template x-for="opt in priceChooserOptions" :key="opt">
+                    <button type="button" @click="pickPrice(opt)"
+                        style="height:44px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:7px;color:#e2e8f0;font-size:15px;font-weight:600;cursor:pointer"
+                        x-text="'Rs. ' + Number(opt).toLocaleString()"></button>
+                </template>
+            </div>
+            <button type="button" @click="showPriceModal=false" style="width:100%;height:34px;margin-top:12px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+        </div>
+    </div>
+    </template>
+
+    {{-- Custom / temporary item popup --}}
+    <template x-teleport="body">
+    <div x-show="showCustomModal" x-cloak @keydown.escape.window="showCustomModal=false" @click.self="showCustomModal=false"
+         style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:340px">
+            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Custom item</div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:14px">A one-off item that isn't in the catalogue. It won't affect stock.</div>
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Item name *</label>
+            <input x-ref="customNameInput" x-model="customName" placeholder="e.g. Miscellaneous" @keydown.enter="$refs.customPriceInput.focus()"
+                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:8px 10px;outline:none;margin-bottom:10px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+                <div>
+                    <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Unit price (Rs.) *</label>
+                    <input x-ref="customPriceInput" type="number" min="0" step="0.01" x-model.number="customPrice" placeholder="0.00"
+                           @keydown.enter="addCustomItem()"
+                           style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:8px 10px;outline:none">
+                </div>
+                <div>
+                    <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Quantity</label>
+                    <input type="number" min="0.001" step="0.001" x-model.number="customQty"
+                           style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:8px 10px;outline:none">
+                </div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button @click="showCustomModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+                <button @click="addCustomItem()" style="flex:1;height:36px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Add to cart</button>
             </div>
         </div>
     </div>
@@ -625,7 +695,9 @@ function posScreen() {
         async loadProducts(q) {
             try {
                 const res = await fetch(`/api/products/search?q=${encodeURIComponent(q || '')}&category=${this.category}`);
-                this.products = await res.json();
+                const list = await res.json();
+                // Don't show out-of-stock items on the POS grid.
+                this.products = list.filter(p => Number(p.stock) > 0);
             } catch (e) {
                 this.products = [];
             }
@@ -671,12 +743,45 @@ function posScreen() {
         // Enter on the scan bar: look up a barcode/name and add the first match
         handleScan(value) {
             if (!value) return;
-            fetch(`/api/products/search?q=${encodeURIComponent(value)}&category=`)
+            const code = value.trim();
+            // Scale/weighed embedded barcodes use GS1 prefix "2" (typically 13 digits, but
+            // the length is configurable) — resolve them via the barcode endpoint, which
+            // returns the weighed quantity. Falls back to a normal search so ordinary
+            // scans/typing are unaffected.
+            if (/^2\d{11,13}$/.test(code)) {
+                fetch(`/pos/products/barcode/${encodeURIComponent(code)}`)
+                    .then(r => r.ok ? r.json() : Promise.reject())
+                    .then(data => this.addScanned(data))
+                    .catch(() => this.searchAdd(code));
+                return;
+            }
+            this.searchAdd(code);
+        },
+
+        searchAdd(code) {
+            fetch(`/api/products/search?q=${encodeURIComponent(code)}&category=`)
                 .then(r => r.json())
                 .then(list => {
                     if (list.length) this.addToCart(list[0]);
-                    else alert('No product found for: ' + value);
+                    else alert('No product found for: ' + code);
                 });
+        },
+
+        // Add a product returned from the barcode endpoint. Weighed items carry their
+        // own quantity (one line per weigh-in), so they aren't merged like unit items.
+        addScanned(data) {
+            if (data && data.weighed) {
+                if (this.wouldOversell(data.id, data.name, data.unit, Number(data.qty) || 0)) return;
+                this.cart.push({
+                    id: data.id, name: data.name, barcode: data.barcode,
+                    price: data.price, tax_percent: data.tax_percent || 0,
+                    unit: data.unit, qty: data.qty, weighed: true, stock: data.stock,
+                });
+                this.activeIdx = this.cart.length - 1;
+                this.$nextTick(() => this.scrollToActive());
+            } else {
+                this.addToCart(data);
+            }
         },
 
         cart: [],
@@ -733,13 +838,95 @@ function posScreen() {
         get cashNum() { return parseFloat(this.cashStr) || 0; },
         get cashDisplay() { return parseFloat(this.cashStr).toLocaleString(); },
 
+        // ── Multi-price chooser ──
+        showPriceModal: false,
+        priceChooserProduct: null,
+        priceChooserOptions: [],
+
+        // ── Custom / temporary item ──
+        showCustomModal: false,
+        customName: '', customPrice: '', customQty: 1,
+        openCustomItem() {
+            this.customName = ''; this.customPrice = ''; this.customQty = 1;
+            this.showCustomModal = true;
+            this.$nextTick(() => this.$refs.customNameInput?.focus());
+        },
+        addCustomItem() {
+            const name = (this.customName || '').trim();
+            const price = parseFloat(this.customPrice);
+            const qty = parseFloat(this.customQty) || 1;
+            if (!name) { alert('Enter an item name.'); return; }
+            if (!isFinite(price) || price < 0) { alert('Enter a valid price.'); return; }
+            this.cart.push({ id: null, custom: true, name, price, qty, tax_percent: 0, unit: 'Item' });
+            this.activeIdx = this.cart.length - 1;
+            this.showCustomModal = false;
+            this.$nextTick(() => this.scrollToActive());
+        },
+
+        // ── Inline unit-price override (per cart line) ──
+        editPriceIdx: -1,
+        startEditPrice(idx) {
+            this.editPriceIdx = idx;
+            this.$nextTick(() => { const el = document.getElementById('price-input-' + idx); if (el) { el.focus(); el.select(); } });
+        },
+        commitPrice(idx) {
+            if (this.cart[idx]) {
+                let v = parseFloat(this.cart[idx].price);
+                this.cart[idx].price = (isFinite(v) && v >= 0) ? v : 0;
+            }
+            this.editPriceIdx = -1;
+        },
+
         addToCart(product) {
-            const i = this.cart.findIndex(x => x.id === product.id);
+            // Non-weighed products can have several in-stock prices (same SKU/barcode) — let the cashier pick.
+            const opts = (product && !product.is_weighed && Array.isArray(product.price_options)) ? product.price_options : [];
+            if (opts.length > 1) {
+                this.priceChooserProduct = product;
+                this.priceChooserOptions = opts;
+                this.showPriceModal = true;
+                return;
+            }
+            this.addLine(product, opts.length === 1 ? opts[0] : product.price);
+        },
+
+        pickPrice(price) {
+            this.showPriceModal = false;
+            if (this.priceChooserProduct) this.addLine(this.priceChooserProduct, price);
+            this.priceChooserProduct = null;
+        },
+
+        // ── Stock guard (prevent overselling) ──
+        stockFor(id) {
+            const p = this.products.find(x => x.id === id);
+            if (p && p.stock != null) return Number(p.stock);
+            const line = this.cart.find(x => x.id === id && x.stock != null);
+            return line ? Number(line.stock) : Infinity;
+        },
+        // Total quantity of this product already in the cart (across all price lines).
+        inCartQty(id) {
+            return this.cart.filter(x => x.id === id && !x.custom)
+                            .reduce((a, i) => a + (Number(i.qty) || 0), 0);
+        },
+        // True if `add` more of this product would exceed available stock (and warns).
+        wouldOversell(id, name, unit, add) {
+            const stock = this.stockFor(id);
+            if (this.inCartQty(id) + add > stock + 1e-9) {
+                alert(`Only ${stock} ${unit || ''} of "${name}" in stock.`.replace(/\s+/g, ' ').trim());
+                return true;
+            }
+            return false;
+        },
+
+        // Add a line at a specific price; lines of the same product at different prices stay separate.
+        addLine(product, price) {
+            if (this.wouldOversell(product.id, product.name, product.unit, 1)) return;
+            const p = Number(price);
+            const i = this.cart.findIndex(x => x.id === product.id && Number(x.price) === p && !x.weighed);
             if (i !== -1) {
                 this.cart[i].qty++;
                 this.activeIdx = i;
             } else {
-                this.cart.push({ ...product, qty: 1 });
+                this.cart.push({ ...product, price: p, qty: 1 });
                 this.activeIdx = this.cart.length - 1;
             }
             this.$nextTick(() => this.scrollToActive());
@@ -748,6 +935,8 @@ function posScreen() {
         // Adjust the active item's quantity; remove it when it hits 0.
         bumpActive(d) {
             if (this.activeIdx < 0 || !this.cart[this.activeIdx]) return;
+            const line = this.cart[this.activeIdx];
+            if (d > 0 && !line.custom && this.wouldOversell(line.id, line.name, line.unit, d)) return;
             this.cart[this.activeIdx].qty += d;
             if (this.cart[this.activeIdx].qty <= 0) {
                 this.cart.splice(this.activeIdx, 1);
@@ -762,6 +951,8 @@ function posScreen() {
         },
 
         changeQty(idx, d) {
+            const line = this.cart[idx];
+            if (d > 0 && line && !line.custom && this.wouldOversell(line.id, line.name, line.unit, d)) return;
             this.activeIdx = idx;
             this.cart[idx].qty += d;
             if (this.cart[idx].qty <= 0) {
@@ -903,6 +1094,7 @@ function posScreen() {
             const payload = {
                 items: this.cart.map(i => ({
                     id: i.id,
+                    name: i.name,
                     qty: i.qty,
                     price: i.price,
                     tax_percent: i.tax_percent ?? 0,
@@ -935,6 +1127,7 @@ function posScreen() {
                     if (method === 'cash') this.cashSalesSoFar += Number(data.total) || 0;
                     this.showSaleModal = true;
                     this.clearCart();
+                    this.loadProducts(this.query);   // refresh stock counts after the sale
                 } else {
                     alert('Error: ' + data.message);
                 }

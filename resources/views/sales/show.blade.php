@@ -40,7 +40,7 @@
         <tbody>
             @foreach($sale->items as $item)
             <tr style="border-bottom:.5px solid #1a1d2a">
-                <td style="padding:8px 0;color:#e2e8f0">{{ $item->product->name }}</td>
+                <td style="padding:8px 0;color:#e2e8f0">{{ $item->product?->name ?? $item->name }}</td>
                 <td style="padding:8px 6px;text-align:center;color:#94a3b8">{{ $item->quantity }}</td>
                 <td style="padding:8px 6px;text-align:right;color:#94a3b8">Rs. {{ number_format($item->unit_price) }}</td>
                 <td style="padding:8px 6px;text-align:right;color:#e2e8f0;font-weight:500">Rs. {{ number_format($item->subtotal) }}</td>

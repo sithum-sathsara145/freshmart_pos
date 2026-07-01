@@ -39,7 +39,7 @@ td{padding:1px 2px}
     <tbody>
         @foreach($sale->items as $item)
         <tr>
-            <td colspan="3">{{ Str::limit($item->product->name, 22) }}</td>
+            <td colspan="3">{{ Str::limit($item->product?->name ?? $item->name, 22) }}</td>
         </tr>
         <tr>
             <td>{{ $item->quantity }} x {{ number_format($item->unit_price) }}</td>

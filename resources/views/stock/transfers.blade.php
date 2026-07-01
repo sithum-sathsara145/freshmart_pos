@@ -19,7 +19,10 @@
         </select>
     </div>
     <div style="margin-bottom:10px"><label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Product *</label>
-        <input type="text" name="product_id" placeholder="Product ID or name" required style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+        <select name="product_id" required style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+            <option value="">— Select product —</option>
+            @foreach($products as $p)<option value="{{ $p->id }}" {{ old('product_id')==$p->id?'selected':'' }}>{{ $p->name }} ({{ $p->sku }})</option>@endforeach
+        </select>
     </div>
     <div style="margin-bottom:10px"><label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Quantity *</label>
         <input type="number" name="quantity" min="0.001" step="0.001" required style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
@@ -45,8 +48,8 @@
         @forelse($transfers as $t)
         <tr style="border-bottom:.5px solid #1a1d2a">
             <td style="padding:7px 10px;color:#e2e8f0;font-weight:500">{{ $t->product?->name }}</td>
-            <td style="padding:7px 10px;color:#64748b">{{ $t->fromBranch?->city }}</td>
-            <td style="padding:7px 10px;color:#64748b">{{ $t->toBranch?->city }}</td>
+            <td style="padding:7px 10px;color:#64748b">{{ $t->fromBranch?->name }}</td>
+            <td style="padding:7px 10px;color:#64748b">{{ $t->toBranch?->name }}</td>
             <td style="padding:7px 10px;color:#e2e8f0">{{ $t->quantity }}</td>
             <td style="padding:7px 10px;color:#64748b">{{ $t->created_at->format('d M Y') }}</td>
             <td style="padding:7px 10px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ $t->status==='completed'?'#14532d':'#451a03' }};color:{{ $t->status==='completed'?'#4ade80':'#fb923c' }}">{{ ucfirst($t->status) }}</span></td>

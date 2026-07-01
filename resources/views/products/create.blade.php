@@ -59,6 +59,21 @@
         </div>
     </div>
 
+    <div style="margin-bottom:10px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#e2e8f0;cursor:pointer">
+            <input type="checkbox" name="is_weighed" value="1" {{ old('is_weighed') ? 'checked' : '' }}
+                onchange="document.getElementById('scale-plu-row').style.display=this.checked?'block':'none'"
+                style="accent-color:#818cf8">
+            Weighed item (sold by weight via scale)
+        </label>
+        <div id="scale-plu-row" style="margin-top:8px;{{ old('is_weighed') ? '' : 'display:none' }}">
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Scale PLU — the item code programmed on the scale</label>
+            <input type="text" name="scale_plu" value="{{ old('scale_plu') }}" inputmode="numeric" placeholder="e.g. 12"
+                style="width:160px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+            @error('scale_plu')<div style="color:#f87171;font-size:10px;margin-top:3px">{{ $message }}</div>@enderror
+        </div>
+    </div>
+
     <div>
         <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Description</label>
         <textarea name="description" rows="3" placeholder="Short product description..."
@@ -128,16 +143,7 @@
 
 {{-- Right column — image --}}
 <div>
-<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px">
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Product image</div>
-    <label style="width:100%;height:160px;background:#0f1117;border:.5px dashed #2a2d3a;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:8px;color:#64748b" for="image-input">
-        <i class="ti ti-photo" style="font-size:32px"></i>
-        <span style="font-size:12px">Click to upload image</span>
-        <span style="font-size:10px">JPG, PNG up to 2MB</span>
-    </label>
-    <input type="file" name="image" id="image-input" accept="image/*" style="display:none" onchange="previewImg(this)">
-    <img id="img-preview" style="display:none;width:100%;height:160px;object-fit:cover;border-radius:8px;margin-top:8px">
-</div>
+@include('products._image_field')
 
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px;margin-top:12px">
     <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Variation (optional)</div>
@@ -158,18 +164,4 @@
 </form>
 </div>
 
-@push('scripts')
-<script>
-function previewImg(input) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = e => {
-            document.getElementById('img-preview').src = e.target.result;
-            document.getElementById('img-preview').style.display = 'block';
-        };
-        reader.readAsDataURL(input.files[0]);
-    }
-}
-</script>
-@endpush
 @endsection

@@ -68,7 +68,7 @@ body{font-family:'Courier New',Courier,monospace;font-size:11.5px;color:#000;bac
 @php $totalItems = 0; @endphp
 @foreach($sale->items as $item)
     @php $totalItems += $item->quantity; @endphp
-    <div class="item-name">{{ Str::limit($item->product->name, 26) }}</div>
+    <div class="item-name">{{ Str::limit($item->product?->name ?? $item->name, 26) }}</div>
     <div class="item-line">
         <span>{{ number_format($item->quantity,0) }} x {{ number_format($item->unit_price) }}</span>
         <span class="bold">Rs. {{ number_format($item->subtotal) }}</span>

@@ -11,7 +11,10 @@
     @csrf
     <div style="margin-bottom:10px">
         <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Product *</label>
-        <input type="text" name="product_id" placeholder="Product name or ID" required style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+        <select name="product_id" required style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+            <option value="">— Select product —</option>
+            @foreach($products as $p)<option value="{{ $p->id }}" {{ old('product_id')==$p->id?'selected':'' }}>{{ $p->name }} ({{ $p->sku }})</option>@endforeach
+        </select>
     </div>
     <div style="margin-bottom:10px">
         <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Adjustment type *</label>

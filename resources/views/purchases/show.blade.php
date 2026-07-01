@@ -23,16 +23,22 @@
         <table style="width:100%;border-collapse:collapse;font-size:12px">
             <thead><tr style="border-bottom:.5px solid #2a2d3a">
                 <th style="padding:6px 0;text-align:left;color:#64748b;font-weight:500;font-size:11px">Product</th>
+                <th style="padding:6px;text-align:left;color:#64748b;font-weight:500;font-size:11px">Batch</th>
                 <th style="padding:6px;text-align:center;color:#64748b;font-weight:500;font-size:11px">Qty</th>
                 <th style="padding:6px;text-align:right;color:#64748b;font-weight:500;font-size:11px">Unit price</th>
+                <th style="padding:6px;text-align:right;color:#64748b;font-weight:500;font-size:11px">MRP</th>
+                <th style="padding:6px;text-align:right;color:#64748b;font-weight:500;font-size:11px">Sale price</th>
                 <th style="padding:6px;text-align:right;color:#64748b;font-weight:500;font-size:11px">Subtotal</th>
             </tr></thead>
             <tbody>
             @foreach($purchase->items as $item)
             <tr style="border-bottom:.5px solid #1a1d2a">
                 <td style="padding:8px 0;color:#e2e8f0">{{ $item->product?->name }}</td>
+                <td style="padding:8px 6px;color:#64748b">{{ $item->batch_no ?: '—' }}</td>
                 <td style="padding:8px 6px;text-align:center;color:#94a3b8">{{ $item->quantity }}</td>
                 <td style="padding:8px 6px;text-align:right;color:#94a3b8">Rs. {{ number_format($item->unit_price) }}</td>
+                <td style="padding:8px 6px;text-align:right;color:#64748b">{{ $item->mrp ? 'Rs. '.number_format($item->mrp) : '—' }}</td>
+                <td style="padding:8px 6px;text-align:right;color:#94a3b8">{{ $item->sale_price ? 'Rs. '.number_format($item->sale_price) : '—' }}</td>
                 <td style="padding:8px 6px;text-align:right;color:#e2e8f0;font-weight:500">Rs. {{ number_format($item->subtotal) }}</td>
             </tr>
             @endforeach

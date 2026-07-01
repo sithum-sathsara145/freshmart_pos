@@ -46,8 +46,14 @@ class ReportController extends Controller
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->sum('discount_amount');
 
-        $grossProfit = $salesRevenue - $purchaseCost;
-        $netProfit   = $grossProfit - $totalExpenses - $totalDiscounts;
+        // True cost of goods sold for the period (captured per sale line at sale time).
+        $cogs = SaleItem::whereHas('sale', fn($q) => $q->where('branch_id', $branchId)
+                ->where('status', '!=', 'returned')
+                ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]))
+            ->sum('cost');
+
+        $grossProfit = $salesRevenue - $cogs;
+        $netProfit   = $grossProfit - $totalExpenses;
 
         // Daily chart data
         $chartData = Sale::where('branch_id', $branchId)
@@ -58,24 +64,21 @@ class ReportController extends Controller
             ->get();
 
         // Top products
-        $topProducts = SaleItem::select('product_id', DB::raw('SUM(quantity) as qty, SUM(subtotal) as revenue'))
+        $topProducts = SaleItem::select('product_id', DB::raw('SUM(quantity) as qty, SUM(subtotal) as revenue, SUM(cost) as cogs'))
             ->whereHas('sale', fn($q) => $q->where('branch_id', $branchId)
+                ->where('status', '!=', 'returned')
                 ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]))
-            ->with('product:id,name,purchase_price')
+            ->with('product:id,name')
             ->groupBy('product_id')
             ->orderByDesc('revenue')
             ->limit(10)
             ->get()
-            ->map(function ($item) {
-                $cost   = $item->product->purchase_price * $item->qty;
-                $profit = $item->revenue - $cost;
-                return [
-                    'name'    => $item->product->name,
-                    'qty'     => $item->qty,
-                    'revenue' => $item->revenue,
-                    'profit'  => $profit,
-                ];
-            });
+            ->map(fn($item) => [
+                'name'    => $item->product?->name,
+                'qty'     => $item->qty,
+                'revenue' => $item->revenue,
+                'profit'  => $item->revenue - $item->cogs,
+            ]);
 
         return view('reports.profit_loss', compact(
             'salesRevenue', 'purchaseCost', 'totalExpenses',

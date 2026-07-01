@@ -20,4 +20,8 @@ class StockTransfer extends Model
     {
         return $this->belongsTo(Branch::class, 'to_branch_id');
     }
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }
