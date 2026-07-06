@@ -95,6 +95,8 @@ Written for everyone (no technical knowledge needed).
 _Newest first. New ideas and improvements are added here as they come up._
 
 <!-- NEW-FEATURES -->
+- **2026-07-01 — Split payment (cash + card)** — Pay one bill partly by card and partly by cash; only the cash portion is counted in the till reconciliation.
+- **2026-07-01 — Hold & resume bills** — Park an in-progress sale (with an optional label) to serve another customer, then resume it later from the Held list.
 - **2026-06-30 — Oversell prevention** — Checkout blocks adding or selling more than the available stock of an item.
 - **2026-06-30 — Custom items at checkout** — Add a one-off item (name, price, quantity) to a sale that isn't in the catalogue; it doesn't affect stock.
 - **2026-06-30 — Editable price at checkout** — Cashiers can tap a cart line's unit price to override it for that sale; stock and cost stay correct.

@@ -156,7 +156,13 @@ input[type=number]{-moz-appearance:textfield}
                 </span>
                 <div style="display:flex;align-items:center;gap:10px">
                     <span style="font-size:11px;color:#a5b4fc;cursor:pointer" @click="openCustomItem()" title="Add a one-off / custom item">
-                        <i class="ti ti-plus" style="font-size:12px"></i> Custom item
+                        <i class="ti ti-plus" style="font-size:12px"></i> Custom
+                    </span>
+                    <span style="font-size:11px;color:#fbbf24;cursor:pointer" @click="holdBill()" title="Hold this bill to finish later">
+                        <i class="ti ti-player-pause" style="font-size:12px"></i> Hold
+                    </span>
+                    <span style="font-size:11px;color:#60a5fa;cursor:pointer" @click="openHeldBills()" title="Resume a held bill">
+                        <i class="ti ti-clipboard-list" style="font-size:12px"></i> Held<span x-show="heldBills.length" x-text="' (' + heldBills.length + ')'"></span>
                     </span>
                     <span style="font-size:11px;color:#ef4444;cursor:pointer" @click="clearCart()">
                         <i class="ti ti-trash" style="font-size:12px"></i> Clear
@@ -297,6 +303,9 @@ input[type=number]{-moz-appearance:textfield}
                     <i class="ti ti-credit-card"></i> Card
                 </button>
             </div>
+            <button class="pay-btn" style="background:#0E7490;color:#fff;margin-top:6px" @click="openSplit()">
+                <i class="ti ti-arrows-split-2"></i> Split (cash + card)
+            </button>
         </div>
     </div>
 
@@ -405,6 +414,75 @@ input[type=number]{-moz-appearance:textfield}
                 </template>
             </div>
             <button type="button" @click="showPriceModal=false" style="width:100%;height:34px;margin-top:12px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+        </div>
+    </div>
+    </template>
+
+    {{-- Split payment (cash + card) popup --}}
+    <template x-teleport="body">
+    <div x-show="showSplitModal" x-cloak @keydown.escape.window="showSplitModal=false" @click.self="showSplitModal=false"
+         style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:340px">
+            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Split payment</div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="'Total: Rs. ' + total.toLocaleString()"></div>
+
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Card amount (Rs.)</label>
+            <input type="number" min="0" step="0.01" x-model.number="splitCard" x-ref="splitCardInput" placeholder="0.00"
+                   @keydown.enter.prevent="$refs.splitLast4Input.focus()"
+                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;padding:8px 10px;outline:none;margin-bottom:8px">
+
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Card last 4 digits</label>
+            <input type="text" inputmode="numeric" maxlength="4" x-model="splitLast4" x-ref="splitLast4Input" placeholder="1234"
+                   @input="splitLast4 = splitLast4.replace(/\D/g,'').slice(0,4)"
+                   @keydown.enter.prevent="$refs.splitCashInput.focus()"
+                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;padding:8px 10px;outline:none;letter-spacing:3px;text-align:center;margin-bottom:8px">
+
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Cash amount (Rs.)</label>
+            <input type="number" min="0" step="0.01" x-model.number="splitCash" x-ref="splitCashInput" placeholder="0.00"
+                   @keydown.enter.prevent="if (splitValid) $refs.splitBtn.focus()"
+                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;padding:8px 10px;outline:none;margin-bottom:12px">
+
+            <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;color:#94a3b8"><span>Cash needed</span><span x-text="'Rs. ' + splitCashNeeded.toLocaleString()"></span></div>
+                <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-top:3px"><span>Change</span><span x-text="'Rs. ' + splitChange.toLocaleString()"></span></div>
+                <div x-show="splitError" style="color:#f87171;margin-top:5px;font-size:11px" x-text="splitError"></div>
+            </div>
+
+            <div style="display:flex;gap:8px">
+                <button @click="showSplitModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+                <button @click="confirmSplit()" x-ref="splitBtn" :disabled="!splitValid" @keydown.enter.prevent="confirmSplit()" :style="!splitValid?'opacity:.5;cursor:not-allowed':''"
+                        style="flex:1;height:36px;background:#534AB7;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Complete sale</button>
+            </div>
+        </div>
+    </div>
+    </template>
+
+    {{-- Held / parked bills popup --}}
+    <template x-teleport="body">
+    <div x-show="showHeldModal" x-cloak @keydown.escape.window="showHeldModal=false" @click.self="showHeldModal=false"
+         style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:16px;width:420px;max-height:80vh;display:flex;flex-direction:column">
+            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Held bills</div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:12px">Resume a parked bill, or discard it.</div>
+            <div style="overflow-y:auto;flex:1">
+                <template x-if="heldBills.length === 0">
+                    <div style="text-align:center;color:#4a5568;font-size:12px;padding:24px">No held bills.</div>
+                </template>
+                <template x-for="b in heldBills" :key="b.id">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:7px;padding:9px 11px;margin-bottom:7px">
+                        <div style="min-width:0">
+                            <div style="font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                                 x-text="b.label || ('Bill #' + b.id)"></div>
+                            <div style="font-size:10px;color:#64748b" x-text="b.item_count + ' item(s) · Rs. ' + Number(b.total).toLocaleString()"></div>
+                        </div>
+                        <div style="display:flex;gap:6px;flex-shrink:0">
+                            <button @click="resumeBill(b.id)" style="height:30px;padding:0 12px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Resume</button>
+                            <button @click="discardBill(b.id)" title="Discard" style="width:30px;height:30px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#f87171;cursor:pointer"><i class="ti ti-trash" style="font-size:13px"></i></button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <button @click="showHeldModal=false" style="width:100%;height:34px;margin-top:10px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Close</button>
         </div>
     </div>
     </template>
@@ -654,6 +732,7 @@ function posScreen() {
 
         init() {
             this.loadProducts('');
+            this.loadHeldBills();
 
             window.addEventListener('keydown', (e) => {
                 // Physical numpad + / - adjust the active cart item (when no popup is open)
@@ -682,6 +761,7 @@ function posScreen() {
             // Auto-focus inside popups for a fast keyboard workflow
             this.$watch('showCardModal', v => { if (v) this.$nextTick(() => this.$refs.cardInput?.focus()); });
             this.$watch('showCashModal', v => { if (v) this.$nextTick(() => this.$refs.cashBtn?.focus()); });
+            this.$watch('showSplitModal', v => { if (v) this.$nextTick(() => this.$refs.splitCardInput?.focus()); });
             this.$watch('showSaleModal', v => { if (v) this.$nextTick(() => this.$refs.printBtn?.focus()); });
             this.$watch('showOpenModal', v => { if (v) this.$nextTick(() => document.querySelector('.denom-open')?.focus()); });
             this.$watch('showCloseModal', v => { if (v && !this.closeResult) this.$nextTick(() => document.querySelector('.denom-close')?.focus()); });
@@ -861,6 +941,99 @@ function posScreen() {
             this.activeIdx = this.cart.length - 1;
             this.showCustomModal = false;
             this.$nextTick(() => this.scrollToActive());
+        },
+
+        // ── Split payment (cash + card) ──
+        showSplitModal: false,
+        splitCard: '', splitCash: '', splitLast4: '',
+        get splitCardNum() { return Math.max(0, parseFloat(this.splitCard) || 0); },
+        get splitCashNum() { return Math.max(0, parseFloat(this.splitCash) || 0); },
+        get splitCashNeeded() { return Math.max(0, this.total - Math.min(this.splitCardNum, this.total)); },
+        get splitChange() { return Math.max(0, this.splitCashNum - this.splitCashNeeded); },
+        get splitValid() {
+            if (this.total <= 0) return false;
+            if (this.splitCardNum > this.total + 1e-9) return false;
+            if (this.splitCardNum > 0 && this.splitLast4.length !== 4) return false;
+            return this.splitCashNum + this.splitCardNum >= this.total - 1e-9;
+        },
+        get splitError() {
+            if (this.splitCardNum > this.total) return 'Card amount is more than the total.';
+            if (this.splitCardNum > 0 && this.splitLast4.length !== 4) return 'Enter the card last 4 digits.';
+            if (this.splitCashNum + this.splitCardNum < this.total - 1e-9) return 'Cash + card is less than the total.';
+            return '';
+        },
+        openSplit() {
+            if (this.cart.length === 0) { alert('Cart is empty!'); return; }
+            if (this.hasCounter && !this.counterOpen) { this.openCounterPrompt(); return; }
+            this.splitCard = ''; this.splitCash = ''; this.splitLast4 = '';
+            this.showSplitModal = true;
+        },
+        confirmSplit() {
+            if (!this.splitValid) return;
+            this.showSplitModal = false;
+            this.processPayment('mixed');
+        },
+
+        // ── Held / parked bills ──
+        heldBills: [],
+        showHeldModal: false,
+        csrf() { return document.querySelector('meta[name=csrf-token]').content; },
+
+        async loadHeldBills() {
+            try { const r = await fetch('/pos/held'); this.heldBills = await r.json(); }
+            catch (e) { this.heldBills = []; }
+        },
+        openHeldBills() { this.loadHeldBills(); this.showHeldModal = true; },
+
+        async holdBill() {
+            if (this.cart.length === 0) { alert('Cart is empty.'); return; }
+            const label = prompt('Label for this held bill (optional):', this.customer?.name || '');
+            if (label === null) return;   // cancelled
+            const payload = {
+                cart: this.cart, customer: this.customer,
+                discountInput: this.discountInput, discountMode: this.discountMode,
+                taxPercent: this.taxPercent, couponCode: this.couponCode,
+            };
+            try {
+                const res = await fetch('/pos/hold', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf() },
+                    body: JSON.stringify({ label: label.trim(), item_count: this.cart.length, total: this.total, payload }),
+                });
+                if (res.ok) { this.clearCart(); await this.loadHeldBills(); }
+                else alert('Could not hold the bill.');
+            } catch (e) { alert('Could not hold the bill.'); }
+        },
+
+        async resumeBill(id) {
+            if (this.cart.length > 0 && !confirm('The current cart will be replaced — hold it first if you need it. Continue?')) return;
+            try {
+                const res = await fetch(`/pos/held/${id}/resume`, {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf() },
+                });
+                const data = await res.json();
+                if (data.success && data.payload) {
+                    const p = data.payload;
+                    this.cart = Array.isArray(p.cart) ? p.cart : [];
+                    this.customer = p.customer || null;
+                    this.discountInput = p.discountInput || '';
+                    this.discountMode = p.discountMode || 'amount';
+                    this.taxPercent = p.taxPercent || '';
+                    this.couponCode = p.couponCode || '';
+                    this.activeIdx = this.cart.length - 1;
+                }
+                this.showHeldModal = false;
+                await this.loadHeldBills();
+            } catch (e) { alert('Could not resume the bill.'); }
+        },
+
+        async discardBill(id) {
+            if (!confirm('Discard this held bill?')) return;
+            try {
+                await fetch(`/pos/held/${id}`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf() } });
+                await this.loadHeldBills();
+            } catch (e) {}
         },
 
         // ── Inline unit-price override (per cart line) ──
@@ -1105,8 +1278,11 @@ function posScreen() {
                 discount_amount: this.discountValue,
                 tax_amount: this.tax,
                 payment_method: method,
-                paid_amount: method === 'cash' ? this.cashNum : this.total,
-                card_last4: method === 'card' ? this.cardLast4 : null,
+                paid_amount: method === 'cash' ? this.cashNum
+                           : (method === 'mixed' ? (this.splitCashNum + this.splitCardNum) : this.total),
+                card_last4: method === 'card' ? this.cardLast4 : (method === 'mixed' ? this.splitLast4 : null),
+                cash_amount: method === 'mixed' ? this.splitCashNum : 0,
+                card_amount: method === 'mixed' ? this.splitCardNum : 0,
                 _token: document.querySelector('meta[name=csrf-token]').content,
             };
 
@@ -1123,8 +1299,8 @@ function posScreen() {
                 const data = await res.json();
 
                 if (data.success) {
-                    this.lastSale = data;        // { sale_id, invoice_no, total, change }
-                    if (method === 'cash') this.cashSalesSoFar += Number(data.total) || 0;
+                    this.lastSale = data;        // { sale_id, invoice_no, total, change, cash_amount }
+                    this.cashSalesSoFar += Number(data.cash_amount) || 0;   // only the cash portion
                     this.showSaleModal = true;
                     this.clearCart();
                     this.loadProducts(this.query);   // refresh stock counts after the sale

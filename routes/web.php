@@ -49,6 +49,11 @@ Route::middleware(['auth'])->group(function () {
     // POS Screen
     Route::get('/pos', [PosController::class, 'index'])->name('pos');
     Route::post('/pos/sale', [PosController::class, 'storeSale'])->name('pos.sale');
+    // Held / parked bills
+    Route::post('/pos/hold', [PosController::class, 'holdBill'])->name('pos.hold');
+    Route::get('/pos/held', [PosController::class, 'heldBills'])->name('pos.held');
+    Route::post('/pos/held/{id}/resume', [PosController::class, 'resumeHeld'])->name('pos.held.resume');
+    Route::delete('/pos/held/{id}', [PosController::class, 'discardHeld'])->name('pos.held.discard');
     Route::post('/pos/counter/open', [PosController::class, 'openCounter'])->name('pos.counter.open');
     Route::post('/pos/counter/close', [PosController::class, 'closeCounter'])->name('pos.counter.close');
     Route::get('/pos/products/search', [PosController::class, 'searchProducts'])->name('pos.products.search');

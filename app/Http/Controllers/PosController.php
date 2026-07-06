@@ -13,6 +13,7 @@ use App\Models\Payment;
 use App\Models\Coupon;
 use App\Models\Counter;
 use App\Models\CounterSession;
+use App\Models\HeldBill;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -47,13 +48,13 @@ class PosController extends Controller
             + ['denominations' => self::DENOMINATIONS]);
     }
 
-    // Cash collected at a counter since a given time (what should be in the drawer from sales)
+    // Cash collected at a counter since a given time (what should be in the drawer from sales).
+    // Uses cash_amount so split (cash+card) sales contribute only their cash portion.
     private function cashSalesSince(int $counterId, $since): float
     {
         return (float) Sale::where('counter_id', $counterId)
-            ->where('payment_method', 'cash')
             ->where('created_at', '>=', $since)
-            ->sum('paid_amount');
+            ->sum('cash_amount');
     }
 
     // Open the counter for the current session with a counted opening float
@@ -280,6 +281,8 @@ class PosController extends Controller
             'discount_amount'=> 'nullable|numeric|min:0',
             'tax_amount'     => 'nullable|numeric|min:0',
             'card_last4'     => 'nullable|digits:4',
+            'cash_amount'    => 'nullable|numeric|min:0',
+            'card_amount'    => 'nullable|numeric|min:0',
         ]);
 
         // An assigned counter must have an open session before any sale
@@ -345,9 +348,23 @@ class PosController extends Controller
                 $taxAmount = max(0, (float) $request->tax_amount);
             }
 
-            $total      = max(0, $subtotal - $discountAmount + $taxAmount);
-            $paidAmount = min($request->paid_amount, $total);
-            $change     = max(0, $request->paid_amount - $total);
+            $total  = max(0, $subtotal - $discountAmount + $taxAmount);
+            $method = $request->payment_method;
+
+            // Split tender (cash + card) vs single-method payment.
+            if ($method === 'mixed') {
+                $cardPortion  = min((float) $request->card_amount, $total);
+                $cashNeeded   = round($total - $cardPortion, 2);            // cash to complete the bill
+                $cashGiven    = (float) $request->cash_amount;
+                $paidAmount   = $total;
+                $change       = max(0, round($cashGiven - $cashNeeded, 2)); // change out of the cash given
+                $cashInDrawer = $cashNeeded;                                // net cash retained
+            } else {
+                $paidAmount   = min($request->paid_amount, $total);
+                $change       = max(0, $request->paid_amount - $total);
+                $cardPortion  = $method === 'card' ? $paidAmount : 0;
+                $cashInDrawer = $method === 'cash' ? $paidAmount : 0;
+            }
 
             // Create sale
             $sale = Sale::create([
@@ -362,8 +379,9 @@ class PosController extends Controller
                 'tax_amount'     => $taxAmount,
                 'total'          => $total,
                 'paid_amount'    => $paidAmount,
+                'cash_amount'    => $cashInDrawer,
                 'change_amount'  => $change,
-                'payment_method' => $request->payment_method,
+                'payment_method' => $method,
                 'status'         => $paidAmount >= $total ? 'paid' : 'partial',
                 'notes'          => $request->notes,
             ]);
@@ -419,47 +437,58 @@ class PosController extends Controller
                 Customer::find($request->customer_id)->increment('total_purchases', $total);
             }
 
-            // Payment record
+            // Payment record(s) — one per tender (split sales create a cash and a card record).
             if ($paidAmount > 0) {
                 $account = Account::where('branch_id', $branchId)
                                   ->where('type', 'cash')
                                   ->first();
                 if ($account) {
-                    // For card payments, use the last 4 digits as the transaction reference
-                    $reference = ($request->payment_method === 'card' && $request->filled('card_last4'))
-                        ? 'CARD-' . $request->card_last4 . '-' . $sale->id
-                        : 'PAY-' . strtoupper(Str::random(8));
+                    $tenders = [];
+                    if ($method === 'mixed') {
+                        if ($cashInDrawer > 0) $tenders[] = ['method' => 'cash', 'amount' => $cashInDrawer];
+                        if ($cardPortion > 0)  $tenders[] = ['method' => 'card', 'amount' => $cardPortion];
+                    } else {
+                        $m = in_array($method, ['cash', 'card', 'bank', 'cheque'], true) ? $method : 'cash';
+                        $tenders[] = ['method' => $m, 'amount' => $paidAmount];
+                    }
 
-                    Payment::create([
-                        'reference_no' => $reference,
-                        'type'         => 'payment_in',
-                        'account_id'   => $account->id,
-                        'party_type'   => 'customer',
-                        'party_id'     => $request->customer_id,
-                        'sale_id'      => $sale->id,
-                        'amount'       => $paidAmount,
-                        'method'       => $request->payment_method,
-                        'created_by'   => $userId,
-                    ]);
+                    foreach ($tenders as $t) {
+                        $reference = ($t['method'] === 'card' && $request->filled('card_last4'))
+                            ? 'CARD-' . $request->card_last4 . '-' . $sale->id
+                            : 'PAY-' . strtoupper(Str::random(8));
+
+                        Payment::create([
+                            'reference_no' => $reference,
+                            'type'         => 'payment_in',
+                            'account_id'   => $account->id,
+                            'party_type'   => 'customer',
+                            'party_id'     => $request->customer_id,
+                            'sale_id'      => $sale->id,
+                            'amount'       => $t['amount'],
+                            'method'       => $t['method'],
+                            'created_by'   => $userId,
+                        ]);
+                    }
 
                     $account->increment('balance', $paidAmount);
                 }
             }
 
-            // Update counter cash
-            if ($counterId && $request->payment_method === 'cash') {
-                \App\Models\Counter::find($counterId)->increment('cash_balance', $paidAmount);
+            // Update counter cash by the cash portion (covers cash and split sales)
+            if ($counterId && $cashInDrawer > 0) {
+                \App\Models\Counter::find($counterId)->increment('cash_balance', $cashInDrawer);
             }
 
             DB::commit();
 
             return response()->json([
-                'success'    => true,
-                'sale_id'    => $sale->id,
-                'invoice_no' => $sale->invoice_no,
-                'total'      => $total,
-                'change'     => $change,
-                'message'    => 'Sale completed successfully',
+                'success'     => true,
+                'sale_id'     => $sale->id,
+                'invoice_no'  => $sale->invoice_no,
+                'total'       => $total,
+                'change'      => $change,
+                'cash_amount' => $cashInDrawer,
+                'message'     => 'Sale completed successfully',
             ]);
 
         } catch (\Exception $e) {
@@ -479,6 +508,52 @@ class PosController extends Controller
         $settings = \App\Models\Setting::pluck('value', 'key_name');
 
         return view('pos.receipt', compact('sale', 'settings'));
+    }
+
+    // ── Held / parked bills ─────────────────────────────────────────────
+    public function holdBill(Request $request)
+    {
+        $request->validate([
+            'payload'    => 'required|array',
+            'label'      => 'nullable|string|max:255',
+            'item_count' => 'nullable|integer|min:0',
+            'total'      => 'nullable|numeric|min:0',
+        ]);
+
+        $bill = HeldBill::create([
+            'branch_id'  => auth()->user()->branch_id,
+            'user_id'    => auth()->id(),
+            'label'      => $request->label,
+            'item_count' => $request->item_count ?? count($request->input('payload.cart', [])),
+            'total'      => $request->total ?? 0,
+            'payload'    => $request->payload,
+        ]);
+
+        return response()->json(['success' => true, 'id' => $bill->id]);
+    }
+
+    public function heldBills()
+    {
+        $bills = HeldBill::where('branch_id', auth()->user()->branch_id)
+            ->latest()
+            ->get(['id', 'label', 'item_count', 'total', 'created_at']);
+
+        return response()->json($bills);
+    }
+
+    public function resumeHeld($id)
+    {
+        $bill = HeldBill::where('branch_id', auth()->user()->branch_id)->findOrFail($id);
+        $payload = $bill->payload;
+        $bill->delete();   // removed once it's back in the cart
+
+        return response()->json(['success' => true, 'payload' => $payload]);
+    }
+
+    public function discardHeld($id)
+    {
+        HeldBill::where('branch_id', auth()->user()->branch_id)->where('id', $id)->delete();
+        return response()->json(['success' => true]);
     }
 
     private function generateInvoiceNo(): string

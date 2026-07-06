@@ -286,6 +286,20 @@ CREATE TABLE stock_layers (
     FOREIGN KEY (branch_id) REFERENCES branches(id)
 );
 
+-- Parked / held POS bills, resumed later at the counter
+CREATE TABLE held_bills (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    branch_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED,
+    label VARCHAR(255),
+    item_count INT DEFAULT 0,
+    total DECIMAL(15,2) DEFAULT 0,
+    payload TEXT NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    FOREIGN KEY (branch_id) REFERENCES branches(id)
+);
+
 -- ============================================================
 -- 11. CUSTOMERS & SUPPLIERS
 -- ============================================================
@@ -349,6 +363,7 @@ CREATE TABLE sales (
     tax_amount DECIMAL(15,2) DEFAULT 0,
     total DECIMAL(15,2) DEFAULT 0,
     paid_amount DECIMAL(15,2) DEFAULT 0,
+    cash_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
     change_amount DECIMAL(15,2) DEFAULT 0,
     loyalty_points_earned INT DEFAULT 0,
     coupon_code VARCHAR(50),
