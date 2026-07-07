@@ -332,7 +332,7 @@ CREATE TABLE sales (
     paid_amount DECIMAL(15,2) DEFAULT 0,
     cash_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
     change_amount DECIMAL(15,2) DEFAULT 0,
-    payment_method ENUM('cash','card','credit','mixed') DEFAULT 'cash',
+    payment_method ENUM('cash','card','credit','bank_transfer','mixed') DEFAULT 'cash',
     status ENUM('paid','partial','pending','returned') DEFAULT 'paid',
     notes TEXT,
     is_online_order TINYINT(1) DEFAULT 0,
@@ -379,10 +379,13 @@ CREATE TABLE sale_return_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     sale_return_id BIGINT UNSIGNED NOT NULL,
     product_id BIGINT UNSIGNED NOT NULL,
+    sale_item_id BIGINT UNSIGNED NULL,
     quantity DECIMAL(15,3) NOT NULL,
     unit_price DECIMAL(15,2) NOT NULL,
+    cost DECIMAL(15,2) NULL,
     subtotal DECIMAL(15,2) NOT NULL,
-    FOREIGN KEY (sale_return_id) REFERENCES sale_returns(id)
+    FOREIGN KEY (sale_return_id) REFERENCES sale_returns(id),
+    FOREIGN KEY (sale_item_id) REFERENCES sale_items(id)
 );
 
 CREATE TABLE quotations (

@@ -10,10 +10,11 @@
     <button type="submit" style="height:34px;padding:0 12px;background:#312e81;color:#a5b4fc;border:.5px solid #534AB7;border-radius:6px;font-size:12px;cursor:pointer">Apply</button>
     <a href="{{ route('reports.export',['sales','format'=>'pdf','from_date'=>$from,'to_date'=>$to]) }}" style="height:34px;padding:0 12px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;display:flex;align-items:center;gap:4px;text-decoration:none;margin-left:auto"><i class="ti ti-download" style="font-size:12px"></i>Export</a>
 </form>
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">
     <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#64748b;margin-bottom:3px">Total sales</div><div style="font-size:18px;font-weight:500;color:#e2e8f0">{{ $totals->count??0 }}</div></div>
-    <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#64748b;margin-bottom:3px">Total value</div><div style="font-size:18px;font-weight:500;color:#4ade80">Rs. {{ number_format($totals->total??0) }}</div></div>
-    <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#64748b;margin-bottom:3px">Total paid</div><div style="font-size:18px;font-weight:500;color:#e2e8f0">Rs. {{ number_format($totals->paid??0) }}</div></div>
+    <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#64748b;margin-bottom:3px">Gross value</div><div style="font-size:18px;font-weight:500;color:#e2e8f0">Rs. {{ number_format($totals->total??0) }}</div></div>
+    <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#64748b;margin-bottom:3px">Returns</div><div style="font-size:18px;font-weight:500;color:#f87171">Rs. {{ number_format($returnAmount??0) }}</div></div>
+    <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#64748b;margin-bottom:3px">Net value</div><div style="font-size:18px;font-weight:500;color:#4ade80">Rs. {{ number_format($netTotal??0) }}</div></div>
     <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:#64748b;margin-bottom:3px">Discounts given</div><div style="font-size:18px;font-weight:500;color:#fb923c">Rs. {{ number_format($totals->discount??0) }}</div></div>
 </div>
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;overflow:hidden">

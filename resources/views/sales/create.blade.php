@@ -6,6 +6,17 @@
 @section('content')
 <div style="padding:14px 16px">
 
+@if(!empty($prefill))
+<div style="display:flex;align-items:center;gap:8px;background:#1e2130;border:.5px solid #534AB7;border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:#a5b4fc">
+    <i class="ti ti-file-invoice" style="font-size:14px"></i>
+    Converting quotation <strong style="color:#e2e8f0;margin:0 3px">{{ $prefill['quote_no'] }}</strong> — review the items and save to complete the sale.
+</div>
+@endif
+
+<form id="sale-form" method="POST" action="{{ route('sales.store') }}">
+@csrf
+@if(!empty($prefill))<input type="hidden" name="from_quote" value="{{ $prefill['quote_id'] }}">@endif
+
 <div style="display:grid;grid-template-columns:1fr 310px;gap:14px;align-items:start">
 
 {{-- Left — Items --}}
@@ -50,8 +61,6 @@
 
 {{-- Right — Summary + submit --}}
 <div>
-<form id="sale-form" method="POST" action="{{ route('sales.store') }}">
-@csrf
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px;margin-bottom:10px">
     <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Sale summary</div>
 
@@ -139,16 +148,16 @@
 <a href="{{ route('pos') }}" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:7px;height:34px;background:#312e81;color:#a5b4fc;border:.5px solid #534AB7;border-radius:6px;font-size:12px;text-decoration:none">
     <i class="ti ti-scan" style="font-size:13px"></i>Use Full POS instead
 </a>
-</form>
 </div>
 
 </div>
+</form>
 </div>
 
 @push('scripts')
 <script>
 // ── Product search ──────────────────────────────────────
-const products = @json($products->map(fn($p)=>['id'=>$p->id,'name'=>$p->name,'price'=>$p->sale_price,'barcode'=>$p->barcode,'unit'=>$p->unit,'stock'=>$p->current_stock]));
+const products = {!! json_encode($products->map(fn($p)=>['id'=>$p->id,'name'=>$p->name,'price'=>$p->sale_price,'barcode'=>$p->barcode,'unit'=>$p->unit,'stock'=>$p->current_stock])) !!};
 
 let rowIdx = 1;
 
@@ -276,6 +285,30 @@ function submitSale(e) {
         alert('Please add at least one product.');
     }
 }
+
+// ── Prefill from quotation (Convert to sale) ──────────
+@if(!empty($prefill))
+(function () {
+    const PF = @json($prefill);
+    function apply() {
+        const cs = document.querySelector('[name="customer_id"]');
+        if (cs && PF.customer_id) cs.value = PF.customer_id;
+        (PF.items || []).forEach((it, i) => {
+            if (i > 0) addSaleRow();
+            const row = document.querySelectorAll('.sale-row')[i];
+            if (!row) return;
+            row.querySelector('[name*="[product_search]"]').value = it.name || '';
+            row.querySelector('[name*="[product_id]"]').value    = it.product_id || '';
+            row.querySelector('[name*="[quantity]"]').value      = it.quantity;
+            row.querySelector('[name*="[unit_price]"]').value    = it.unit_price;
+            calcSaleRow(row.querySelector('[name*="[unit_price]"]'));
+        });
+        calcTotals();
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+    else apply();
+})();
+@endif
 </script>
 @endpush
 @endsection

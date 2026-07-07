@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\SaleReturn;
 use App\Models\Purchase;
 use App\Models\Product;
 use App\Models\Stock;
@@ -34,6 +35,15 @@ class DashboardController extends Controller
             ->whereYear('created_at', $today->year)
             ->selectRaw('COUNT(*) as count, SUM(total) as total')
             ->first();
+
+        // Sales are immutable — net revenue cards by returns recorded in the same window.
+        // (use fresh today()/now() so we don't depend on $today, which gets mutated below)
+        $returnsToday = SaleReturn::whereHas('sale', fn($q) => $q->where('branch_id', $branchId))
+            ->whereDate('created_at', today())->sum('return_amount');
+        $returnsMonth = SaleReturn::whereHas('sale', fn($q) => $q->where('branch_id', $branchId))
+            ->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->sum('return_amount');
+        if ($todaySales) $todaySales->total = (float) ($todaySales->total ?? 0) - (float) $returnsToday;
+        if ($monthSales) $monthSales->total = (float) ($monthSales->total ?? 0) - (float) $returnsMonth;
 
         // Yesterday sales (for % change)
         $yesterdaySales = Sale::where('branch_id', $branchId)
@@ -124,7 +134,8 @@ class DashboardController extends Controller
         $today    = today();
 
         return response()->json([
-            'today_sales'    => Sale::where('branch_id', $branchId)->whereDate('created_at', $today)->sum('total'),
+            'today_sales'    => Sale::where('branch_id', $branchId)->whereDate('created_at', $today)->sum('total')
+                                - SaleReturn::whereHas('sale', fn($q) => $q->where('branch_id', $branchId))->whereDate('created_at', $today)->sum('return_amount'),
             'today_count'    => Sale::where('branch_id', $branchId)->whereDate('created_at', $today)->count(),
             'low_stock'      => Stock::where('branch_id', $branchId)->whereRaw('quantity < (SELECT min_stock FROM products WHERE products.id = stock.product_id)')->count(),
             'staff_on_duty'  => Attendance::whereDate('date', $today)->where('status', 'present')->count(),

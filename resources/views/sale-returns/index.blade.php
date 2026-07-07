@@ -31,7 +31,16 @@
         <td style="padding:9px 12px;color:#f87171;font-weight:500">Rs. {{ number_format($r->return_amount) }}</td>
         <td style="padding:9px 12px;color:#94a3b8;font-size:11px">{{ Str::limit($r->reason, 25) }}</td>
         <td style="padding:9px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ $r->refund_method==='cash'?'#14532d':'#312e81' }};color:{{ $r->refund_method==='cash'?'#4ade80':'#a5b4fc' }}">{{ ucfirst(str_replace('_',' ',$r->refund_method)) }}</span></td>
-        <td style="padding:9px 12px"><a href="{{ route('sale-returns.show',$r) }}" style="width:26px;height:26px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#94a3b8;text-decoration:none"><i class="ti ti-eye" style="font-size:12px"></i></a></td>
+        <td style="padding:9px 12px">
+            <div style="display:flex;gap:5px">
+                <a href="{{ route('sale-returns.show',$r) }}" style="width:26px;height:26px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#94a3b8;text-decoration:none"><i class="ti ti-eye" style="font-size:12px"></i></a>
+                <form method="POST" action="{{ route('sale-returns.destroy',$r) }}" onsubmit="return confirm('Reverse return {{ $r->credit_note_no }}? Stock and any cash refund will be undone.');" style="display:inline">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" title="Reverse return" style="width:26px;height:26px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#f87171;cursor:pointer"><i class="ti ti-arrow-back-up" style="font-size:12px"></i></button>
+                </form>
+            </div>
+        </td>
     </tr>
     @empty
     <tr><td colspan="8" style="padding:32px;text-align:center;color:#4a5568">No returns found</td></tr>

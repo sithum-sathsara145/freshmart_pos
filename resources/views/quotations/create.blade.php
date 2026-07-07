@@ -3,8 +3,9 @@
 @section('title','New Quotation')
 @section('page-title','New Quotation / Estimate')
 @section('content')
+@php $ri = 'background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none'; @endphp
 <div style="padding:14px 16px;max-width:700px">
-<form method="POST" action="{{ route('quotations.store') }}">
+<form method="POST" action="{{ route('quotations.store') }}" onsubmit="return qValidate()">
 @csrf
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:16px;margin-bottom:12px">
     <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Quotation details</div>
@@ -34,10 +35,14 @@
     </div>
     <div id="quote-items">
         <div class="qi-row" style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 28px;gap:4px;margin-bottom:5px">
-            <input type="text" name="items[0][product_id]" placeholder="Product name" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
-            <input type="number" name="items[0][quantity]" placeholder="1" min="0.001" step="0.001" oninput="qCalcRow(this)" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
-            <input type="number" name="items[0][unit_price]" placeholder="0.00" min="0" step="0.01" oninput="qCalcRow(this)" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
-            <input type="number" name="items[0][subtotal]" placeholder="0.00" readonly style="background:#0f1117;border:.5px solid #1a1d2a;border-radius:5px;color:#a5b4fc;font-size:11px;padding:5px 8px;outline:none">
+            <div style="position:relative">
+                <input type="text" class="qi-search" placeholder="Search product..." autocomplete="off" oninput="qSearch(this,0)" style="{{ $ri }};width:100%;box-sizing:border-box">
+                <input type="hidden" name="items[0][product_id]">
+                <div class="qi-drop" id="qdrop-0" style="display:none;position:absolute;top:28px;left:0;right:0;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;z-index:20;max-height:150px;overflow-y:auto"></div>
+            </div>
+            <input type="number" name="items[0][quantity]" placeholder="1" value="1" min="0.001" step="0.001" oninput="qCalcRow(this)" style="{{ $ri }}">
+            <input type="number" name="items[0][unit_price]" placeholder="0.00" min="0" step="0.01" oninput="qCalcRow(this)" style="{{ $ri }}">
+            <input type="number" name="items[0][subtotal]" placeholder="0.00" readonly style="{{ $ri }};color:#a5b4fc">
             <div style="width:26px;height:26px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#f87171;font-size:13px" onclick="this.closest('.qi-row').remove();qCalcTotal()"><i class="ti ti-x"></i></div>
         </div>
     </div>
@@ -68,7 +73,34 @@
 
 @push('scripts')
 <script>
+const qProducts = {!! json_encode($products) !!};
 let qi = 1;
+
+function qSearch(el, idx) {
+    const q = el.value.toLowerCase().trim();
+    const drop = document.getElementById('qdrop-' + idx);
+    // typing invalidates any previously chosen product until one is picked again
+    el.closest('.qi-row').querySelector('[name*="[product_id]"]').value = '';
+    if (!q) { drop.style.display = 'none'; return; }
+    const matches = qProducts.filter(p => p.name.toLowerCase().includes(q) || (p.barcode && String(p.barcode).includes(q))).slice(0, 8);
+    if (!matches.length) { drop.style.display = 'none'; return; }
+    drop.innerHTML = matches.map(p =>
+        `<div onclick="qSelect(${idx},${p.id},${JSON.stringify(p.name)},${p.price})" style="padding:6px 10px;cursor:pointer;font-size:11px;color:#e2e8f0;border-bottom:.5px solid #2a2d3a;display:flex;justify-content:space-between" onmouseover="this.style.background='#312e81'" onmouseout="this.style.background=''"><span>${p.name}</span><span style="color:#a5b4fc">Rs. ${Number(p.price).toLocaleString()}</span></div>`
+    ).join('');
+    drop.style.display = 'block';
+}
+function qSelect(idx, id, name, price) {
+    const row = document.querySelectorAll('.qi-row')[idx];
+    row.querySelector('.qi-search').value = name;
+    row.querySelector('[name*="[product_id]"]').value = id;
+    const up = row.querySelector('[name*="[unit_price]"]');
+    if (!parseFloat(up.value)) up.value = price;
+    document.getElementById('qdrop-' + idx).style.display = 'none';
+    qCalcRow(up);
+}
+document.addEventListener('click', e => {
+    document.querySelectorAll('.qi-drop').forEach(d => { if (!d.parentElement.contains(e.target)) d.style.display = 'none'; });
+});
 function qCalcRow(el) {
     const row = el.closest('.qi-row');
     const qty = parseFloat(row.querySelector('[name*="[quantity]"]').value)||0;
@@ -80,16 +112,22 @@ function qCalcTotal() {
     let sub = 0;
     document.querySelectorAll('[name*="[subtotal]"]').forEach(i=>sub+=parseFloat(i.value)||0);
     const disc = parseFloat(document.querySelector('[name="discount_amount"]').value)||0;
-    const total = sub - disc;
+    const total = Math.max(0, sub - disc);
     document.getElementById('q-grand-total').textContent = 'Rs. ' + total.toLocaleString('en-US',{minimumFractionDigits:2});
 }
 function addQIRow() {
     const d = document.createElement('div');
     d.className = 'qi-row';
     d.style.cssText = 'display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 28px;gap:4px;margin-bottom:5px';
-    d.innerHTML = `<input type="text" name="items[${qi}][product_id]" placeholder="Product name" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none"><input type="number" name="items[${qi}][quantity]" placeholder="1" min="0.001" step="0.001" oninput="qCalcRow(this)" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none"><input type="number" name="items[${qi}][unit_price]" placeholder="0.00" min="0" step="0.01" oninput="qCalcRow(this)" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none"><input type="number" name="items[${qi}][subtotal]" placeholder="0.00" readonly style="background:#0f1117;border:.5px solid #1a1d2a;border-radius:5px;color:#a5b4fc;font-size:11px;padding:5px 8px;outline:none"><div style="width:26px;height:26px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#f87171;font-size:13px" onclick="this.closest('.qi-row').remove();qCalcTotal()"><i class="ti ti-x"></i></div>`;
+    const s = '{{ $ri }}';
+    d.innerHTML = `<div style="position:relative"><input type="text" class="qi-search" placeholder="Search product..." autocomplete="off" oninput="qSearch(this,${qi})" style="${s};width:100%;box-sizing:border-box"><input type="hidden" name="items[${qi}][product_id]"><div class="qi-drop" id="qdrop-${qi}" style="display:none;position:absolute;top:28px;left:0;right:0;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;z-index:20;max-height:150px;overflow-y:auto"></div></div><input type="number" name="items[${qi}][quantity]" value="1" min="0.001" step="0.001" oninput="qCalcRow(this)" style="${s}"><input type="number" name="items[${qi}][unit_price]" placeholder="0.00" min="0" step="0.01" oninput="qCalcRow(this)" style="${s}"><input type="number" name="items[${qi}][subtotal]" placeholder="0.00" readonly style="${s};color:#a5b4fc"><div style="width:26px;height:26px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#f87171;font-size:13px" onclick="this.closest('.qi-row').remove();qCalcTotal()"><i class="ti ti-x"></i></div>`;
     document.getElementById('quote-items').appendChild(d);
     qi++;
+}
+function qValidate() {
+    const picked = [...document.querySelectorAll('[name*="[product_id]"]')].some(i => i.value);
+    if (!picked) { alert('Pick at least one product from the search results.'); return false; }
+    return true;
 }
 </script>
 @endpush

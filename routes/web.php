@@ -85,20 +85,20 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/stock/transfers', [StockController::class, 'storeTransfer'])->name('stock.transfers.store');
     Route::patch('/stock/transfers/{id}/status', [StockController::class, 'updateTransferStatus']);
 
-    // Sales
-    Route::resource('sales', SaleController::class);
+    // Sales (finalized once created — correct via Void/Return, collect payment via payments-in)
+    Route::resource('sales', SaleController::class)->except(['edit', 'update']);
     Route::get('/sales/{id}/invoice', [SaleController::class, 'invoice'])->name('sales.invoice');
     Route::get('/sales/{id}/receipt', [SaleController::class, 'receipt'])->name('sales.receipt');
 
-    // Sales Returns
-    Route::resource('sale-returns', SaleReturnController::class);
+    // Sales Returns (immutable once issued — no edit/update, delete reverses)
+    Route::resource('sale-returns', SaleReturnController::class)->except(['edit', 'update']);
 
     // Payment In
     Route::get('/payments-in', [PaymentController::class, 'indexIn'])->name('payments.in');
     Route::post('/payments-in', [PaymentController::class, 'storeIn'])->name('payments.in.store');
 
-    // Quotations
-    Route::resource('quotations', QuotationController::class);
+    // Quotations (no in-place editor — delete + recreate, or convert to a sale)
+    Route::resource('quotations', QuotationController::class)->except(['edit', 'update']);
     Route::post('/quotations/{id}/convert', [QuotationController::class, 'convertToSale'])->name('quotations.convert');
     Route::get('/quotations/{id}/pdf', [QuotationController::class, 'pdf'])->name('quotations.pdf');
 

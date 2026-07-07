@@ -415,11 +415,14 @@ CREATE TABLE sale_return_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     sale_return_id BIGINT UNSIGNED NOT NULL,
     product_id BIGINT UNSIGNED NOT NULL,
+    sale_item_id BIGINT UNSIGNED NULL,
     quantity DECIMAL(15,3) NOT NULL,
     unit_price DECIMAL(15,2) NOT NULL,
+    cost DECIMAL(15,2) NULL,
     subtotal DECIMAL(15,2) NOT NULL,
     FOREIGN KEY (sale_return_id) REFERENCES sale_returns(id),
-    FOREIGN KEY (product_id) REFERENCES products(id)
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    FOREIGN KEY (sale_item_id) REFERENCES sale_items(id)
 );
 
 -- ============================================================

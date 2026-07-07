@@ -21,6 +21,13 @@
     <a href="{{ route('sale-returns.create') }}?sale_id={{ $sale->id }}" style="height:32px;padding:0 12px;background:#7f1d1d;color:#fca5a5;border:.5px solid #991b1b;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:4px;text-decoration:none">
         <i class="ti ti-arrow-back-up" style="font-size:12px"></i>Return
     </a>
+    <form method="POST" action="{{ route('sales.destroy',$sale) }}" onsubmit="return confirm('Void invoice {{ $sale->invoice_no }}? Stock and payments will be reversed. This cannot be undone.');" style="margin-left:auto">
+        @csrf
+        @method('DELETE')
+        <button type="submit" style="height:32px;padding:0 12px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#f87171;font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">
+            <i class="ti ti-trash" style="font-size:12px"></i>Void sale
+        </button>
+    </form>
     @endif
 </div>
 

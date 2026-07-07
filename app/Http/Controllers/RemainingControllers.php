@@ -207,27 +207,60 @@ class PaymentController extends Controller
 {
     public function indexIn(Request $request)
     {
+        $branchId = auth()->user()->branch_id;
+
         $payments = Payment::with(['sale', 'account'])
             ->where('type', 'payment_in')
-            ->whereHas('account', fn($q) => $q->where('branch_id', auth()->user()->branch_id))
+            ->whereHas('account', fn($q) => $q->where('branch_id', $branchId))
             ->latest()->paginate(20);
 
-        $totals = ['cash' => Payment::where('type','payment_in')->where('method','cash')->sum('amount'), 'card' => Payment::where('type','payment_in')->where('method','card')->sum('amount')];
+        // Scope the summary cards to this branch (were summing every branch).
+        $inBranch = fn($q) => $q->where('type', 'payment_in')->whereHas('account', fn($a) => $a->where('branch_id', $branchId));
+        $totals = [
+            'cash' => Payment::where($inBranch)->where('method', 'cash')->sum('amount'),
+            'card' => Payment::where($inBranch)->where('method', 'card')->sum('amount'),
+        ];
 
         return view('payments.in', compact('payments', 'totals'));
     }
 
     public function storeIn(Request $request)
     {
+        $branchId = auth()->user()->branch_id;
         $request->validate(['sale_id' => 'required|exists:sales,id', 'amount' => 'required|numeric|min:1', 'account_id' => 'required|exists:accounts,id']);
-        DB::transaction(function () use ($request) {
-            Payment::create([...$request->only(['sale_id','amount','method','account_id','notes']), 'reference_no' => 'PAY-'.strtoupper(Str::random(8)), 'type' => 'payment_in', 'party_type' => 'customer', 'created_by' => auth()->id()]);
-            Account::find($request->account_id)->increment('balance', $request->amount);
-            $sale = \App\Models\Sale::find($request->sale_id);
-            $newPaid = $sale->paid_amount + $request->amount;
-            $sale->update(['paid_amount' => min($newPaid, $sale->total), 'status' => $newPaid >= $sale->total ? 'paid' : 'partial']);
+
+        $sale    = \App\Models\Sale::where('branch_id', $branchId)->find($request->sale_id);
+        $account = Account::where('branch_id', $branchId)->find($request->account_id);
+        if (! $sale || ! $account) {
+            return back()->with('error', 'Sale or account not found for this branch.');
+        }
+        $due = max(0, (float) $sale->total - (float) $sale->paid_amount);
+        if ($due <= 0) {
+            return back()->with('error', 'This invoice is already fully paid.');
+        }
+        // Never credit more than is actually owed (prevents overstating the account balance).
+        $amount = min((float) $request->amount, $due);
+        $method = in_array($request->method, ['cash', 'card', 'bank', 'cheque'], true) ? $request->method : 'cash';
+
+        DB::transaction(function () use ($request, $sale, $account, $amount, $method) {
+            Payment::create([
+                'reference_no' => 'PAY-' . strtoupper(Str::random(8)),
+                'type'         => 'payment_in',
+                'account_id'   => $account->id,
+                'party_type'   => 'customer',
+                'party_id'     => $sale->customer_id,
+                'sale_id'      => $sale->id,
+                'amount'       => $amount,
+                'method'       => $method,
+                'notes'        => $request->notes,
+                'created_by'   => auth()->id(),
+            ]);
+            $account->increment('balance', $amount);
+            $newPaid = (float) $sale->paid_amount + $amount;
+            $sale->update(['paid_amount' => $newPaid, 'status' => $newPaid >= $sale->total ? 'paid' : 'partial']);
         });
-        return back()->with('success', 'Payment recorded.');
+
+        return back()->with('success', 'Payment of Rs. ' . number_format($amount, 2) . ' recorded.');
     }
 
     public function indexOut(Request $request)
@@ -242,15 +275,44 @@ class PaymentController extends Controller
 
     public function storeOut(Request $request)
     {
+        $branchId = auth()->user()->branch_id;
         $request->validate(['purchase_id' => 'required|exists:purchases,id', 'amount' => 'required|numeric|min:1', 'account_id' => 'required|exists:accounts,id']);
-        DB::transaction(function () use ($request) {
-            Payment::create([...$request->only(['purchase_id','amount','method','account_id','notes']), 'reference_no' => 'PAY-'.strtoupper(Str::random(8)), 'type' => 'payment_out', 'party_type' => 'supplier', 'created_by' => auth()->id()]);
-            Account::find($request->account_id)->decrement('balance', $request->amount);
-            $purchase = Purchase::find($request->purchase_id);
-            $newPaid = $purchase->paid_amount + $request->amount;
-            $purchase->update(['paid_amount' => min($newPaid, $purchase->total), 'balance_due' => max(0, $purchase->total - $newPaid), 'payment_status' => $newPaid >= $purchase->total ? 'paid' : 'partial']);
+
+        $purchase = Purchase::where('branch_id', $branchId)->find($request->purchase_id);
+        $account  = Account::where('branch_id', $branchId)->find($request->account_id);
+        if (! $purchase || ! $account) {
+            return back()->with('error', 'Purchase or account not found for this branch.');
+        }
+        $due = max(0, (float) $purchase->total - (float) $purchase->paid_amount);
+        if ($due <= 0) {
+            return back()->with('error', 'This purchase is already fully paid.');
+        }
+        $amount = min((float) $request->amount, $due);
+        $method = in_array($request->method, ['cash', 'card', 'bank', 'cheque'], true) ? $request->method : 'cash';
+
+        DB::transaction(function () use ($request, $purchase, $account, $amount, $method) {
+            Payment::create([
+                'reference_no' => 'PAY-' . strtoupper(Str::random(8)),
+                'type'         => 'payment_out',
+                'account_id'   => $account->id,
+                'party_type'   => 'supplier',
+                'party_id'     => $purchase->supplier_id,
+                'purchase_id'  => $purchase->id,
+                'amount'       => $amount,
+                'method'       => $method,
+                'notes'        => $request->notes,
+                'created_by'   => auth()->id(),
+            ]);
+            $account->decrement('balance', $amount);
+            $newPaid = (float) $purchase->paid_amount + $amount;
+            $purchase->update([
+                'paid_amount'    => $newPaid,
+                'balance_due'    => max(0, (float) $purchase->total - $newPaid),
+                'payment_status' => $newPaid >= $purchase->total ? 'paid' : 'partial',
+            ]);
         });
-        return back()->with('success', 'Payment out recorded.');
+
+        return back()->with('success', 'Payment of Rs. ' . number_format($amount, 2) . ' recorded.');
     }
 }
 

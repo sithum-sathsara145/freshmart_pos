@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\Customer;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -29,11 +30,18 @@ class QuotationController extends Controller
     public function create()
     {
         $customers = Customer::orderBy('name')->get();
-        return view('quotations.create', compact('customers'));
+        $products  = Product::where('status', 'active')->orderBy('name')->get()
+            ->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'price' => (float) $p->sale_price, 'barcode' => $p->barcode]);
+        return view('quotations.create', compact('customers', 'products'));
     }
 
     public function store(Request $request)
     {
+        // Drop blank rows (added but no product chosen) before validating.
+        $request->merge([
+            'items' => collect($request->items ?? [])->filter(fn($i) => ! empty($i['product_id']))->values()->all(),
+        ]);
+
         $request->validate([
             'items'              => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
@@ -82,43 +90,45 @@ class QuotationController extends Controller
 
     public function show(Quotation $quotation)
     {
+        abort_if((int) $quotation->branch_id !== (int) auth()->user()->branch_id, 404);
         $quotation->load(['items.product', 'customer']);
         return view('quotations.show', compact('quotation'));
     }
 
-    public function edit(Quotation $quotation)
-    {
-        $customers = Customer::orderBy('name')->get();
-        $quotation->load('items.product');
-        return view('quotations.edit', compact('quotation', 'customers'));
-    }
-
-    public function update(Request $request, Quotation $quotation)
-    {
-        $quotation->update(['notes' => $request->notes, 'valid_till' => $request->valid_till]);
-        return redirect()->route('quotations.show', $quotation)->with('success', 'Quotation updated.');
-    }
-
     public function destroy(Quotation $quotation)
     {
-        $quotation->delete();
-        return redirect()->route('quotations.index')->with('success', 'Quotation deleted.');
+        if ((int) $quotation->branch_id !== (int) auth()->user()->branch_id) {
+            return back()->with('error', 'Quotation not found for this branch.');
+        }
+
+        DB::beginTransaction();
+        try {
+            // quotation_items reference the quote (InnoDB FK, no cascade) — remove them first.
+            $quotation->items()->delete();
+            $quotation->delete();
+            DB::commit();
+            return redirect()->route('quotations.index')->with('success', 'Quotation deleted.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Delete failed: ' . $e->getMessage());
+        }
     }
 
     public function convertToSale(int $id)
     {
-        $quote = Quotation::with('items')->findOrFail($id);
+        $quote = Quotation::where('branch_id', auth()->user()->branch_id)->findOrFail($id);
         if ($quote->status === 'converted') {
-            return back()->with('error', 'Already converted.');
+            return back()->with('error', 'This quotation has already been converted.');
         }
-        $quote->update(['status' => 'converted']);
-        // Redirect to sale create with prefilled data
-        return redirect()->route('sales.create', ['from_quote' => $id])->with('success', 'Quotation loaded into new sale.');
+        // Load the quote into a new sale for review; it is only marked 'converted'
+        // once that sale is actually saved (SaleController::store()).
+        return redirect()->route('sales.create', ['from_quote' => $quote->id]);
     }
 
     public function pdf(int $id)
     {
-        $quotation = Quotation::with(['items.product', 'customer', 'branch'])->findOrFail($id);
+        $quotation = Quotation::with(['items.product', 'customer', 'branch'])
+            ->where('branch_id', auth()->user()->branch_id)->findOrFail($id);
         $settings  = \App\Models\Setting::pluck('value', 'key_name');
         $pdf       = Pdf::loadView('quotations.pdf', compact('quotation', 'settings'))->setPaper('A4');
         return $pdf->download("Quote-{$quotation->quote_no}.pdf");

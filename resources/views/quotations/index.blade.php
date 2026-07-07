@@ -41,6 +41,11 @@
                     <button type="submit" style="width:26px;height:26px;background:#14532d;border:.5px solid #166534;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#4ade80;cursor:pointer" title="Convert to sale"><i class="ti ti-arrow-right" style="font-size:12px"></i></button>
                 </form>
                 @endif
+                <form method="POST" action="{{ route('quotations.destroy',$q) }}" onsubmit="return confirm('Delete quotation {{ $q->quote_no }}?');">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" title="Delete" style="width:26px;height:26px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#f87171;cursor:pointer"><i class="ti ti-trash" style="font-size:12px"></i></button>
+                </form>
             </div>
         </td>
     </tr>
