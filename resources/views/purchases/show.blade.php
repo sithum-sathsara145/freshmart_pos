@@ -14,6 +14,16 @@
     <a href="{{ route('purchase-returns.create') }}?purchase_id={{ $purchase->id }}" style="height:32px;padding:0 12px;background:#7f1d1d;color:#fca5a5;border:.5px solid #991b1b;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:4px;text-decoration:none">
         <i class="ti ti-arrow-back-up" style="font-size:12px"></i>Return
     </a>
+    <a href="{{ route('purchases.edit',$purchase) }}" style="height:32px;padding:0 12px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;display:flex;align-items:center;gap:4px;text-decoration:none">
+        <i class="ti ti-edit" style="font-size:12px"></i>Edit
+    </a>
+    <form method="POST" action="{{ route('purchases.destroy',$purchase) }}" onsubmit="return confirm('Delete this purchase and reverse its stock? This cannot be undone.');">
+        @csrf
+        @method('DELETE')
+        <button type="submit" style="height:32px;padding:0 12px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#f87171;font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">
+            <i class="ti ti-trash" style="font-size:12px"></i>Delete
+        </button>
+    </form>
 </div>
 
 <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px">
