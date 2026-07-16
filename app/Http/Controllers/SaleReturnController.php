@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CurrentBranch;
+
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SaleReturn;
@@ -20,18 +22,18 @@ class SaleReturnController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         $returns = SaleReturn::with(['sale', 'customer'])
-            ->whereHas('sale', fn($q) => $q->where('branch_id', $branchId))
+            ->whereHas('sale', fn($q) => $q->whereBranch($branchId))
             ->when($request->search, fn($q) => $q->where('credit_note_no', 'like', "%{$request->search}%"))
             ->latest()
             ->paginate(20);
 
         $stats = [
-            'total_returns'  => SaleReturn::whereHas('sale', fn($q) => $q->where('branch_id', $branchId))->count(),
-            'total_amount'   => SaleReturn::whereHas('sale', fn($q) => $q->where('branch_id', $branchId))->sum('return_amount'),
-            'this_month'     => SaleReturn::whereHas('sale', fn($q) => $q->where('branch_id', $branchId))->whereMonth('created_at', now()->month)->sum('return_amount'),
+            'total_returns'  => SaleReturn::whereHas('sale', fn($q) => $q->whereBranch($branchId))->count(),
+            'total_amount'   => SaleReturn::whereHas('sale', fn($q) => $q->whereBranch($branchId))->sum('return_amount'),
+            'this_month'     => SaleReturn::whereHas('sale', fn($q) => $q->whereBranch($branchId))->whereMonth('created_at', now()->month)->sum('return_amount'),
         ];
 
         return view('sale-returns.index', compact('returns', 'stats'));
@@ -39,12 +41,12 @@ class SaleReturnController extends Controller
 
     public function create()
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         // Candidate invoices with at least one line that still has un-returned quantity.
         // Everything the picker needs is embedded so no extra AJAX round-trip is required.
         $sales = Sale::with(['customer', 'items.product', 'items.returnItems'])
-            ->where('branch_id', $branchId)
+            ->whereBranch($branchId)
             ->where('status', '!=', 'returned')
             ->latest()->limit(100)->get()
             ->map(function ($s) {
@@ -88,10 +90,10 @@ class SaleReturnController extends Controller
             'refund_method'        => 'required|in:cash,credit_note,exchange',
         ]);
 
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
         $sale     = Sale::with('items.product')->findOrFail($request->sale_id);
 
-        if ((int) $sale->branch_id !== (int) $branchId) {
+        if (! CurrentBranch::allows($sale->branch_id)) {
             return back()->with('error', 'That invoice belongs to another branch.')->withInput();
         }
 
@@ -173,8 +175,9 @@ class SaleReturnController extends Controller
 
             // A cash refund actually leaves the till (mirror of the sale's payment_in).
             if ($request->refund_method === 'cash' && $returnAmount > 0) {
-                $account = Account::where('branch_id', $branchId)->where('type', 'cash')->first()
-                        ?? Account::where('branch_id', $branchId)->first();
+                // Refund leaves the till of the branch that made the sale.
+                $account = Account::whereBranch((int) $sale->branch_id)->where('type', 'cash')->first()
+                        ?? Account::whereBranch((int) $sale->branch_id)->first();
                 if ($account) {
                     Payment::create([
                         'reference_no' => 'REF-' . strtoupper(Str::random(8)),
@@ -222,17 +225,20 @@ class SaleReturnController extends Controller
 
     public function destroy(SaleReturn $saleReturn)
     {
-        $branchId = auth()->user()->branch_id;
         $saleReturn->load(['items.product', 'sale']);
         $sale = $saleReturn->sale;
 
-        if (! $sale || (int) $sale->branch_id !== (int) $branchId) {
+        if (! $sale || ! CurrentBranch::allows($sale->branch_id)) {
             return back()->with('error', 'Return not found for this branch.');
         }
 
+        // The stock sits in the branch that made the sale — not whichever branch the
+        // user happens to be viewing, which is null in All-branches mode.
+        $branchId = (int) $sale->branch_id;
+
         // We can only cleanly reverse while the re-added stock is still on hand.
         foreach ($saleReturn->items as $item) {
-            $onHand = (float) (Stock::where('product_id', $item->product_id)->where('branch_id', $branchId)->value('quantity') ?? 0);
+            $onHand = (float) (Stock::where('product_id', $item->product_id)->whereBranch($branchId)->value('quantity') ?? 0);
             if ($onHand + 0.0005 < (float) $item->quantity) {
                 return back()->with('error', 'Cannot reverse: some returned stock has since been sold. Adjust stock manually instead.');
             }

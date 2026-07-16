@@ -1,6 +1,8 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Support\CurrentBranch;
+
 use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\Customer;
@@ -14,14 +16,14 @@ class QuotationController extends Controller
     public function index(Request $request)
     {
         $quotations = Quotation::with(['customer', 'user'])
-            ->where('branch_id', auth()->user()->branch_id)
+            ->whereBranch(CurrentBranch::id())
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->latest()->paginate(20);
 
         $stats = [
-            'total'     => Quotation::where('branch_id', auth()->user()->branch_id)->count(),
-            'pending'   => Quotation::where('branch_id', auth()->user()->branch_id)->where('status', 'pending')->count(),
-            'converted' => Quotation::where('branch_id', auth()->user()->branch_id)->where('status', 'converted')->count(),
+            'total'     => Quotation::whereBranch(CurrentBranch::id())->count(),
+            'pending'   => Quotation::whereBranch(CurrentBranch::id())->where('status', 'pending')->count(),
+            'converted' => Quotation::whereBranch(CurrentBranch::id())->where('status', 'converted')->count(),
         ];
 
         return view('quotations.index', compact('quotations', 'stats'));
@@ -49,6 +51,10 @@ class QuotationController extends Controller
             'items.*.unit_price' => 'required|numeric|min:0',
         ]);
 
+        if (! $branchId = CurrentBranch::requireId()) {
+            return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
+        }
+
         DB::beginTransaction();
         try {
             $subtotal = collect($request->items)->sum(fn($i) => $i['quantity'] * $i['unit_price']);
@@ -59,7 +65,7 @@ class QuotationController extends Controller
             $quote = Quotation::create([
                 'quote_no'        => $this->nextQuoteNo(),
                 'customer_id'     => $request->customer_id,
-                'branch_id'       => auth()->user()->branch_id,
+                'branch_id'       => $branchId,
                 'user_id'         => auth()->id(),
                 'subtotal'        => $subtotal,
                 'discount_amount' => $discount,
@@ -90,14 +96,14 @@ class QuotationController extends Controller
 
     public function show(Quotation $quotation)
     {
-        abort_if((int) $quotation->branch_id !== (int) auth()->user()->branch_id, 404);
+        CurrentBranch::guard($quotation->branch_id);
         $quotation->load(['items.product', 'customer']);
         return view('quotations.show', compact('quotation'));
     }
 
     public function destroy(Quotation $quotation)
     {
-        if ((int) $quotation->branch_id !== (int) auth()->user()->branch_id) {
+        if (! CurrentBranch::allows($quotation->branch_id)) {
             return back()->with('error', 'Quotation not found for this branch.');
         }
 
@@ -116,7 +122,7 @@ class QuotationController extends Controller
 
     public function convertToSale(int $id)
     {
-        $quote = Quotation::where('branch_id', auth()->user()->branch_id)->findOrFail($id);
+        $quote = Quotation::whereBranch(CurrentBranch::id())->findOrFail($id);
         if ($quote->status === 'converted') {
             return back()->with('error', 'This quotation has already been converted.');
         }
@@ -128,7 +134,7 @@ class QuotationController extends Controller
     public function pdf(int $id)
     {
         $quotation = Quotation::with(['items.product', 'customer', 'branch'])
-            ->where('branch_id', auth()->user()->branch_id)->findOrFail($id);
+            ->whereBranch(CurrentBranch::id())->findOrFail($id);
         $settings  = \App\Models\Setting::pluck('value', 'key_name');
         $pdf       = Pdf::loadView('quotations.pdf', compact('quotation', 'settings'))->setPaper('A4');
         return $pdf->download("Quote-{$quotation->quote_no}.pdf");

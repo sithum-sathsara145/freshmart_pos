@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CurrentBranch;
+
 use App\Models\CounterSession;
 use Illuminate\Http\Request;
 
@@ -9,19 +11,19 @@ class CounterSessionController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         $sessions = CounterSession::with(['counter', 'openedBy', 'closedBy'])
-            ->where('branch_id', $branchId)
+            ->whereBranch($branchId)
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->latest('opened_at')
             ->paginate(20)
             ->withQueryString();
 
         $totals = [
-            'open'     => CounterSession::where('branch_id', $branchId)->where('status', 'open')->count(),
-            'closed'   => CounterSession::where('branch_id', $branchId)->where('status', 'closed')->count(),
-            'variance' => (float) CounterSession::where('branch_id', $branchId)->sum('variance'),
+            'open'     => CounterSession::whereBranch($branchId)->where('status', 'open')->count(),
+            'closed'   => CounterSession::whereBranch($branchId)->where('status', 'closed')->count(),
+            'variance' => (float) CounterSession::whereBranch($branchId)->sum('variance'),
         ];
 
         return view('counter-sessions.index', compact('sessions', 'totals'));

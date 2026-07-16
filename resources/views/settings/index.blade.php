@@ -224,28 +224,160 @@
 </div>
 </div>
 
-<div id="sec-users" class="settings-section" style="display:none">
+<div id="sec-users" class="settings-section" style="display:none" x-data="usersTab()">
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px">
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:10px">Users & roles</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:500;color:#94a3b8">Users & roles</div>
+        <div style="display:flex;gap:8px">
+            @can('viewAny', App\Models\Role::class)
+            <a href="{{ route('roles.index') }}" style="height:28px;padding:0 10px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;color:#94a3b8;font-size:11px;display:flex;align-items:center;gap:4px;text-decoration:none">
+                <i class="ti ti-shield-lock" style="font-size:12px"></i>Roles & permissions
+            </a>
+            @endcan
+            @can('create', App\Models\User::class)
+            <button type="button" @click="openCreate()" style="height:28px;padding:0 10px;background:#312e81;border:.5px solid #534AB7;border-radius:5px;color:#a5b4fc;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px">
+                <i class="ti ti-plus" style="font-size:12px"></i>Add user
+            </button>
+            @endcan
+        </div>
+    </div>
+
     <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="border-bottom:.5px solid #2a2d3a">
             <th style="padding:7px;text-align:left;color:#64748b;font-weight:500;font-size:11px">Name</th>
-            <th style="padding:7px;color:#64748b;font-weight:500;font-size:11px">Email</th>
-            <th style="padding:7px;color:#64748b;font-weight:500;font-size:11px">Role</th>
+            <th style="padding:7px;text-align:left;color:#64748b;font-weight:500;font-size:11px">Email</th>
+            <th style="padding:7px;text-align:left;color:#64748b;font-weight:500;font-size:11px">Role</th>
+            <th style="padding:7px;text-align:left;color:#64748b;font-weight:500;font-size:11px">Branch</th>
             <th style="padding:7px;color:#64748b;font-weight:500;font-size:11px">Status</th>
+            <th style="padding:7px;width:70px"></th>
         </tr></thead>
         <tbody>
-        @foreach($users as $u)
+        @forelse($users as $u)
+        @php
+            $role = $u->roles->first();
+            $payload = [
+                'id' => $u->id, 'name' => $u->name, 'email' => $u->email,
+                'phone' => $u->phone, 'branch_id' => $u->branch_id,
+                'counter_id' => $u->counter_id, 'role' => $role?->name,
+                'status' => $u->status,
+            ];
+        @endphp
         <tr style="border-bottom:.5px solid #1a1d2a">
-            <td style="padding:7px;color:#e2e8f0;font-weight:500">{{ $u->name }}</td>
+            <td style="padding:7px;color:#e2e8f0;font-weight:500">
+                {{ $u->name }}
+                @if($u->is(auth()->user()))<span style="font-size:9px;color:#64748b"> (you)</span>@endif
+            </td>
             <td style="padding:7px;color:#64748b">{{ $u->email }}</td>
-            <td style="padding:7px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#312e81;color:#a5b4fc">{{ $u->getRoleNames()->first() ?? '—' }}</span></td>
-            <td style="padding:7px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#14532d;color:#4ade80">Active</span></td>
+            <td style="padding:7px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#312e81;color:#a5b4fc">{{ $role?->displayName() ?? '—' }}</span></td>
+            <td style="padding:7px;color:#64748b">{{ $u->branch?->name ?? '—' }}</td>
+            <td style="padding:7px;text-align:center">
+                <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ $u->isActive() ? '#14532d' : '#7f1d1d' }};color:{{ $u->isActive() ? '#4ade80' : '#fca5a5' }}">
+                    {{ $u->isActive() ? 'Active' : 'Inactive' }}
+                </span>
+            </td>
+            <td style="padding:7px">
+                @can('update', $u)
+                <div style="display:flex;gap:5px;justify-content:flex-end">
+                    <button type="button" title="Edit" @click="openEdit({{ Js::from($payload) }})"
+                        style="width:24px;height:24px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;color:#60a5fa;cursor:pointer"><i class="ti ti-pencil" style="font-size:12px"></i></button>
+                    <button type="button" title="Delete" @click="confirmDelete({{ $u->id }}, @js($u->name))"
+                        style="width:24px;height:24px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;color:#f87171;cursor:pointer"><i class="ti ti-trash" style="font-size:12px"></i></button>
+                </div>
+                @endcan
+            </td>
         </tr>
-        @endforeach
+        @empty
+        <tr><td colspan="6" style="padding:20px;text-align:center;color:#4a5568;font-size:11px">No users.</td></tr>
+        @endforelse
         </tbody>
     </table>
+    <div style="font-size:10px;color:#4a5568;margin-top:9px">
+        You can only edit accounts ranked at or below your own role.
+    </div>
 </div>
+
+{{-- Add / edit user --}}
+<template x-teleport="body">
+<div x-show="showModal" x-cloak @keydown.escape.window="showModal=false" @click.self="showModal=false"
+     style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
+    <form :action="form.id ? '{{ url('users') }}/' + form.id : '{{ route('users.store') }}'" method="POST"
+          style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:420px;max-height:90vh;overflow-y:auto">
+        @csrf
+        <template x-if="form.id"><input type="hidden" name="_method" value="PUT"></template>
+        <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px" x-text="form.id ? 'Edit user' : 'Add user'"></div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:14px">Roles you can hand out are limited to your own rank and below.</div>
+
+        @php $ui = 'width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:8px 10px;outline:none'; @endphp
+        <div style="margin-bottom:9px">
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Full name *</label>
+            <input name="name" x-model="form.name" required style="{{ $ui }}">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px">
+            <div>
+                <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Email *</label>
+                <input name="email" type="email" x-model="form.email" required style="{{ $ui }}">
+            </div>
+            <div>
+                <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Phone</label>
+                <input name="phone" x-model="form.phone" style="{{ $ui }}">
+            </div>
+        </div>
+        <div style="margin-bottom:9px">
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">
+                Password <span x-show="form.id" style="color:#4a5568">— leave blank to keep current</span>
+                <span x-show="!form.id">*</span>
+            </label>
+            <input name="password" type="password" autocomplete="new-password" :required="!form.id" style="{{ $ui }}">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px">
+            <div>
+                <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Role *</label>
+                <select name="role" x-model="form.role" required style="{{ $ui }}">
+                    <option value="">— Select —</option>
+                    @foreach($assignableRoles as $r)
+                    <option value="{{ $r->name }}">{{ $r->displayName() }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Status</label>
+                <select name="status" x-model="form.status" style="{{ $ui }}">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive — cannot log in</option>
+                </select>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+            <div>
+                <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Branch</label>
+                @if(auth()->user()->seesAllBranches())
+                <select name="branch_id" x-model="form.branch_id" style="{{ $ui }}">
+                    <option value="">— None —</option>
+                    @foreach($branches as $b)<option value="{{ $b->id }}">{{ $b->name }}</option>@endforeach
+                </select>
+                @else
+                <input disabled value="{{ auth()->user()->branch?->name ?? '—' }}" style="{{ $ui }};opacity:.5">
+                @endif
+            </div>
+            <div>
+                <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Counter</label>
+                <select name="counter_id" x-model="form.counter_id" style="{{ $ui }}">
+                    <option value="">— None —</option>
+                    @foreach($counters as $c)<option value="{{ $c->id }}">{{ $c->name }} ({{ $c->branch?->name }})</option>@endforeach
+                </select>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:8px">
+            <button type="button" @click="showModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+            <button type="submit" style="flex:1;height:36px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Save user</button>
+        </div>
+    </form>
+</div>
+</template>
+
+{{-- Delete --}}
+<form x-ref="deleteForm" method="POST" style="display:none">@csrf @method('DELETE')</form>
 </div>
 
 <div id="sec-counters" class="settings-section" style="display:none">
@@ -353,6 +485,40 @@ function showSection(key) {
 }
 const initialSection = (location.hash || '').replace('#', '');
 showSection(document.getElementById('sec-' + initialSection) ? initialSection : 'business');
+
+// ── Users tab: add / edit / delete ──────────────────────────────────────
+function usersTab() {
+    const blank = { id: null, name: '', email: '', phone: '', role: '', status: 'active', branch_id: '', counter_id: '' };
+    return {
+        showModal: false,
+        form: { ...blank },
+
+        openCreate() {
+            this.form = { ...blank };
+            this.showModal = true;
+        },
+        openEdit(user) {
+            // Normalise nulls so the selects bind cleanly.
+            this.form = {
+                id: user.id,
+                name: user.name ?? '',
+                email: user.email ?? '',
+                phone: user.phone ?? '',
+                role: user.role ?? '',
+                status: user.status ?? 'active',
+                branch_id: user.branch_id ?? '',
+                counter_id: user.counter_id ?? '',
+            };
+            this.showModal = true;
+        },
+        confirmDelete(id, name) {
+            if (!confirm(`Delete "${name}"? If they already have sales or staff records they'll be deactivated instead.`)) return;
+            const f = this.$refs.deleteForm;
+            f.action = '{{ url('users') }}/' + id;
+            f.submit();
+        },
+    };
+}
 </script>
 @endpush
 @endsection

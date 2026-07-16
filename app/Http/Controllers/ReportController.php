@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CurrentBranch;
+
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SaleReturn;
@@ -11,6 +13,7 @@ use App\Models\Expense;
 use App\Models\Product;
 use App\Models\Stock;
 use App\Models\Payment;
+use App\Support\ReportRange;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -18,6 +21,77 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
+    /**
+     * Reports landing hub — GA-style overview: a KPI row + net-sales trend for the
+     * selected period, then a grid of links to every report.
+     */
+    public function index(Request $request)
+    {
+        $range    = ReportRange::fromRequest($request);
+        $branchId = CurrentBranch::id();
+
+        // Headline metrics for an arbitrary window (net of returns).
+        $metrics = function (string $from, string $to) use ($branchId) {
+            $gross   = (float) Sale::whereBranch($branchId)->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->sum('total');
+            $ret     = $this->returnTotals($branchId, $from, $to);
+            $cogs    = (float) SaleItem::whereHas('sale', fn($q) => $q->whereBranch($branchId)
+                        ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]))->sum('cost') - $ret['cogs'];
+            return [
+                'net'       => $gross - $ret['amount'],
+                'invoices'  => (int) Sale::whereBranch($branchId)->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->count(),
+                'profit'    => ($gross - $ret['amount']) - $cogs,
+                'purchases' => (float) Purchase::whereBranch($branchId)->whereBetween('purchase_date', [$from, $to])->sum('total'),
+                'expenses'  => (float) Expense::whereBranch($branchId)->whereBetween('expense_date', [$from, $to])->sum('amount'),
+            ];
+        };
+
+        $cur  = $metrics($range->fromDate(), $range->toDate());
+        $prev = $range->compare ? $metrics($range->prevFromDate(), $range->prevToDate()) : null;
+        $d    = fn($k) => $prev ? ReportRange::delta($cur[$k], $prev[$k]) : null;
+
+        $kpis = [
+            ['label' => 'Net sales',    'value' => 'Rs. ' . number_format($cur['net']),       'delta' => $d('net'),       'color' => '#4ade80'],
+            ['label' => 'Invoices',     'value' => number_format($cur['invoices']),           'delta' => $d('invoices')],
+            ['label' => 'Gross profit', 'value' => 'Rs. ' . number_format($cur['profit']),    'delta' => $d('profit'),    'color' => '#a5b4fc'],
+            ['label' => 'Purchases',    'value' => 'Rs. ' . number_format($cur['purchases']), 'delta' => $d('purchases'), 'invert' => true],
+            ['label' => 'Expenses',     'value' => 'Rs. ' . number_format($cur['expenses']),  'delta' => $d('expenses'),  'invert' => true, 'color' => '#fb923c'],
+        ];
+
+        // Net-sales trend (gross per bucket minus returns per bucket).
+        $netSeries = function (string $from, string $to, ?array $keys) use ($branchId, $range) {
+            $sales = Sale::whereBranch($branchId)->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->get(['created_at', 'total']);
+            $rets  = SaleReturn::whereHas('sale', fn($q) => $q->whereBranch($branchId))
+                        ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->get(['created_at', 'return_amount']);
+            $g = $range->series($range->bucketMap($sales, 'created_at', 'total'), $keys);
+            $r = $range->series($range->bucketMap($rets, 'created_at', 'return_amount'), $keys);
+            return array_map(fn($a, $b) => round($a - $b, 2), $g, $r);
+        };
+
+        $series = [['name' => 'Net sales', 'data' => $netSeries($range->fromDate(), $range->toDate(), null), 'color' => '#4ade80']];
+        if ($range->compare) {
+            $series[] = ['name' => 'Previous', 'data' => $netSeries($range->prevFromDate(), $range->prevToDate(), $range->prevBucketKeys()), 'color' => '#4ade80', 'dashed' => true];
+        }
+        $trend = ['type' => 'line', 'labels' => $range->bucketLabels(), 'series' => $series, 'money' => true];
+
+        // Report cards. `route` = null means "coming in a later phase".
+        $q = $range->query();
+        $cards = [
+            ['title' => 'Sales',            'desc' => 'Invoices, baskets, peak hours',       'icon' => 'ti-shopping-cart',   'color' => '#4ade80', 'url' => route('reports.sales_summary', $q)],
+            ['title' => 'Revenue & Profit', 'desc' => 'Revenue, COGS, margin, net profit',   'icon' => 'ti-trending-up',     'color' => '#a5b4fc', 'url' => route('reports.profit_loss', $q)],
+            ['title' => 'Product sales',    'desc' => 'Best sellers and profit per product', 'icon' => 'ti-package',         'color' => '#60a5fa', 'url' => route('reports.product_sales', $q)],
+            ['title' => 'Purchases',        'desc' => 'Buying, payables, top suppliers',     'icon' => 'ti-truck-delivery',  'color' => '#fbbf24', 'url' => null],
+            ['title' => 'Stock movement',   'desc' => 'In / out, write-offs, stock value',   'icon' => 'ti-transfer',        'color' => '#2dd4bf', 'url' => null],
+            ['title' => 'Stock summary',    'desc' => 'On-hand value by product',            'icon' => 'ti-boxes',           'color' => '#60a5fa', 'url' => route('reports.stock_summary', $q)],
+            ['title' => 'Low stock alerts', 'desc' => 'Items at or below reorder level',     'icon' => 'ti-alert-triangle',  'color' => '#f87171', 'url' => route('reports.stock_alert', $q)],
+            ['title' => 'Counter sessions', 'desc' => 'Cash variance by till and cashier',   'icon' => 'ti-cash-register',   'color' => '#c084fc', 'url' => null],
+            ['title' => 'Payments & cash',  'desc' => 'Money in vs out, by method',          'icon' => 'ti-cash',            'color' => '#4ade80', 'url' => route('reports.payments', $q)],
+            ['title' => 'Expenses',         'desc' => 'Spending by category',                'icon' => 'ti-credit-card',     'color' => '#fb923c', 'url' => route('reports.expenses', $q)],
+            ['title' => 'Rate list',        'desc' => 'Current price list',                  'icon' => 'ti-list-numbers',    'color' => '#94a3b8', 'url' => route('reports.rate_list', $q)],
+            ['title' => 'Staff activity',   'desc' => 'Sales by cashier',                    'icon' => 'ti-users',           'color' => '#818cf8', 'url' => route('reports.user_reports', $q)],
+        ];
+
+        return view('reports.index', compact('range', 'kpis', 'trend', 'cards'));
+    }
     private function dateRange(Request $request): array
     {
         $from = $request->from_date ?? now()->startOfMonth()->toDateString();
@@ -29,27 +103,27 @@ class ReportController extends Controller
      * Returns recorded in the period for this branch. Sales stay immutable, so reports
      * count gross sales and subtract these. Netted by the credit note's own date.
      */
-    private function returnTotals(int $branchId, string $from, string $to): array
+    private function returnTotals(?int $branchId, string $from, string $to): array
     {
-        $amount = SaleReturn::whereHas('sale', fn($q) => $q->where('branch_id', $branchId))
+        $amount = SaleReturn::whereHas('sale', fn($q) => $q->whereBranch($branchId))
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->sum('return_amount');
 
         $cogs = SaleReturnItem::whereHas('saleReturn', fn($q) => $q
                 ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
-                ->whereHas('sale', fn($s) => $s->where('branch_id', $branchId)))
+                ->whereHas('sale', fn($s) => $s->whereBranch($branchId)))
             ->sum('cost');
 
         return ['amount' => (float) $amount, 'cogs' => (float) $cogs];
     }
 
     /** Per-product returned qty / revenue / cogs in the period (product_id keyed). */
-    private function returnsByProduct(int $branchId, string $from, string $to)
+    private function returnsByProduct(?int $branchId, string $from, string $to)
     {
         return SaleReturnItem::selectRaw('product_id, SUM(quantity) as qty, SUM(subtotal) as revenue, SUM(cost) as cogs')
             ->whereHas('saleReturn', fn($q) => $q
                 ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
-                ->whereHas('sale', fn($s) => $s->where('branch_id', $branchId)))
+                ->whereHas('sale', fn($s) => $s->whereBranch($branchId)))
             ->groupBy('product_id')
             ->get()
             ->keyBy('product_id');
@@ -59,30 +133,30 @@ class ReportController extends Controller
     public function profitLoss(Request $request)
     {
         [$from, $to] = $this->dateRange($request);
-        $branchId    = auth()->user()->branch_id;
+        $branchId    = CurrentBranch::id();
 
         // Sales are immutable; count gross then net out returns recorded in the period.
         $returns = $this->returnTotals($branchId, $from, $to);
 
-        $salesRevenue = Sale::where('branch_id', $branchId)
+        $salesRevenue = Sale::whereBranch($branchId)
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->sum('total') - $returns['amount'];
 
-        $purchaseCost = Purchase::where('branch_id', $branchId)
+        $purchaseCost = Purchase::whereBranch($branchId)
             ->whereBetween('purchase_date', [$from, $to])
             ->sum('total');
 
-        $totalExpenses = Expense::where('branch_id', $branchId)
+        $totalExpenses = Expense::whereBranch($branchId)
             ->whereBetween('expense_date', [$from, $to])
             ->sum('amount');
 
-        $totalDiscounts = Sale::where('branch_id', $branchId)
+        $totalDiscounts = Sale::whereBranch($branchId)
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->sum('discount_amount');
 
         // True cost of goods sold for the period (captured per sale line at sale time),
         // less the COGS reversed by returns.
-        $cogs = SaleItem::whereHas('sale', fn($q) => $q->where('branch_id', $branchId)
+        $cogs = SaleItem::whereHas('sale', fn($q) => $q->whereBranch($branchId)
                 ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]))
             ->sum('cost') - $returns['cogs'];
 
@@ -90,7 +164,7 @@ class ReportController extends Controller
         $netProfit   = $grossProfit - $totalExpenses;
 
         // Daily chart data
-        $chartData = Sale::where('branch_id', $branchId)
+        $chartData = Sale::whereBranch($branchId)
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->selectRaw('DATE(created_at) as date, SUM(total) as revenue')
             ->groupBy('date')
@@ -100,7 +174,7 @@ class ReportController extends Controller
         // Top products (gross sales, netted per-product by returns in the period)
         $retByProduct = $this->returnsByProduct($branchId, $from, $to);
         $topProducts = SaleItem::select('product_id', DB::raw('SUM(quantity) as qty, SUM(subtotal) as revenue, SUM(cost) as cogs'))
-            ->whereHas('sale', fn($q) => $q->where('branch_id', $branchId)
+            ->whereHas('sale', fn($q) => $q->whereBranch($branchId)
                 ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]))
             ->with('product:id,name')
             ->groupBy('product_id')
@@ -131,15 +205,15 @@ class ReportController extends Controller
     public function salesSummary(Request $request)
     {
         [$from, $to] = $this->dateRange($request);
-        $branchId    = auth()->user()->branch_id;
+        $branchId    = CurrentBranch::id();
 
         $sales = Sale::with(['customer', 'user'])
-            ->where('branch_id', $branchId)
+            ->whereBranch($branchId)
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->paginate(20);
 
-        $totals = Sale::where('branch_id', $branchId)
+        $totals = Sale::whereBranch($branchId)
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->selectRaw('COUNT(*) as count, SUM(total) as total, SUM(paid_amount) as paid, SUM(discount_amount) as discount')
             ->first();
@@ -148,7 +222,7 @@ class ReportController extends Controller
         $returnAmount = $this->returnTotals($branchId, $from, $to)['amount'];
         $netTotal     = (float) ($totals->total ?? 0) - $returnAmount;
 
-        $byPaymentMethod = Sale::where('branch_id', $branchId)
+        $byPaymentMethod = Sale::whereBranch($branchId)
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->selectRaw('payment_method, COUNT(*) as count, SUM(total) as total')
             ->groupBy('payment_method')
@@ -165,7 +239,7 @@ class ReportController extends Controller
 
         $byCategory = SaleItem::select('products.category_id', DB::raw('SUM(sale_items.subtotal) as revenue'))
             ->join('products', 'sale_items.product_id', '=', 'products.id')
-            ->whereHas('sale', fn($q) => $q->where('branch_id', $branchId)
+            ->whereHas('sale', fn($q) => $q->whereBranch($branchId)
                 ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]))
             ->with('product.category')
             ->groupBy('products.category_id')
@@ -176,7 +250,7 @@ class ReportController extends Controller
         $returnByCategory = SaleReturnItem::join('products', 'sale_return_items.product_id', '=', 'products.id')
             ->whereHas('saleReturn', fn($q) => $q
                 ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
-                ->whereHas('sale', fn($s) => $s->where('branch_id', $branchId)))
+                ->whereHas('sale', fn($s) => $s->whereBranch($branchId)))
             ->selectRaw('products.category_id as cid, SUM(sale_return_items.subtotal) as revenue')
             ->groupBy('products.category_id')
             ->pluck('revenue', 'cid');
@@ -190,10 +264,10 @@ class ReportController extends Controller
     // Stock Summary
     public function stockSummary(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         $stocks = Stock::with(['product.category', 'product.brand'])
-            ->where('branch_id', $branchId)
+            ->whereBranch($branchId)
             ->when($request->category_id, fn($q) => $q->whereHas('product', fn($q) => $q->where('category_id', $request->category_id)))
             ->get()
             ->map(function ($s) {
@@ -223,10 +297,10 @@ class ReportController extends Controller
     // Stock Alert
     public function stockAlert(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
-        $alerts = Product::with(['category', 'stocks' => fn($q) => $q->where('branch_id', $branchId)])
-            ->whereHas('stocks', fn($q) => $q->where('branch_id', $branchId)
+        $alerts = Product::with(['category', 'stocks' => fn($q) => $q->whereBranch($branchId)])
+            ->whereHas('stocks', fn($q) => $q->whereBranch($branchId)
                 ->whereRaw('quantity < products.min_stock'))
             ->get()
             ->map(function ($p) use ($branchId) {
@@ -269,7 +343,7 @@ class ReportController extends Controller
     public function productSales(Request $request)
     {
         [$from, $to] = $this->dateRange($request);
-        $branchId    = auth()->user()->branch_id;
+        $branchId    = CurrentBranch::id();
 
         $retByProduct = $this->returnsByProduct($branchId, $from, $to);
 
@@ -279,7 +353,7 @@ class ReportController extends Controller
                 DB::raw('SUM(subtotal) as revenue'),
                 DB::raw('SUM(cost) as cost')
             )
-            ->whereHas('sale', fn($q) => $q->where('branch_id', $branchId)
+            ->whereHas('sale', fn($q) => $q->whereBranch($branchId)
                 ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]))
             ->with(['product:id,name,category_id', 'product.category:id,name'])
             ->groupBy('product_id')
@@ -308,18 +382,18 @@ class ReportController extends Controller
     public function payments(Request $request)
     {
         [$from, $to] = $this->dateRange($request);
-        $branchId    = auth()->user()->branch_id;
+        $branchId    = CurrentBranch::id();
 
         $payments = Payment::with(['account', 'sale', 'purchase'])
-            ->whereHas('account', fn($q) => $q->where('branch_id', $branchId))
+            ->whereHas('account', fn($q) => $q->whereBranch($branchId))
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->when($request->type, fn($q) => $q->where('type', $request->type))
             ->latest()
             ->paginate(20);
 
         $totals = [
-            'in'  => Payment::whereHas('account', fn($q) => $q->where('branch_id', $branchId))->where('type', 'payment_in')->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->sum('amount'),
-            'out' => Payment::whereHas('account', fn($q) => $q->where('branch_id', $branchId))->where('type', 'payment_out')->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->sum('amount'),
+            'in'  => Payment::whereHas('account', fn($q) => $q->whereBranch($branchId))->where('type', 'payment_in')->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->sum('amount'),
+            'out' => Payment::whereHas('account', fn($q) => $q->whereBranch($branchId))->where('type', 'payment_out')->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->sum('amount'),
         ];
 
         return view('reports.payments', compact('payments', 'totals', 'from', 'to'));
@@ -329,15 +403,15 @@ class ReportController extends Controller
     public function expenses(Request $request)
     {
         [$from, $to] = $this->dateRange($request);
-        $branchId    = auth()->user()->branch_id;
+        $branchId    = CurrentBranch::id();
 
         $expenses = Expense::with(['category', 'account'])
-            ->where('branch_id', $branchId)
+            ->whereBranch($branchId)
             ->whereBetween('expense_date', [$from, $to])
             ->latest('expense_date')
             ->paginate(20);
 
-        $byCategory = Expense::where('branch_id', $branchId)
+        $byCategory = Expense::whereBranch($branchId)
             ->whereBetween('expense_date', [$from, $to])
             ->selectRaw('expense_category_id, SUM(amount) as total')
             ->with('category')
@@ -353,9 +427,9 @@ class ReportController extends Controller
     public function userReports(Request $request)
     {
         [$from, $to] = $this->dateRange($request);
-        $branchId    = auth()->user()->branch_id;
+        $branchId    = CurrentBranch::id();
 
-        $cashiers = Sale::where('branch_id', $branchId)
+        $cashiers = Sale::whereBranch($branchId)
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->selectRaw('user_id, COUNT(*) as sale_count, SUM(total) as total, SUM(paid_amount) as collected')
             ->with('user:id,name')
@@ -370,13 +444,13 @@ class ReportController extends Controller
     {
         [$from, $to] = $this->dateRange($request);
         $format      = $request->format ?? 'pdf';
-        $branchId    = auth()->user()->branch_id;
+        $branchId    = CurrentBranch::id();
 
         // Build data based on type
         $data = match($type) {
-            'sales'    => Sale::where('branch_id', $branchId)->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->with('customer')->get(),
-            'stock'    => Stock::where('branch_id', $branchId)->with('product.category')->get(),
-            'expenses' => Expense::where('branch_id', $branchId)->whereBetween('expense_date', [$from, $to])->with('category')->get(),
+            'sales'    => Sale::whereBranch($branchId)->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->with('customer')->get(),
+            'stock'    => Stock::whereBranch($branchId)->with('product.category')->get(),
+            'expenses' => Expense::whereBranch($branchId)->whereBetween('expense_date', [$from, $to])->with('category')->get(),
             default    => collect(),
         };
 

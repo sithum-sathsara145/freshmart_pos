@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CurrentBranch;
+
 use App\Models\Product;
 use App\Models\Brand;
 use App\Models\Category;
@@ -18,7 +20,7 @@ class ProductController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         $products = Product::with(['category', 'brand'])
             ->when($request->search, fn($q) => $q->where(function ($q) use ($request) {
@@ -44,8 +46,8 @@ class ProductController extends Controller
         $stats = [
             'total'     => Product::count(),
             'active'    => Product::where('status', 'active')->count(),
-            'low_stock' => Product::whereHas('stocks', fn($q) => $q->where('branch_id', $branchId)->whereRaw('quantity < products.min_stock')->where('quantity', '>', 0))->count(),
-            'out'       => Product::whereHas('stocks', fn($q) => $q->where('branch_id', $branchId)->where('quantity', '<=', 0))->count(),
+            'low_stock' => Product::whereHas('stocks', fn($q) => $q->whereBranch($branchId)->whereRaw('quantity < products.min_stock')->where('quantity', '>', 0))->count(),
+            'out'       => Product::whereHas('stocks', fn($q) => $q->whereBranch($branchId)->where('quantity', '<=', 0))->count(),
         ];
 
         return view('products.index', compact('products', 'categories', 'brands', 'stats'));
@@ -83,7 +85,7 @@ class ProductController extends Controller
     public function export(Request $request)
     {
         $format   = $request->get('format') === 'xlsx' ? 'xlsx' : 'csv';
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         $products = Product::with(['category', 'brand'])
             ->when($request->search, fn ($q) => $q->where(function ($q) use ($request) {
@@ -148,7 +150,13 @@ class ProductController extends Controller
             return back()->with('error', 'Could not read the file: ' . $e->getMessage());
         }
 
-        $branchId    = auth()->user()->branch_id;
+        // Products themselves aren't branch-scoped, but opening stock is — so a file
+        // carrying opening stock needs a concrete working branch to land it in.
+        $branchId = CurrentBranch::id();
+        if (! $branchId && collect($rows)->contains(fn($r) => (float) $this->importNum($r['opening_stock'] ?? 0) > 0)) {
+            return back()->with('error', 'This file sets opening stock — pick a working branch before importing it.');
+        }
+
         $created     = 0;
         $skipped     = 0;
         $errors      = [];
@@ -372,6 +380,17 @@ class ProductController extends Controller
         // image / image_public_id are set explicitly below from whichever upload path ran.
         unset($validated['image_url'], $validated['image_public_id']);
 
+        // The product record itself isn't branch-scoped, but its opening stock is —
+        // so only opening stock needs a concrete working branch.
+        $openingBranchId = CurrentBranch::id();
+        if (($request->opening_stock ?? 0) > 0 && ! $openingBranchId) {
+            $msg = 'Pick a working branch before setting opening stock — stock belongs to a branch.';
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $msg], 422);
+            }
+            return back()->withInput()->with('error', $msg);
+        }
+
         $uploadedPublicId = null;   // track for cleanup if the DB write fails
         DB::beginTransaction();
         try {
@@ -409,7 +428,7 @@ class ProductController extends Controller
             $openingStock = $request->opening_stock ?? 0;
             if ($openingStock > 0) {
                 \App\Support\Inventory::addLayer(
-                    $product->id, auth()->user()->branch_id, (float) $openingStock,
+                    $product->id, $openingBranchId, (float) $openingStock,
                     (float) $product->purchase_price, (float) $product->sale_price,
                     'OPENING', now()->toDateString()
                 );
@@ -439,7 +458,7 @@ class ProductController extends Controller
 
     public function show(Product $product)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
         $product->load(['category', 'brand']);
         $product->current_stock = $product->stockForBranch($branchId);
 
@@ -552,9 +571,55 @@ class ProductController extends Controller
     }
 
     // AJAX search for POS and other screens
+    /**
+     * Quick-create a product from the purchase-order screen. Minimal fields — the SKU is
+     * auto-generated and cost/stock come from the purchase line. Returns the same JSON
+     * shape as apiSearch() so the PO form can drop it straight into a row.
+     */
+    public function quickStore(Request $request)
+    {
+        $data = $request->validate([
+            'name'        => 'required|string|max:255',
+            'category_id' => 'nullable|exists:categories,id',
+            'unit'        => 'nullable|string|max:50',
+            'barcode'     => 'nullable|string|max:100|unique:products,barcode',
+            'sale_price'  => 'nullable|numeric|min:0',
+            'mrp'         => 'nullable|numeric|min:0',
+            'is_weighed'  => 'nullable|boolean',
+        ]);
+
+        $product = Product::create([
+            'name'           => $data['name'],
+            'category_id'    => $data['category_id'] ?? null,
+            'unit'           => $data['unit'] ?: 'piece',
+            'barcode'        => $data['barcode'] ?? null,
+            'sale_price'     => $data['sale_price'] ?? 0,
+            'mrp'            => $data['mrp'] ?? 0,
+            'is_weighed'     => $request->boolean('is_weighed'),
+            'purchase_price' => 0,
+            'status'         => 'active',
+            'created_by'     => auth()->id(),
+        ]);
+
+        return response()->json([
+            'id'             => $product->id,
+            'name'           => $product->name,
+            'sku'            => $product->sku,
+            'barcode'        => $product->barcode,
+            'price'          => (float) $product->sale_price,
+            'price_options'  => [],
+            'purchase_price' => (float) $product->purchase_price,
+            'mrp'            => (float) $product->mrp,
+            'is_weighed'     => (bool) $product->is_weighed,
+            'unit'           => $product->unit,
+            'stock'          => 0,
+            'category'       => $product->category?->name,
+        ]);
+    }
+
     public function apiSearch(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
         $q        = $request->get('q', '');
         $category = $request->get('category');
 
@@ -571,7 +636,7 @@ class ProductController extends Controller
 
         // Distinct in-stock sale prices per product (the POS price options for multi-price items).
         $priceMap = \App\Models\StockLayer::whereIn('product_id', $products->pluck('id'))
-            ->where('branch_id', $branchId)
+            ->whereBranch($branchId)
             ->where('qty_remaining', '>', 0)
             ->select('product_id', 'sale_price')
             ->distinct()
@@ -601,7 +666,7 @@ class ProductController extends Controller
 
     public function apiShow(Product $product)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
         return response()->json([
             'id'          => $product->id,
             'name'        => $product->name,

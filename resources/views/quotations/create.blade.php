@@ -84,17 +84,20 @@ function qSearch(el, idx) {
     if (!q) { drop.style.display = 'none'; return; }
     const matches = qProducts.filter(p => p.name.toLowerCase().includes(q) || (p.barcode && String(p.barcode).includes(q))).slice(0, 8);
     if (!matches.length) { drop.style.display = 'none'; return; }
-    drop.innerHTML = matches.map(p =>
-        `<div onclick="qSelect(${idx},${p.id},${JSON.stringify(p.name)},${p.price})" style="padding:6px 10px;cursor:pointer;font-size:11px;color:#e2e8f0;border-bottom:.5px solid #2a2d3a;display:flex;justify-content:space-between" onmouseover="this.style.background='#312e81'" onmouseout="this.style.background=''"><span>${p.name}</span><span style="color:#a5b4fc">Rs. ${Number(p.price).toLocaleString()}</span></div>`
-    ).join('');
+    drop.innerHTML = matches.map(p => {
+        const label = String(p.name).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `<div onclick="qSelect(${idx},${p.id})" style="padding:6px 10px;cursor:pointer;font-size:11px;color:#e2e8f0;border-bottom:.5px solid #2a2d3a;display:flex;justify-content:space-between" onmouseover="this.style.background='#312e81'" onmouseout="this.style.background=''"><span>${label}</span><span style="color:#a5b4fc">Rs. ${Number(p.price).toLocaleString()}</span></div>`;
+    }).join('');
     drop.style.display = 'block';
 }
-function qSelect(idx, id, name, price) {
+function qSelect(idx, id) {
+    const p = qProducts.find(x => x.id === id);
+    if (!p) return;
     const row = document.querySelectorAll('.qi-row')[idx];
-    row.querySelector('.qi-search').value = name;
+    row.querySelector('.qi-search').value = p.name;
     row.querySelector('[name*="[product_id]"]').value = id;
     const up = row.querySelector('[name*="[unit_price]"]');
-    if (!parseFloat(up.value)) up.value = price;
+    if (!parseFloat(up.value)) up.value = p.price;
     document.getElementById('qdrop-' + idx).style.display = 'none';
     qCalcRow(up);
 }

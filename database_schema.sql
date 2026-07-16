@@ -7,6 +7,26 @@ CREATE DATABASE IF NOT EXISTS freshmart_pos CHARACTER SET utf8mb4 COLLATE utf8mb
 USE freshmart_pos;
 
 -- ============================================
+-- LARAVEL CORE (cache store — CACHE_STORE=database)
+-- Spatie permission caching reads/writes these. Without them every
+-- permission check fatals with "Table 'cache' doesn't exist".
+-- ============================================
+
+CREATE TABLE cache (
+    `key` VARCHAR(255) NOT NULL PRIMARY KEY,
+    `value` MEDIUMTEXT NOT NULL,
+    expiration INT NOT NULL,
+    INDEX cache_expiration_index (expiration)
+);
+
+CREATE TABLE cache_locks (
+    `key` VARCHAR(255) NOT NULL PRIMARY KEY,
+    owner VARCHAR(255) NOT NULL,
+    expiration INT NOT NULL,
+    INDEX cache_locks_expiration_index (expiration)
+);
+
+-- ============================================
 -- CORE SETTINGS
 -- ============================================
 
@@ -87,8 +107,13 @@ CREATE TABLE roles (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     guard_name VARCHAR(50) DEFAULT 'web',
+    level INT NOT NULL DEFAULT 0,              -- rank: super_admin 100 > admin 90 > manager 60 > stock_manager 40 > cashier 20
+    label VARCHAR(100) NULL,                   -- human-friendly display name
+    is_system TINYINT(1) NOT NULL DEFAULT 0,   -- system roles cannot be renamed/deleted
+    description VARCHAR(255) NULL,
     created_at TIMESTAMP NULL,
-    updated_at TIMESTAMP NULL
+    updated_at TIMESTAMP NULL,
+    UNIQUE KEY roles_name_guard_unique (name, guard_name)
 );
 
 CREATE TABLE permissions (
@@ -105,6 +130,24 @@ CREATE TABLE model_has_roles (
     model_id BIGINT UNSIGNED NOT NULL,
     PRIMARY KEY (role_id, model_id, model_type),
     FOREIGN KEY (role_id) REFERENCES roles(id)
+);
+
+CREATE TABLE role_has_permissions (
+    permission_id BIGINT UNSIGNED NOT NULL,
+    role_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (permission_id, role_id),
+    FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+);
+
+-- Direct (per-user) permission grants. Spatie's hasPermissionTo() reads this.
+CREATE TABLE model_has_permissions (
+    permission_id BIGINT UNSIGNED NOT NULL,
+    model_type VARCHAR(255) NOT NULL,
+    model_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (permission_id, model_id, model_type),
+    INDEX model_has_permissions_model_idx (model_id, model_type),
+    FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
 );
 
 -- ============================================
@@ -446,7 +489,8 @@ CREATE TABLE purchases (
 CREATE TABLE purchase_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     purchase_id BIGINT UNSIGNED NOT NULL,
-    product_id BIGINT UNSIGNED NOT NULL,
+    product_id BIGINT UNSIGNED NULL,
+    name VARCHAR(255) NULL,
     quantity DECIMAL(15,3) NOT NULL,
     unit_price DECIMAL(15,2) NOT NULL,
     subtotal DECIMAL(15,2) NOT NULL,
@@ -464,11 +508,26 @@ CREATE TABLE purchase_returns (
     supplier_id BIGINT UNSIGNED,
     reason TEXT,
     return_amount DECIMAL(15,2) NOT NULL,
+    credit_method ENUM('credit_note','cash_refund','replacement') DEFAULT 'credit_note',
     status ENUM('pending','credited') DEFAULT 'pending',
     created_by BIGINT UNSIGNED,
     created_at TIMESTAMP NULL,
     updated_at TIMESTAMP NULL,
     FOREIGN KEY (purchase_id) REFERENCES purchases(id)
+);
+
+CREATE TABLE purchase_return_items (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    purchase_return_id BIGINT UNSIGNED NOT NULL,
+    product_id BIGINT UNSIGNED NOT NULL,
+    purchase_item_id BIGINT UNSIGNED NULL,
+    quantity DECIMAL(15,3) NOT NULL,
+    unit_price DECIMAL(15,2) NOT NULL,
+    cost DECIMAL(15,2) NULL,
+    subtotal DECIMAL(15,2) NOT NULL,
+    FOREIGN KEY (purchase_return_id) REFERENCES purchase_returns(id),
+    FOREIGN KEY (product_id) REFERENCES products(id),
+    FOREIGN KEY (purchase_item_id) REFERENCES purchase_items(id)
 );
 
 -- ============================================

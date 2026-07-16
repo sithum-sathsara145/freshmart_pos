@@ -90,19 +90,27 @@ class Product extends Model
         return str_starts_with($this->image, 'http') ? $this->image : asset('storage/' . $this->image);
     }
 
-    public function stockForBranch(int $branchId): float
+    /**
+     * On-hand quantity. A null branch means "all branches", so the per-branch rows
+     * are summed rather than read individually.
+     */
+    public function stockForBranch(?int $branchId): float
     {
+        if ($branchId === null) {
+            return (float) $this->stocks()->sum('quantity');
+        }
+
         return $this->stocks()
                     ->where('branch_id', $branchId)
                     ->value('quantity') ?? 0;
     }
 
-    public function isLowStock(int $branchId): bool
+    public function isLowStock(?int $branchId): bool
     {
         return $this->stockForBranch($branchId) < $this->min_stock;
     }
 
-    public function isOutOfStock(int $branchId): bool
+    public function isOutOfStock(?int $branchId): bool
     {
         return $this->stockForBranch($branchId) <= 0;
     }

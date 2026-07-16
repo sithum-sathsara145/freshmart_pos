@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\HRM;
 
+use App\Support\CurrentBranch;
+
 use App\Http\Controllers\Controller;
 use App\Models\Staff;
 use App\Models\Attendance;
@@ -19,11 +21,11 @@ class StaffController extends Controller
 {
     public function dashboard()
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
         $today    = today();
 
         $stats = [
-            'total'      => Staff::where('branch_id', $branchId)->count(),
+            'total'      => Staff::whereBranch($branchId)->count(),
             'on_duty'    => Attendance::whereDate('date', $today)->where('status', 'present')->count(),
             'on_leave'   => Attendance::whereDate('date', $today)->where('status', 'leave')->count(),
             'absent'     => Attendance::whereDate('date', $today)->where('status', 'absent')->count(),
@@ -32,10 +34,10 @@ class StaffController extends Controller
 
         $todayAttendance = Attendance::with('staff')
             ->whereDate('date', $today)
-            ->whereHas('staff', fn($q) => $q->where('branch_id', $branchId))
+            ->whereHas('staff', fn($q) => $q->whereBranch($branchId))
             ->get();
 
-        $byDepartment = Staff::where('branch_id', $branchId)
+        $byDepartment = Staff::whereBranch($branchId)
             ->where('status', 'active')
             ->selectRaw('role, COUNT(*) as total')
             ->groupBy('role')
@@ -47,7 +49,7 @@ class StaffController extends Controller
     public function index(Request $request)
     {
         $staff = Staff::with('branch')
-            ->where('branch_id', auth()->user()->branch_id)
+            ->whereBranch(CurrentBranch::id())
             ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%")
                 ->orWhere('phone', 'like', "%{$request->search}%"))
             ->when($request->role, fn($q) => $q->where('role', $request->role))
@@ -75,9 +77,13 @@ class StaffController extends Controller
             'status'       => 'required|in:active,inactive',
         ]);
 
+        if (! $branchId = CurrentBranch::requireId()) {
+            return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
+        }
+
         Staff::create([
             ...$request->only(['name', 'phone', 'email', 'address', 'role', 'basic_salary', 'join_date', 'status']),
-            'branch_id' => auth()->user()->branch_id,
+            'branch_id' => $branchId,
         ]);
 
         return redirect()->route('hrm.staff.index')->with('success', 'Staff member added.');
@@ -118,15 +124,15 @@ class AttendanceController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
         $date     = $request->date ?? today()->toDateString();
 
         $attendance = Attendance::with('staff')
             ->whereDate('date', $date)
-            ->whereHas('staff', fn($q) => $q->where('branch_id', $branchId))
+            ->whereHas('staff', fn($q) => $q->whereBranch($branchId))
             ->get();
 
-        $staff = Staff::where('branch_id', $branchId)->where('status', 'active')->get();
+        $staff = Staff::whereBranch($branchId)->where('status', 'active')->get();
 
         $stats = [
             'present' => $attendance->where('status', 'present')->count(),
@@ -191,10 +197,13 @@ class AttendanceController extends Controller
         return response()->json(['success' => true, 'time' => now()->format('H:i')]);
     }
 
-    public function create() { return view('hrm.attendance.create'); }
-    public function edit(Attendance $attendance) { return view('hrm.attendance.edit', compact('attendance')); }
-    public function update(Request $r, Attendance $a) { $a->update($r->only(['time_in','time_out','status'])); return back()->with('success','Updated.'); }
-    public function show(Attendance $attendance) { return view('hrm.attendance.show', compact('attendance')); }
+    public function edit(Attendance $attendance)
+    {
+        $attendance->load('staff');
+        return view('hrm.attendance.edit', compact('attendance'));
+    }
+
+    public function update(Request $r, Attendance $a) { $a->update($r->only(['time_in','time_out','status'])); return redirect()->route('hrm.attendance.index')->with('success','Updated.'); }
     public function destroy(Attendance $attendance) { $attendance->delete(); return back(); }
 }
 
@@ -206,7 +215,7 @@ class LeaveController extends Controller
     public function index(Request $request)
     {
         $leaves = LeaveRequest::with('staff')
-            ->whereHas('staff', fn($q) => $q->where('branch_id', auth()->user()->branch_id))
+            ->whereHas('staff', fn($q) => $q->whereBranch(CurrentBranch::id()))
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->latest()
             ->paginate(20);
@@ -216,7 +225,7 @@ class LeaveController extends Controller
 
     public function create()
     {
-        $staff = Staff::where('branch_id', auth()->user()->branch_id)->where('status', 'active')->get();
+        $staff = Staff::whereBranch(CurrentBranch::id())->where('status', 'active')->get();
         return view('hrm.leaves.create', compact('staff'));
     }
 
@@ -266,9 +275,6 @@ class LeaveController extends Controller
         return back()->with('success', 'Leave rejected.');
     }
 
-    public function show(LeaveRequest $leave) { return view('hrm.leaves.show', compact('leave')); }
-    public function edit(LeaveRequest $leave) { return view('hrm.leaves.edit', compact('leave')); }
-    public function update(Request $r, LeaveRequest $l) { return back(); }
     public function destroy(LeaveRequest $leave) { $leave->delete(); return back(); }
 }
 
@@ -285,7 +291,7 @@ class PayrollController extends Controller
         $payrolls = Payroll::with('staff')
             ->where('month', $month)
             ->where('year', $year)
-            ->whereHas('staff', fn($q) => $q->where('branch_id', auth()->user()->branch_id))
+            ->whereHas('staff', fn($q) => $q->whereBranch(CurrentBranch::id()))
             ->get();
 
         $totals = [
@@ -301,9 +307,9 @@ class PayrollController extends Controller
     {
         $month    = $request->month ?? now()->month;
         $year     = $request->year  ?? now()->year;
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
-        $staffList = Staff::where('branch_id', $branchId)->where('status', 'active')->get();
+        $staffList = Staff::whereBranch($branchId)->where('status', 'active')->get();
 
         DB::beginTransaction();
         try {
@@ -347,10 +353,6 @@ class PayrollController extends Controller
         }
     }
 
-    public function show(Payroll $payroll) { return view('hrm.payroll.show', compact('payroll')); }
-    public function create() { return view('hrm.payroll.create'); }
-    public function store(Request $r) { return back(); }
-    public function edit(Payroll $p) { return view('hrm.payroll.edit', compact('p')); }
     public function update(Request $r, Payroll $p) { $p->update($r->only(['allowances','deductions','status'])); return back()->with('success','Updated.'); }
     public function destroy(Payroll $p) { $p->delete(); return back(); }
 }
@@ -380,37 +382,8 @@ class HolidayController extends Controller
         return back()->with('success', 'Holiday removed.');
     }
 
-    public function create() { return view('hrm.holidays.create'); }
-    public function show(Holiday $h) { return view('hrm.holidays.show', compact('h')); }
-    public function edit(Holiday $h) { return view('hrm.holidays.edit', compact('h')); }
-    public function update(Request $r, Holiday $h) { $h->update($r->only(['name','date','type'])); return back(); }
 }
 
-// =========================================================
-// Appreciation Controller
-// =========================================================
-class AppreciationController extends Controller
-{
-    public function index()
-    {
-        $appreciations = Appreciation::with(['staff', 'givenBy'])
-            ->whereHas('staff', fn($q) => $q->where('branch_id', auth()->user()->branch_id))
-            ->latest()
-            ->paginate(20);
-
-        return view('hrm.appreciations.index', compact('appreciations'));
-    }
-
-    public function store(Request $request)
-    {
-        $request->validate(['staff_id' => 'required|exists:staff,id', 'category' => 'required', 'note' => 'nullable']);
-        Appreciation::create([...$request->only(['staff_id','category','note']), 'given_by' => auth()->id()]);
-        return back()->with('success', 'Appreciation added!');
-    }
-
-    public function create() { return view('hrm.appreciations.create'); }
-    public function show(Appreciation $a) { return view('hrm.appreciations.show', compact('a')); }
-    public function edit(Appreciation $a) { return view('hrm.appreciations.edit', compact('a')); }
-    public function update(Request $r, Appreciation $a) { $a->update($r->only(['category','note'])); return back(); }
-    public function destroy(Appreciation $a) { $a->delete(); return back(); }
-}
+// NOTE: the 'appreciations' module was never built (no views, no UI links) — its
+// controller and routes were removed 2026-07-07. The `appreciations` table remains
+// in the schema should the feature ever be implemented.

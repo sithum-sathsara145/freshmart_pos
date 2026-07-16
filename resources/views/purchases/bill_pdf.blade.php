@@ -169,7 +169,7 @@ table.items tbody tr:nth-child(even) { background: #f8f9fc; }
         @foreach($purchase->items as $i => $item)
         <tr>
             <td>{{ $i + 1 }}</td>
-            <td>{{ $item->product?->name }}</td>
+            <td>{{ $item->product?->name ?? $item->name }}</td>
             <td>{{ $item->product?->unit ?? 'Pcs' }}</td>
             <td class="right">{{ number_format($item->quantity, 2) }}</td>
             <td class="right">Rs. {{ number_format($item->unit_price) }}</td>

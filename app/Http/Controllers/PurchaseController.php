@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CurrentBranch;
+
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\Supplier;
 use App\Models\Product;
+use App\Models\Category;
 use App\Models\Stock;
 use App\Models\StockLayer;
 use App\Models\Payment;
@@ -19,10 +22,10 @@ class PurchaseController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         $purchases = Purchase::with(['supplier', 'user'])
-            ->where('branch_id', $branchId)
+            ->whereBranch($branchId)
             ->when($request->search, fn($q) => $q->where('bill_no', 'like', "%{$request->search}%")
                 ->orWhereHas('supplier', fn($q) => $q->where('name', 'like', "%{$request->search}%")))
             ->when($request->supplier_id, fn($q) => $q->where('supplier_id', $request->supplier_id))
@@ -34,10 +37,10 @@ class PurchaseController extends Controller
             ->withQueryString();
 
         $stats = [
-            'month_total'    => Purchase::where('branch_id', $branchId)->whereMonth('created_at', now()->month)->sum('total'),
-            'month_count'    => Purchase::where('branch_id', $branchId)->whereMonth('created_at', now()->month)->count(),
-            'balance_due'    => Purchase::where('branch_id', $branchId)->where('payment_status', '!=', 'paid')->sum('balance_due'),
-            'paid_this_month'=> Purchase::where('branch_id', $branchId)->whereMonth('created_at', now()->month)->sum('paid_amount'),
+            'month_total'    => Purchase::whereBranch($branchId)->whereMonth('created_at', now()->month)->sum('total'),
+            'month_count'    => Purchase::whereBranch($branchId)->whereMonth('created_at', now()->month)->count(),
+            'balance_due'    => Purchase::whereBranch($branchId)->where('payment_status', '!=', 'paid')->sum('balance_due'),
+            'paid_this_month'=> Purchase::whereBranch($branchId)->whereMonth('created_at', now()->month)->sum('paid_amount'),
         ];
 
         $suppliers = Supplier::orderBy('name')->get();
@@ -47,8 +50,11 @@ class PurchaseController extends Controller
 
     public function create()
     {
-        $suppliers = Supplier::orderBy('name')->get();
-        return view('purchases.create', compact('suppliers'));
+        $branchId   = CurrentBranch::id();
+        $suppliers  = Supplier::orderBy('name')->get();
+        $categories = Category::orderBy('name')->get();
+        $accounts   = Account::whereBranch($branchId)->get();
+        return view('purchases.create', compact('suppliers', 'categories', 'accounts'));
     }
 
     public function store(Request $request)
@@ -57,7 +63,8 @@ class PurchaseController extends Controller
             'supplier_id'        => 'required|exists:suppliers,id',
             'purchase_date'      => 'required|date',
             'items'              => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.name'       => 'nullable|string|max:255',
             'items.*.quantity'   => 'required|numeric|min:0.001',
             'items.*.unit_price' => 'required|numeric|min:0',
             'items.*.batch_no'   => 'nullable|string|max:50',
@@ -65,9 +72,12 @@ class PurchaseController extends Controller
             'items.*.sale_price' => 'nullable|numeric|min:0',
         ]);
 
+        if (! $branchId = CurrentBranch::requireId()) {
+            return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
+        }
+
         DB::beginTransaction();
         try {
-            $branchId = auth()->user()->branch_id;
             $subtotal = collect($request->items)->sum(fn($i) => $i['quantity'] * $i['unit_price']);
             $discount = (float) ($request->discount_amount ?? 0);
             $tax      = (float) ($request->tax_amount ?? 0);
@@ -101,10 +111,12 @@ class PurchaseController extends Controller
                 Supplier::find($request->supplier_id)->increment('balance_due', $total - $paid);
             }
 
-            // Payment record
+            // Payment out — honour the chosen account, map the method to a valid ENUM.
             if ($paid > 0) {
-                $account = Account::where('branch_id', $branchId)->first();
+                $account = ($request->account_id ? Account::whereBranch($branchId)->find($request->account_id) : null)
+                        ?? Account::whereBranch($branchId)->first();
                 if ($account) {
+                    $methodMap = ['cash' => 'cash', 'bank' => 'bank', 'cheque' => 'cheque', 'card' => 'card', 'credit' => 'cash'];
                     Payment::create([
                         'reference_no' => 'PAY-' . strtoupper(Str::random(8)),
                         'type'         => 'payment_out',
@@ -113,7 +125,7 @@ class PurchaseController extends Controller
                         'party_id'     => $request->supplier_id,
                         'purchase_id'  => $purchase->id,
                         'amount'       => $paid,
-                        'method'       => $request->payment_method ?? 'cash',
+                        'method'       => $methodMap[$request->payment_method] ?? 'cash',
                         'created_by'   => auth()->id(),
                     ]);
                     $account->decrement('balance', $paid);
@@ -131,12 +143,14 @@ class PurchaseController extends Controller
 
     public function show(Purchase $purchase)
     {
+        CurrentBranch::guard($purchase->branch_id);
         $purchase->load(['items.product', 'supplier', 'branch', 'user']);
         return view('purchases.show', compact('purchase'));
     }
 
     public function edit(Purchase $purchase)
     {
+        CurrentBranch::guard($purchase->branch_id);
         if ($reason = $this->blockingReason($purchase)) {
             return redirect()->route('purchases.show', $purchase)->with('error', $reason);
         }
@@ -147,6 +161,7 @@ class PurchaseController extends Controller
 
     public function update(Request $request, Purchase $purchase)
     {
+        CurrentBranch::guard($purchase->branch_id);
         if ($reason = $this->blockingReason($purchase)) {
             return back()->with('error', $reason);
         }
@@ -154,7 +169,8 @@ class PurchaseController extends Controller
         $request->validate([
             'purchase_date'      => 'required|date',
             'items'              => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.product_id' => 'nullable|exists:products,id',
+            'items.*.name'       => 'nullable|string|max:255',
             'items.*.quantity'   => 'required|numeric|min:0.001',
             'items.*.unit_price' => 'required|numeric|min:0',
             'items.*.batch_no'   => 'nullable|string|max:50',
@@ -178,7 +194,7 @@ class PurchaseController extends Controller
             // confirmed none of it has been consumed) before recreating from the submitted items.
             foreach ($purchase->items as $item) {
                 if ($item->layer) {
-                    Stock::where('product_id', $item->product_id)->where('branch_id', $branchId)
+                    Stock::where('product_id', $item->product_id)->whereBranch($branchId)
                         ->decrement('quantity', (float) $item->layer->qty_remaining);
                     $item->layer->delete();
                 }
@@ -238,6 +254,7 @@ class PurchaseController extends Controller
 
     public function destroy(Purchase $purchase)
     {
+        CurrentBranch::guard($purchase->branch_id);
         if ($purchase->payment_status === 'paid') {
             return back()->with('error', 'Cannot delete a fully paid purchase.');
         }
@@ -252,7 +269,7 @@ class PurchaseController extends Controller
 
             foreach ($purchase->items as $item) {
                 if ($item->layer) {
-                    Stock::where('product_id', $item->product_id)->where('branch_id', $branchId)
+                    Stock::where('product_id', $item->product_id)->whereBranch($branchId)
                         ->decrement('quantity', (float) $item->layer->qty_remaining);
                     $item->layer->delete();
                 }
@@ -284,7 +301,8 @@ class PurchaseController extends Controller
 
     public function bill(int $id)
     {
-        $purchase = Purchase::with(['items.product', 'supplier', 'branch'])->findOrFail($id);
+        $purchase = Purchase::with(['items.product', 'supplier', 'branch'])
+            ->whereBranch(CurrentBranch::id())->findOrFail($id);
         $settings = \App\Models\Setting::pluck('value', 'key_name');
         $pdf      = Pdf::loadView('purchases.bill_pdf', compact('purchase', 'settings'))->setPaper('A4');
         return $pdf->download("Bill-{$purchase->bill_no}.pdf");
@@ -302,17 +320,31 @@ class PurchaseController extends Controller
      * FIFO/multi-price (non-weighed) product updates. Shared by store() and update()
      * so both stay in sync.
      */
-    private function createPurchaseItem(Purchase $purchase, array $item, int $branchId, $purchaseDate): PurchaseItem
+    private function createPurchaseItem(Purchase $purchase, array $item, ?int $branchId, $purchaseDate): PurchaseItem
     {
+        $qty  = (float) $item['quantity'];
+        $cost = (float) $item['unit_price'];
+
+        // Custom / non-inventory line — recorded on the bill only. No product, stock or layer.
+        if (empty($item['product_id'])) {
+            return PurchaseItem::create([
+                'purchase_id' => $purchase->id,
+                'product_id'  => null,
+                'name'        => trim($item['name'] ?? '') ?: 'Custom item',
+                'quantity'    => $qty,
+                'unit_price'  => $cost,
+                'batch_no'    => $item['batch_no'] ?? null,
+                'subtotal'    => $qty * $cost,
+            ]);
+        }
+
         $product = Product::find($item['product_id']);
-        $qty     = (float) $item['quantity'];
-        $cost    = (float) $item['unit_price'];
         $batch   = $item['batch_no'] ?? null;
         $mrp         = isset($item['mrp']) && $item['mrp'] !== '' ? (float) $item['mrp'] : null;
         $enteredSale = isset($item['sale_price']) && $item['sale_price'] !== '' ? (float) $item['sale_price'] : null;
 
         // On-hand before this purchase (aggregate).
-        $onHand = (float) (Stock::where('product_id', $product->id)->where('branch_id', $branchId)->value('quantity') ?? 0);
+        $onHand = (float) (Stock::where('product_id', $product->id)->whereBranch($branchId)->value('quantity') ?? 0);
 
         if ($product->is_weighed) {
             // Weighted-average cost; the sale price is set manually (defaults to current).
@@ -371,6 +403,9 @@ class PurchaseController extends Controller
 
         $purchase->load('items.layer', 'items.product');
         foreach ($purchase->items as $item) {
+            if (! $item->product_id) {
+                continue;   // custom / non-inventory line — no stock to reconcile
+            }
             $remaining = $item->layer ? (float) $item->layer->qty_remaining : 0.0;
             if (abs($remaining - (float) $item->quantity) > 0.0005) {
                 $name = $item->product?->name ?? "product #{$item->product_id}";

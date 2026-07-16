@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CurrentBranch;
+
 use App\Models\Stock;
 use App\Models\StockAdjustment;
 use App\Models\StockTransfer;
@@ -15,21 +17,21 @@ class StockController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         $stocks = Stock::with(['product.category', 'product.brand'])
-            ->where('branch_id', $branchId)
+            ->whereBranch($branchId)
             ->when($request->category_id, fn($q) => $q->whereHas('product', fn($q) => $q->where('category_id', $request->category_id)))
             ->when($request->search, fn($q) => $q->whereHas('product', fn($q) => $q->where('name', 'like', "%{$request->search}%")))
             ->paginate(20);
 
         $totals = [
-            'products'    => Stock::where('branch_id', $branchId)->count(),
-            'total_value' => Stock::where('branch_id', $branchId)
+            'products'    => Stock::whereBranch($branchId)->count(),
+            'total_value' => Stock::whereBranch($branchId)
                 ->join('products', 'stock.product_id', '=', 'products.id')
                 ->sum(DB::raw('stock.quantity * products.purchase_price')),
-            'low'  => Stock::where('branch_id', $branchId)->whereRaw('quantity < (SELECT min_stock FROM products WHERE id = stock.product_id)')->where('quantity', '>', 0)->count(),
-            'out'  => Stock::where('branch_id', $branchId)->where('quantity', '<=', 0)->count(),
+            'low'  => Stock::whereBranch($branchId)->whereRaw('quantity < (SELECT min_stock FROM products WHERE id = stock.product_id)')->where('quantity', '>', 0)->count(),
+            'out'  => Stock::whereBranch($branchId)->where('quantity', '<=', 0)->count(),
         ];
 
         return view('stock.index', compact('stocks', 'totals'));
@@ -38,7 +40,7 @@ class StockController extends Controller
     public function adjustments(Request $request)
     {
         $adjustments = StockAdjustment::with(['product', 'createdBy'])
-            ->where('branch_id', auth()->user()->branch_id)
+            ->whereBranch(CurrentBranch::id())
             ->latest()->paginate(20);
 
         $products = Product::orderBy('name')->get(['id', 'name', 'sku']);
@@ -55,11 +57,14 @@ class StockController extends Controller
             'reason'     => 'nullable|string',
         ]);
 
+        if (! $branchId = CurrentBranch::requireId()) {
+            return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
+        }
+
         DB::beginTransaction();
         try {
-            $branchId = auth()->user()->branch_id;
             $product  = Product::findOrFail($request->product_id);
-            $onHand   = (float) (Stock::where('product_id', $product->id)->where('branch_id', $branchId)->value('quantity') ?? 0);
+            $onHand   = (float) (Stock::where('product_id', $product->id)->whereBranch($branchId)->value('quantity') ?? 0);
 
             // The amount actually applied — removals are capped at what's on hand.
             $requested = (float) $request->quantity;
@@ -101,9 +106,12 @@ class StockController extends Controller
 
     public function transfers(Request $request)
     {
+        // A transfer is "mine" if either leg touches my branch. In All-branches mode
+        // there's no working branch to compare against, so every transfer is listed.
         $transfers = StockTransfer::with(['product', 'fromBranch', 'toBranch'])
-            ->where(fn($q) => $q->where('from_branch_id', auth()->user()->branch_id)
-                ->orWhere('to_branch_id', auth()->user()->branch_id))
+            ->when(CurrentBranch::id(), fn($q, $branchId) => $q->where(
+                fn($w) => $w->where('from_branch_id', $branchId)->orWhere('to_branch_id', $branchId)
+            ))
             ->latest()->paginate(20);
 
         $branches = Branch::where('status', 'active')->get();
@@ -120,6 +128,12 @@ class StockController extends Controller
             'product_id'     => 'required|exists:products,id',
             'quantity'       => 'required|numeric|min:0.001',
         ]);
+
+        // The source branch comes from the form, so it is untrusted: a scoped user
+        // must not move stock out of a branch they don't work in.
+        if (! CurrentBranch::allows((int) $request->from_branch_id)) {
+            return back()->withInput()->with('error', 'You cannot transfer stock out of that branch.');
+        }
 
         // Check source stock
         $sourceStock = Stock::where('product_id', $request->product_id)
@@ -163,7 +177,11 @@ class StockController extends Controller
 
     public function apiGetStock(int $productId, int $branchId)
     {
-        $stock = Stock::where('product_id', $productId)->where('branch_id', $branchId)->value('quantity') ?? 0;
+        // The branch comes straight from the URL, so it is untrusted: a scoped user
+        // must not read another branch's stock by editing the id.
+        CurrentBranch::guard($branchId);
+
+        $stock = Stock::where('product_id', $productId)->whereBranch($branchId)->value('quantity') ?? 0;
         return response()->json(['stock' => $stock]);
     }
 }

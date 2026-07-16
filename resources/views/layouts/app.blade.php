@@ -59,92 +59,151 @@
         </div>
 
         {{-- Quick POS button --}}
+        @can('pos.access')
         <div style="padding:10px 12px;border-bottom:.5px solid #2a2d3a">
             <a href="{{ route('pos') }}" style="display:flex;align-items:center;justify-content:center;gap:6px;background:#312e81;color:#a5b4fc;border-radius:7px;padding:8px;font-size:13px;font-weight:500;text-decoration:none;border:.5px solid #534AB7">
                 <i class="ti ti-scan"></i> Open POS
             </a>
         </div>
+        @endcan
 
-        {{-- Navigation --}}
+        {{-- Navigation. Every link is gated on the same permission as its route, and
+             each section heading only renders if the user can reach something in it —
+             so nobody is shown a link that would 403. --}}
         <nav style="flex:1">
+            @can('dashboard.view')
             <a href="{{ route('dashboard') }}" class="sidebar-link {{ request()->routeIs('dashboard') ? 'active' : '' }}">
                 <i class="ti ti-layout-dashboard"></i>Dashboard
             </a>
+            @endcan
 
+            @canany(['sales.view','quotations.view','payments.in.view','sale_returns.view'])
             <div class="sidebar-section">Sales</div>
+            @can('sales.view')
             <a href="{{ route('sales.index') }}" class="sidebar-link {{ request()->routeIs('sales*') ? 'active' : '' }}">
                 <i class="ti ti-receipt"></i>Sales
             </a>
+            @endcan
+            @can('quotations.view')
             <a href="{{ route('quotations.index') }}" class="sidebar-link {{ request()->routeIs('quotations*') ? 'active' : '' }}">
                 <i class="ti ti-file-description"></i>Quotations
             </a>
+            @endcan
+            @can('payments.in.view')
             <a href="{{ route('payments.in') }}" class="sidebar-link {{ request()->routeIs('payments.in*') ? 'active' : '' }}">
                 <i class="ti ti-cash"></i>Payment In
             </a>
+            @endcan
+            @can('sale_returns.view')
             <a href="{{ route('sale-returns.index') }}" class="sidebar-link {{ request()->routeIs('sale-returns*') ? 'active' : '' }}">
                 <i class="ti ti-arrow-back-up"></i>Sales Returns
             </a>
+            @endcan
+            @endcanany
 
+            @canany(['purchases.view','payments.out.view','purchase_returns.view'])
             <div class="sidebar-section">Purchases</div>
+            @can('purchases.view')
             <a href="{{ route('purchases.index') }}" class="sidebar-link {{ request()->routeIs('purchases*') ? 'active' : '' }}">
                 <i class="ti ti-truck"></i>Purchases
             </a>
+            @endcan
+            @can('payments.out.view')
             <a href="{{ route('payments.out') }}" class="sidebar-link {{ request()->routeIs('payments.out*') ? 'active' : '' }}">
                 <i class="ti ti-cash"></i>Payment Out
             </a>
+            @endcan
+            @can('purchase_returns.view')
             <a href="{{ route('purchase-returns.index') }}" class="sidebar-link {{ request()->routeIs('purchase-returns*') ? 'active' : '' }}">
                 <i class="ti ti-arrow-back-up"></i>Purchase Returns
             </a>
+            @endcan
+            @endcanany
 
+            @canany(['products.view','catalog.brands.manage','catalog.categories.manage','barcodes.print'])
             <div class="sidebar-section">Products</div>
+            @can('products.view')
             <a href="{{ route('products.index') }}" class="sidebar-link {{ request()->routeIs('products*') ? 'active' : '' }}">
                 <i class="ti ti-package"></i>Products
             </a>
+            @endcan
+            @can('catalog.brands.manage')
             <a href="{{ route('brands.index') }}" class="sidebar-link">
                 <i class="ti ti-tag"></i>Brands
             </a>
+            @endcan
+            @can('catalog.categories.manage')
             <a href="{{ route('categories.index') }}" class="sidebar-link">
                 <i class="ti ti-category"></i>Categories
             </a>
+            @endcan
+            @can('barcodes.print')
             <a href="{{ route('barcodes.labels') }}" class="sidebar-link {{ request()->routeIs('barcodes.labels') ? 'active' : '' }}">
                 <i class="ti ti-barcode"></i>Barcode labels
             </a>
+            @endcan
+            @endcanany
 
+            @canany(['stock.view','stock.transfer','stock.adjust'])
             <div class="sidebar-section">Inventory</div>
+            @can('stock.view')
             <a href="{{ route('stock.index') }}" class="sidebar-link {{ request()->routeIs('stock.index') ? 'active' : '' }}">
                 <i class="ti ti-box"></i>Stock
             </a>
+            @endcan
+            @can('stock.transfer')
             <a href="{{ route('stock.transfers') }}" class="sidebar-link {{ request()->routeIs('stock.transfers') ? 'active' : '' }}">
                 <i class="ti ti-arrows-exchange"></i>Stock Transfer
             </a>
+            @endcan
+            @can('stock.adjust')
             <a href="{{ route('stock.adjustments') }}" class="sidebar-link {{ request()->routeIs('stock.adjustments') ? 'active' : '' }}">
                 <i class="ti ti-adjustments"></i>Adjustments
             </a>
+            @endcan
+            @endcanany
 
+            @canany(['customers.view','suppliers.view'])
             <div class="sidebar-section">Parties</div>
+            @can('customers.view')
             <a href="{{ route('customers.index') }}" class="sidebar-link {{ request()->routeIs('customers*') ? 'active' : '' }}">
                 <i class="ti ti-users"></i>Customers
             </a>
+            @endcan
+            @can('suppliers.view')
             <a href="{{ route('suppliers.index') }}" class="sidebar-link {{ request()->routeIs('suppliers*') ? 'active' : '' }}">
                 <i class="ti ti-building-store"></i>Suppliers
             </a>
+            @endcan
+            @endcanany
 
+            @canany(['accounts.view','expenses.view','counter_sessions.view'])
             <div class="sidebar-section">Finance</div>
+            @can('accounts.view')
             <a href="{{ route('accounts.index') }}" class="sidebar-link {{ request()->routeIs('accounts*') ? 'active' : '' }}">
                 <i class="ti ti-building-bank"></i>Cash & Bank
             </a>
+            @endcan
+            @can('expenses.view')
             <a href="{{ route('expenses.index') }}" class="sidebar-link {{ request()->routeIs('expenses*') ? 'active' : '' }}">
                 <i class="ti ti-credit-card"></i>Expenses
             </a>
+            @endcan
+            @can('counter_sessions.view')
             <a href="{{ route('counter-sessions.index') }}" class="sidebar-link {{ request()->routeIs('counter-sessions*') ? 'active' : '' }}">
                 <i class="ti ti-coin"></i>Counter Sessions
             </a>
+            @endcan
+            @endcanany
 
+            @can('reports.view')
             <div class="sidebar-section">Reports</div>
-            <a href="{{ route('reports.profit_loss') }}" class="sidebar-link {{ request()->routeIs('reports.*') ? 'active' : '' }}">
-                <i class="ti ti-chart-bar"></i>Reports
+            <a href="{{ route('reports.index') }}" class="sidebar-link {{ request()->routeIs('reports.*') ? 'active' : '' }}">
+                <i class="ti ti-chart-histogram"></i>Reports
             </a>
+            @endcan
 
+            @can('hrm.view')
             <div class="sidebar-section">HRM</div>
             <a href="{{ route('hrm.dashboard') }}" class="sidebar-link {{ request()->routeIs('hrm.*') ? 'active' : '' }}">
                 <i class="ti ti-id-badge"></i>HRM
@@ -152,19 +211,35 @@
             <a href="{{ route('hrm.staff.index') }}" class="sidebar-link">
                 <i class="ti ti-users"></i>Staff Members
             </a>
+            @endcan
 
+            @canany(['online_orders.view','website.manage'])
             <div class="sidebar-section">Online</div>
+            @can('online_orders.view')
             <a href="{{ route('online-orders.index') }}" class="sidebar-link {{ request()->routeIs('online-orders*') ? 'active' : '' }}">
                 <i class="ti ti-shopping-cart"></i>Online Orders
             </a>
+            @endcan
+            @can('website.manage')
             <a href="{{ route('website.index') }}" class="sidebar-link {{ request()->routeIs('website*') ? 'active' : '' }}">
                 <i class="ti ti-world"></i>Website Setup
             </a>
+            @endcan
+            @endcanany
 
+            @canany(['settings.access','roles.view','roles.manage'])
             <div class="sidebar-section">System</div>
+            @can('settings.access')
             <a href="{{ route('settings.index') }}" class="sidebar-link {{ request()->routeIs('settings*') ? 'active' : '' }}">
                 <i class="ti ti-settings"></i>Settings
             </a>
+            @endcan
+            @canany(['roles.view','roles.manage'])
+            <a href="{{ route('roles.index') }}" class="sidebar-link {{ request()->routeIs('roles.*') ? 'active' : '' }}">
+                <i class="ti ti-shield-lock"></i>Roles & Permissions
+            </a>
+            @endcanany
+            @endcanany
         </nav>
 
         {{-- User info --}}
@@ -197,11 +272,41 @@
                 <i class="ti ti-user" style="font-size:12px;margin-right:3px"></i>
                 {{ auth()->user()->name }}
             </div>
-            {{-- Branch indicator --}}
+            {{-- Branch indicator / switcher --}}
+            @if(auth()->user()->seesAllBranches())
+            @php($branchOptions = \App\Support\CurrentBranch::options())
+            <div x-data="{ open:false }" style="position:relative">
+                <button type="button" @click="open = !open" @click.outside="open = false"
+                    style="font-size:11px;background:{{ \App\Support\CurrentBranch::isAll() ? '#422006' : '#1e2130' }};border:.5px solid {{ \App\Support\CurrentBranch::isAll() ? '#854d0e' : '#2a2d3a' }};border-radius:6px;padding:4px 10px;color:{{ \App\Support\CurrentBranch::isAll() ? '#fbbf24' : '#94a3b8' }};cursor:pointer;display:flex;align-items:center;gap:4px">
+                    <i class="ti ti-map-pin" style="font-size:12px"></i>
+                    {{ \App\Support\CurrentBranch::name() }}
+                    <i class="ti ti-chevron-down" style="font-size:11px"></i>
+                </button>
+                <div x-show="open" x-cloak x-transition.opacity
+                    style="position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:8px;padding:5px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.45)">
+                    <form method="POST" action="{{ route('branch.switch') }}">
+                        @csrf
+                        <button type="submit" name="branch_id" value=""
+                            style="width:100%;text-align:left;background:{{ \App\Support\CurrentBranch::isAll() ? '#2a2d3a' : 'transparent' }};border:0;border-radius:6px;padding:7px 9px;color:#fbbf24;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">
+                            <i class="ti ti-building-store" style="font-size:13px"></i> All branches
+                            <span style="margin-left:auto;font-size:10px;color:#64748b">view only</span>
+                        </button>
+                        <div style="height:.5px;background:#2a2d3a;margin:4px 2px"></div>
+                        @foreach($branchOptions as $b)
+                        <button type="submit" name="branch_id" value="{{ $b->id }}"
+                            style="width:100%;text-align:left;background:{{ \App\Support\CurrentBranch::id() === (int) $b->id ? '#2a2d3a' : 'transparent' }};border:0;border-radius:6px;padding:7px 9px;color:#e2e8f0;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">
+                            <i class="ti ti-map-pin" style="font-size:13px;color:#64748b"></i> {{ $b->name }}
+                        </button>
+                        @endforeach
+                    </form>
+                </div>
+            </div>
+            @else
             <div style="font-size:11px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;padding:4px 10px;color:#94a3b8">
                 <i class="ti ti-map-pin" style="font-size:12px;margin-right:3px"></i>
                 {{ auth()->user()->branch?->name ?? 'No branch' }}
             </div>
+            @endif
             {{-- Date & time (live) --}}
             <div style="font-size:11px;color:#64748b;display:flex;align-items:center;gap:5px">
                 <i class="ti ti-clock" style="font-size:12px"></i>

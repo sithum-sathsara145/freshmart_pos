@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CurrentBranch;
+
 
 use App\Models\Customer;
 use App\Models\Supplier;
@@ -64,17 +66,14 @@ class CustomerController extends Controller
 
     public function destroy(Customer $customer)
     {
-        if ($customer->sales()->exists()) {
-            return back()->with('error', 'Cannot delete — customer has sales.');
+        // Sales, returns and online orders all hold FK references to the customer.
+        if ($customer->sales()->exists()
+            || \App\Models\SaleReturn::where('customer_id', $customer->id)->exists()
+            || OnlineOrder::where('customer_id', $customer->id)->exists()) {
+            return back()->with('error', 'Cannot delete — this customer has sales, returns or online orders on record.');
         }
         $customer->delete();
         return redirect()->route('customers.index')->with('success', 'Customer deleted.');
-    }
-
-    public function ledger(int $id)
-    {
-        $customer = Customer::with(['sales' => fn($q) => $q->latest()])->findOrFail($id);
-        return view('customers.ledger', compact('customer'));
     }
 
     public function apiSearch(Request $request)
@@ -138,8 +137,14 @@ class SupplierController extends Controller
 
     public function edit(Supplier $supplier) { return view('suppliers.edit', compact('supplier')); }
     public function update(Request $r, Supplier $s) { $s->update($r->only(['name','contact_person','phone','email','address','city'])); return redirect()->route('suppliers.show',$s)->with('success','Updated.'); }
-    public function destroy(Supplier $s) { $s->delete(); return redirect()->route('suppliers.index')->with('success','Deleted.'); }
-    public function ledger(int $id) { $supplier = Supplier::with(['purchases'])->findOrFail($id); return view('suppliers.ledger', compact('supplier')); }
+    public function destroy(Supplier $s)
+    {
+        if (Purchase::where('supplier_id', $s->id)->exists() || PurchaseReturn::where('supplier_id', $s->id)->exists()) {
+            return back()->with('error', 'Cannot delete — this supplier has purchases or returns on record.');
+        }
+        $s->delete();
+        return redirect()->route('suppliers.index')->with('success', 'Deleted.');
+    }
 }
 
 // =========================================================
@@ -149,7 +154,7 @@ class AccountController extends Controller
 {
     public function index()
     {
-        $accounts = Account::where('branch_id', auth()->user()->branch_id)->get();
+        $accounts = Account::whereBranch(CurrentBranch::id())->get();
         $totalBalance = $accounts->sum('balance');
         return view('accounts.index', compact('accounts', 'totalBalance'));
     }
@@ -159,14 +164,25 @@ class AccountController extends Controller
     public function store(Request $request)
     {
         $request->validate(['name' => 'required', 'type' => 'required|in:cash,bank']);
-        Account::create([...$request->only(['name', 'type', 'account_number']), 'branch_id' => auth()->user()->branch_id, 'balance' => 0]);
+        if (! $branchId = CurrentBranch::requireId()) {
+            return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
+        }
+        Account::create([...$request->only(['name', 'type', 'account_number']), 'branch_id' => $branchId, 'balance' => 0]);
         return redirect()->route('accounts.index')->with('success', 'Account added.');
     }
 
-    public function show(Account $account) { return view('accounts.show', compact('account')); }
-    public function edit(Account $account) { return view('accounts.edit', compact('account')); }
-    public function update(Request $r, Account $a) { $a->update($r->only(['name','account_number','status'])); return redirect()->route('accounts.index')->with('success','Updated.'); }
-    public function destroy(Account $account) { $account->delete(); return redirect()->route('accounts.index')->with('success','Deleted.'); }
+    public function destroy(Account $account)
+    {
+        if (Payment::where('account_id', $account->id)->orWhere('to_account_id', $account->id)->exists()
+            || Expense::where('account_id', $account->id)->exists()) {
+            return back()->with('error', 'Cannot delete — this account has payments or expenses on record.');
+        }
+        if (abs((float) $account->balance) > 0.004) {
+            return back()->with('error', 'Cannot delete — the account still holds a balance. Transfer it out first.');
+        }
+        $account->delete();
+        return redirect()->route('accounts.index')->with('success', 'Deleted.');
+    }
 
     public function transactions(int $id)
     {
@@ -207,15 +223,15 @@ class PaymentController extends Controller
 {
     public function indexIn(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         $payments = Payment::with(['sale', 'account'])
             ->where('type', 'payment_in')
-            ->whereHas('account', fn($q) => $q->where('branch_id', $branchId))
+            ->whereHas('account', fn($q) => $q->whereBranch($branchId))
             ->latest()->paginate(20);
 
         // Scope the summary cards to this branch (were summing every branch).
-        $inBranch = fn($q) => $q->where('type', 'payment_in')->whereHas('account', fn($a) => $a->where('branch_id', $branchId));
+        $inBranch = fn($q) => $q->where('type', 'payment_in')->whereHas('account', fn($a) => $a->whereBranch($branchId));
         $totals = [
             'cash' => Payment::where($inBranch)->where('method', 'cash')->sum('amount'),
             'card' => Payment::where($inBranch)->where('method', 'card')->sum('amount'),
@@ -226,11 +242,11 @@ class PaymentController extends Controller
 
     public function storeIn(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
         $request->validate(['sale_id' => 'required|exists:sales,id', 'amount' => 'required|numeric|min:1', 'account_id' => 'required|exists:accounts,id']);
 
-        $sale    = \App\Models\Sale::where('branch_id', $branchId)->find($request->sale_id);
-        $account = Account::where('branch_id', $branchId)->find($request->account_id);
+        $sale    = \App\Models\Sale::whereBranch($branchId)->find($request->sale_id);
+        $account = Account::whereBranch($branchId)->find($request->account_id);
         if (! $sale || ! $account) {
             return back()->with('error', 'Sale or account not found for this branch.');
         }
@@ -267,7 +283,7 @@ class PaymentController extends Controller
     {
         $payments = Payment::with(['purchase', 'account'])
             ->where('type', 'payment_out')
-            ->whereHas('account', fn($q) => $q->where('branch_id', auth()->user()->branch_id))
+            ->whereHas('account', fn($q) => $q->whereBranch(CurrentBranch::id()))
             ->latest()->paginate(20);
 
         return view('payments.out', compact('payments'));
@@ -275,11 +291,11 @@ class PaymentController extends Controller
 
     public function storeOut(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
         $request->validate(['purchase_id' => 'required|exists:purchases,id', 'amount' => 'required|numeric|min:1', 'account_id' => 'required|exists:accounts,id']);
 
-        $purchase = Purchase::where('branch_id', $branchId)->find($request->purchase_id);
-        $account  = Account::where('branch_id', $branchId)->find($request->account_id);
+        $purchase = Purchase::whereBranch($branchId)->find($request->purchase_id);
+        $account  = Account::whereBranch($branchId)->find($request->account_id);
         if (! $purchase || ! $account) {
             return back()->with('error', 'Purchase or account not found for this branch.');
         }
@@ -324,31 +340,70 @@ class ExpenseController extends Controller
     public function index(Request $request)
     {
         $expenses = Expense::with(['category', 'account'])
-            ->where('branch_id', auth()->user()->branch_id)
+            ->whereBranch(CurrentBranch::id())
             ->when($request->from_date, fn($q) => $q->whereDate('expense_date', '>=', $request->from_date))
             ->when($request->to_date, fn($q) => $q->whereDate('expense_date', '<=', $request->to_date))
             ->latest('expense_date')->paginate(20);
 
         $categories = ExpenseCategory::all();
-        $totals = ['month' => Expense::where('branch_id', auth()->user()->branch_id)->whereMonth('expense_date', now()->month)->sum('amount'), 'total' => Expense::where('branch_id', auth()->user()->branch_id)->sum('amount')];
+        $totals = ['month' => Expense::whereBranch(CurrentBranch::id())->whereMonth('expense_date', now()->month)->sum('amount'), 'total' => Expense::whereBranch(CurrentBranch::id())->sum('amount')];
 
         return view('expenses.index', compact('expenses', 'categories', 'totals'));
     }
 
-    public function create() { return view('expenses.create', ['categories' => ExpenseCategory::all(), 'accounts' => Account::where('branch_id', auth()->user()->branch_id)->get()]); }
+    public function create() { return view('expenses.create', ['categories' => ExpenseCategory::all(), 'accounts' => Account::whereBranch(CurrentBranch::id())->get()]); }
 
     public function store(Request $request)
     {
         $request->validate(['expense_category_id' => 'required|exists:expense_categories,id', 'description' => 'required', 'amount' => 'required|numeric|min:0.01', 'expense_date' => 'required|date']);
-        Expense::create([...$request->only(['expense_category_id','account_id','description','amount','expense_date']), 'branch_id' => auth()->user()->branch_id, 'created_by' => auth()->id()]);
+        if (! $branchId = CurrentBranch::requireId()) {
+            return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
+        }
+        Expense::create([...$request->only(['expense_category_id','account_id','description','amount','expense_date']), 'branch_id' => $branchId, 'created_by' => auth()->id()]);
         if ($request->account_id) Account::find($request->account_id)->decrement('balance', $request->amount);
         return redirect()->route('expenses.index')->with('success', 'Expense recorded.');
     }
 
-    public function show(Expense $expense) { return view('expenses.show', compact('expense')); }
-    public function edit(Expense $expense) { return view('expenses.edit', compact('expense')); }
-    public function update(Request $r, Expense $e) { $e->update($r->only(['description','amount','expense_date','expense_category_id'])); return redirect()->route('expenses.index')->with('success','Updated.'); }
-    public function destroy(Expense $expense) { $expense->delete(); return redirect()->route('expenses.index')->with('success','Deleted.'); }
+    public function edit(Expense $expense)
+    {
+        CurrentBranch::guard($expense->branch_id);
+        return view('expenses.edit', [
+            'expense'    => $expense,
+            'categories' => ExpenseCategory::all(),
+        ]);
+    }
+
+    public function update(Request $r, Expense $e)
+    {
+        CurrentBranch::guard($e->branch_id);
+        $r->validate(['description' => 'required', 'amount' => 'required|numeric|min:0.01', 'expense_date' => 'required|date', 'expense_category_id' => 'required|exists:expense_categories,id']);
+
+        DB::transaction(function () use ($r, $e) {
+            // Keep the paying account in step when the amount changes.
+            $delta = (float) $r->amount - (float) $e->amount;
+            if ($e->account_id && abs($delta) > 0.004) {
+                Account::where('id', $e->account_id)->decrement('balance', $delta);
+            }
+            $e->update($r->only(['description', 'amount', 'expense_date', 'expense_category_id']));
+        });
+
+        return redirect()->route('expenses.index')->with('success', 'Updated.');
+    }
+
+    public function destroy(Expense $expense)
+    {
+        CurrentBranch::guard($expense->branch_id);
+
+        DB::transaction(function () use ($expense) {
+            // Put the money back in the account it was paid from.
+            if ($expense->account_id) {
+                Account::where('id', $expense->account_id)->increment('balance', $expense->amount);
+            }
+            $expense->delete();
+        });
+
+        return redirect()->route('expenses.index')->with('success', 'Expense deleted and account restored.');
+    }
 }
 
 // =========================================================
@@ -419,8 +474,22 @@ class SettingController extends Controller
     {
         $settings  = Setting::pluck('value', 'key_name');
         $branches  = \App\Models\Branch::with('counters')->get();
-        $users     = \App\Models\User::with('roles')->get();
         $counters  = \App\Models\Counter::with('branch')->get();
+
+        // Users tab — super_admin accounts are invisible to everyone else, and
+        // people who can't see all branches only see their own branch's staff.
+        $actor = auth()->user();
+        $users = \App\Models\User::with('roles', 'branch')
+            ->when(! $actor->isSuperAdmin(), fn ($q) => $q->whereDoesntHave(
+                'roles',
+                fn ($r) => $r->where('name', \App\Models\Role::SUPER_ADMIN)
+            ))
+            ->when(! $actor->seesAllBranches(), fn ($q) => $q->where('branch_id', $actor->branch_id))
+            ->orderBy('name')
+            ->get();
+
+        // Roles this actor may hand out (at or below their rank; never super_admin).
+        $assignableRoles = \App\Models\Role::assignableBy($actor)->orderByDesc('level')->get();
 
         // API keys tab — never expose secret values to the view; only whether they are set.
         $apiCredentials = config('api_credentials', []);
@@ -434,7 +503,7 @@ class SettingController extends Controller
         }
 
         return view('settings.index', compact(
-            'settings', 'branches', 'users', 'counters', 'apiCredentials', 'apiKeyState'
+            'settings', 'branches', 'users', 'counters', 'assignableRoles', 'apiCredentials', 'apiKeyState'
         ));
     }
 
@@ -482,7 +551,7 @@ class OnlineOrderController extends Controller
     public function index(Request $request)
     {
         $orders = OnlineOrder::with('customer')
-            ->where('branch_id', auth()->user()->branch_id)
+            ->whereBranch(CurrentBranch::id())
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->latest()->paginate(20);
 
@@ -505,8 +574,8 @@ class OnlineOrderController extends Controller
 
     public function convertToSale(OnlineOrder $onlineOrder)
     {
-        // Convert online order items to a regular sale
-        $sale = app(SaleController::class)->store(request()->merge([
+        // Convert online order items to a regular sale.
+        $response = app(SaleController::class)->store(request()->merge([
             'items' => $onlineOrder->items->map(fn($i) => [
                 'product_id' => $i->product_id,
                 'quantity'   => $i->quantity,
@@ -517,15 +586,24 @@ class OnlineOrderController extends Controller
             'paid_amount'    => 0,
         ]));
 
+        // Only mark the order delivered when the sale actually saved — on failure,
+        // store() redirects back with an error instead of to the new invoice.
+        if (! str_contains($response->getTargetUrl(), '/sales/')) {
+            return $response;
+        }
+
         $onlineOrder->update(['status' => 'delivered']);
         return redirect()->route('online-orders.index')->with('success', 'Order converted to sale.');
     }
 
-    public function create() { return view('online-orders.create'); }
-    public function store(Request $r) { return back(); }
-    public function edit(OnlineOrder $o) { return view('online-orders.edit', compact('o')); }
-    public function update(Request $r, OnlineOrder $o) { return back(); }
-    public function destroy(OnlineOrder $o) { $o->delete(); return back(); }
+    public function destroy(OnlineOrder $o)
+    {
+        DB::transaction(function () use ($o) {
+            $o->items()->delete();   // FK: online_order_items reference the order
+            $o->delete();
+        });
+        return back()->with('success', 'Online order deleted.');
+    }
 }
 
 // =========================================================
@@ -536,7 +614,7 @@ class PurchaseReturnController extends Controller
     public function index(Request $request)
     {
         $returns = PurchaseReturn::with(['purchase.supplier'])
-            ->whereHas('purchase', fn($q) => $q->where('branch_id', auth()->user()->branch_id))
+            ->whereHas('purchase', fn($q) => $q->whereBranch(CurrentBranch::id()))
             ->latest()->paginate(20);
 
         return view('purchase-returns.index', compact('returns'));
@@ -544,35 +622,216 @@ class PurchaseReturnController extends Controller
 
     public function create()
     {
-        $purchases = Purchase::with('supplier')->where('branch_id', auth()->user()->branch_id)->latest()->limit(50)->get();
+        $branchId = CurrentBranch::id();
+
+        // Bills with at least one line that still has stock on hand from this purchase
+        // (returnable qty = the line's remaining cost layer). Embedded for the picker.
+        $purchases = Purchase::with(['supplier', 'items.product', 'items.layer'])
+            ->whereBranch($branchId)
+            ->latest()->limit(100)->get()
+            ->map(function ($p) {
+                $lines = $p->items->map(function ($it) {
+                        $remaining = $it->layer ? (float) $it->layer->qty_remaining : 0.0;
+                        return [
+                            'purchase_item_id' => $it->id,
+                            'name'             => $it->product?->name ?? 'Item',
+                            'purchased'        => (float) $it->quantity,
+                            'remaining'        => round($remaining, 3),
+                            'unit_price'       => (float) $it->unit_price,
+                        ];
+                    })
+                    ->filter(fn($l) => $l['remaining'] > 0.0005)
+                    ->values();
+
+                return [
+                    'id'       => $p->id,
+                    'bill_no'  => $p->bill_no,
+                    'supplier' => $p->supplier?->name ?? '—',
+                    'total'    => (float) $p->total,
+                    'lines'    => $lines,
+                ];
+            })
+            ->filter(fn($p) => count($p['lines']) > 0)
+            ->values();
+
         return view('purchase-returns.create', compact('purchases'));
     }
 
     public function store(Request $request)
     {
-        $request->validate(['purchase_id' => 'required|exists:purchases,id', 'return_amount' => 'required|numeric|min:0.01', 'reason' => 'required|string']);
+        $branchId = CurrentBranch::id();
+        $request->validate([
+            'purchase_id'              => 'required|exists:purchases,id',
+            'reason'                   => 'required|string',
+            'credit_method'            => 'required|in:credit_note,cash_refund,replacement',
+            'items'                    => 'required|array|min:1',
+            'items.*.purchase_item_id' => 'required|exists:purchase_items,id',
+            'items.*.quantity'         => 'nullable|numeric|min:0',
+        ]);
 
-        DB::transaction(function () use ($request) {
-            $purchase = Purchase::findOrFail($request->purchase_id);
-            PurchaseReturn::create([
-                'dr_note_no'    => 'DR-' . str_pad(PurchaseReturn::count() + 1, 4, '0', STR_PAD_LEFT),
-                'purchase_id'   => $request->purchase_id,
+        $purchase = Purchase::with(['items.layer', 'items.product'])
+            ->whereBranch($branchId)->find($request->purchase_id);
+        if (! $purchase) {
+            return back()->with('error', 'That purchase belongs to another branch.')->withInput();
+        }
+        $purchaseItems = $purchase->items->keyBy('id');
+
+        // Keep rows with a positive qty; cap each at the line's on-hand layer qty.
+        $lines = [];
+        foreach ($request->items as $row) {
+            $qty = (float) ($row['quantity'] ?? 0);
+            if ($qty <= 0) {
+                continue;
+            }
+            $pi = $purchaseItems->get((int) $row['purchase_item_id']);
+            if (! $pi) {
+                return back()->with('error', 'A returned item does not belong to the selected bill.')->withInput();
+            }
+            $onHand = $pi->layer ? (float) $pi->layer->qty_remaining : 0.0;
+            if ($qty - $onHand > 0.0005) {
+                $name = $pi->product?->name ?? 'item';
+                return back()->with('error', "You can return at most {$onHand} of \"{$name}\" (the rest was sold or already returned).")->withInput();
+            }
+            $lines[] = ['pi' => $pi, 'qty' => $qty];
+        }
+        if (empty($lines)) {
+            return back()->with('error', 'Enter a return quantity for at least one item.')->withInput();
+        }
+
+        DB::transaction(function () use ($request, $branchId, $purchase, $lines) {
+            $returnAmount = round(collect($lines)->sum(fn($l) => $l['qty'] * (float) $l['pi']->unit_price), 2);
+
+            $return = PurchaseReturn::create([
+                'dr_note_no'    => $this->nextDrNoteNo(),
+                'purchase_id'   => $purchase->id,
                 'supplier_id'   => $purchase->supplier_id,
                 'reason'        => $request->reason,
-                'return_amount' => $request->return_amount,
-                'status'        => 'pending',
+                'return_amount' => $returnAmount,
+                'credit_method' => $request->credit_method,
+                'status'        => $request->credit_method === 'replacement' ? 'pending' : 'credited',
                 'created_by'    => auth()->id(),
             ]);
-            Supplier::find($purchase->supplier_id)->decrement('balance_due', $request->return_amount);
+
+            foreach ($lines as $l) {
+                $pi       = $l['pi'];
+                $qty      = $l['qty'];
+                $layer    = $pi->layer;
+                $unitCost = $layer ? (float) $layer->cost : (float) $pi->unit_price;
+
+                \App\Models\PurchaseReturnItem::create([
+                    'purchase_return_id' => $return->id,
+                    'product_id'         => $pi->product_id,
+                    'purchase_item_id'   => $pi->id,
+                    'quantity'           => $qty,
+                    'unit_price'         => $pi->unit_price,
+                    'cost'               => round($unitCost * $qty, 2),
+                    'subtotal'           => round($qty * (float) $pi->unit_price, 2),
+                ]);
+
+                // Goods go back to the supplier: drop the line's layer + aggregate together.
+                if ($layer) {
+                    $layer->decrement('qty_remaining', $qty);
+                }
+                Stock::where('product_id', $pi->product_id)->whereBranch($branchId)->decrement('quantity', $qty);
+            }
+
+            // Settle the credit per the chosen method.
+            if ($request->credit_method === 'credit_note') {
+                // Reduce what we still owe the supplier (never below zero).
+                if ($supplier = Supplier::find($purchase->supplier_id)) {
+                    $dec = min((float) $supplier->balance_due, $returnAmount);
+                    if ($dec > 0) {
+                        $supplier->decrement('balance_due', $dec);
+                    }
+                }
+            } elseif ($request->credit_method === 'cash_refund') {
+                // Supplier hands cash back -> money into the till.
+                $account = Account::whereBranch($branchId)->where('type', 'cash')->first()
+                        ?? Account::whereBranch($branchId)->first();
+                if ($account) {
+                    Payment::create([
+                        'reference_no' => 'REF-' . strtoupper(Str::random(8)),
+                        'type'         => 'payment_in',
+                        'account_id'   => $account->id,
+                        'party_type'   => 'supplier',
+                        'party_id'     => $purchase->supplier_id,
+                        'purchase_id'  => $purchase->id,
+                        'amount'       => $returnAmount,
+                        'method'       => 'cash',
+                        'notes'        => "Refund for {$return->dr_note_no}",
+                        'created_by'   => auth()->id(),
+                    ]);
+                    $account->increment('balance', $returnAmount);
+                }
+            }
+            // 'replacement': goods returned, a fresh GRN brings the replacement — no money movement.
         });
 
         return redirect()->route('purchase-returns.index')->with('success', 'Dr. Note issued.');
     }
 
-    public function show(PurchaseReturn $purchaseReturn) { return view('purchase-returns.show', compact('purchaseReturn')); }
-    public function edit(PurchaseReturn $p) { return view('purchase-returns.edit', compact('p')); }
-    public function update(Request $r, PurchaseReturn $p) { return back(); }
-    public function destroy(PurchaseReturn $p) { $p->delete(); return back(); }
+    public function show(PurchaseReturn $purchaseReturn)
+    {
+        $purchaseReturn->load(['items.product', 'purchase.supplier', 'supplier']);
+        abort_if(! $purchaseReturn->purchase, 404);
+        CurrentBranch::guard($purchaseReturn->purchase->branch_id);
+        return view('purchase-returns.show', compact('purchaseReturn'));
+    }
+
+    public function destroy(PurchaseReturn $purchaseReturn)
+    {
+        $purchaseReturn->load(['items', 'purchase']);
+        $purchase = $purchaseReturn->purchase;
+        if (! $purchase || ! CurrentBranch::allows($purchase->branch_id)) {
+            return back()->with('error', 'Return not found for this branch.');
+        }
+
+        // Goods go back to the branch that bought them, not the branch being viewed.
+        $branchId = (int) $purchase->branch_id;
+
+        DB::transaction(function () use ($purchaseReturn, $purchase, $branchId) {
+            foreach ($purchaseReturn->items as $item) {
+                // Put the goods back on hand: restore the original layer if it still exists,
+                // otherwise add a fresh layer at the captured cost.
+                $layer = $item->purchase_item_id ? optional(\App\Models\PurchaseItem::find($item->purchase_item_id))->layer : null;
+                if ($layer) {
+                    $layer->increment('qty_remaining', (float) $item->quantity);
+                    Stock::where('product_id', $item->product_id)->whereBranch($branchId)->increment('quantity', (float) $item->quantity);
+                } elseif ($product = Product::find($item->product_id)) {
+                    $perUnit = ($item->cost !== null && (float) $item->quantity > 0)
+                        ? (float) $item->cost / (float) $item->quantity
+                        : (float) $item->unit_price;
+                    \App\Support\Inventory::addLayer($item->product_id, $branchId, (float) $item->quantity, $perUnit, (float) ($product->sale_price ?? 0), 'DR-REVERSE', now()->toDateString());
+                }
+            }
+
+            // Undo the credit that was applied.
+            if ($purchaseReturn->credit_method === 'credit_note') {
+                if ($s = Supplier::find($purchase->supplier_id)) {
+                    $s->increment('balance_due', $purchaseReturn->return_amount);
+                }
+            } elseif ($purchaseReturn->credit_method === 'cash_refund') {
+                $pays = Payment::where('purchase_id', $purchase->id)->where('type', 'payment_in')
+                    ->where('notes', 'like', '%' . $purchaseReturn->dr_note_no . '%')->get();
+                foreach ($pays as $p) {
+                    Account::where('id', $p->account_id)->decrement('balance', $p->amount);
+                    $p->delete();
+                }
+            }
+
+            $purchaseReturn->items()->delete();
+            $purchaseReturn->delete();
+        });
+
+        return redirect()->route('purchase-returns.index')->with('success', 'Purchase return reversed.');
+    }
+
+    private function nextDrNoteNo(): string
+    {
+        $last = PurchaseReturn::latest('id')->value('dr_note_no');
+        $num  = $last ? ((int) preg_replace('/\D/', '', $last)) + 1 : 1;
+        return 'DR-' . str_pad($num, 4, '0', STR_PAD_LEFT);
+    }
 }
 
 // =========================================================

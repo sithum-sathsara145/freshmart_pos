@@ -8,7 +8,8 @@
     $cell = 'background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 7px;outline:none;width:100%';
     $cols = '2.1fr 1fr .9fr 1fr 1fr 1fr .9fr 26px';
     $initialItems = $purchase->items->map(fn($i) => [
-        'id' => $i->product_id, 'name' => $i->product?->name, 'sku' => $i->product?->sku,
+        '_k' => 'e' . $i->id, 'custom' => ! $i->product_id,
+        'id' => $i->product_id, 'name' => $i->product?->name ?? $i->name, 'sku' => $i->product?->sku,
         'barcode' => $i->product?->barcode, 'unit' => $i->product?->unit,
         'is_weighed' => (bool) $i->product?->is_weighed, 'stock' => 0,
         'cur_cost' => $i->unit_price, 'cur_sale' => $i->sale_price, 'cur_mrp' => $i->mrp,
@@ -44,7 +45,10 @@
 </div>
 
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:16px;margin-bottom:12px">
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:8px">Items</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:500;color:#94a3b8">Items</div>
+        <button type="button" @click="addCustom()" style="height:26px;padding:0 10px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;color:#94a3b8;font-size:11px;cursor:pointer"><i class="ti ti-plus" style="font-size:11px"></i> Custom item</button>
+    </div>
     <div style="font-size:11px;color:#64748b;margin-bottom:10px">
         <i class="ti ti-lock" style="font-size:11px"></i>
         Weighed items already on the shelf lock their qty/cost (the running average cost can't be
@@ -84,29 +88,40 @@
     </div>
 
     {{-- Rows --}}
-    <template x-for="(it,i) in items" :key="it.id">
+    <template x-for="(it,i) in items" :key="it._k">
         <div style="margin-bottom:6px">
             <div style="display:grid;grid-template-columns:{{ $cols }};gap:5px;align-items:center">
-                <input type="hidden" :name="`items[${i}][product_id]`" :value="it.id">
+                <input type="hidden" :name="`items[${i}][product_id]`" :value="it.custom ? '' : it.id">
                 <div style="overflow:hidden">
-                    <div style="font-size:11px;color:#e2e8f0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden" x-text="it.name"></div>
-                    <div style="font-size:9px;color:#64748b;white-space:nowrap;text-overflow:ellipsis;overflow:hidden" x-text="it.barcode || it.sku"></div>
+                    <template x-if="!it.custom">
+                        <div>
+                            <div style="font-size:11px;color:#e2e8f0;white-space:nowrap;text-overflow:ellipsis;overflow:hidden" x-text="it.name"></div>
+                            <div style="font-size:9px;color:#64748b;white-space:nowrap;text-overflow:ellipsis;overflow:hidden" x-text="it.barcode || it.sku"></div>
+                            <input type="hidden" :name="`items[${i}][name]`" :value="it.name">
+                        </div>
+                    </template>
+                    <template x-if="it.custom">
+                        <input type="text" :name="`items[${i}][name]`" x-model="it.name" placeholder="Custom item name" required style="{{ $cell }}">
+                    </template>
                 </div>
                 <input type="text" :name="`items[${i}][batch_no]`" x-model="it.batch_no" placeholder="optional" style="{{ $cell }}">
                 <input type="number" :name="`items[${i}][quantity]`" x-model.number="it.qty" min="0.001" step="0.001"
                     :readonly="it.is_weighed && it.existing" :style="(it.is_weighed && it.existing) ? '{{ $cell }};opacity:.5;cursor:not-allowed' : '{{ $cell }}'">
                 <input type="number" :name="`items[${i}][unit_price]`" x-model.number="it.unit_price" min="0" step="0.01"
                     :readonly="it.is_weighed && it.existing" :style="(it.is_weighed && it.existing) ? '{{ $cell }};opacity:.5;cursor:not-allowed' : '{{ $cell }}'">
-                <input type="number" :name="`items[${i}][mrp]`" x-model.number="it.mrp" min="0" step="0.01" style="{{ $cell }}">
-                <input type="number" :name="`items[${i}][sale_price]`" x-model.number="it.sale_price" min="0" step="0.01" style="{{ $cell }}">
+                <input type="number" :name="`items[${i}][mrp]`" x-model.number="it.mrp" min="0" step="0.01" :disabled="it.custom" style="{{ $cell }}" :style="it.custom ? 'opacity:.4' : ''">
+                <input type="number" :name="`items[${i}][sale_price]`" x-model.number="it.sale_price" min="0" step="0.01" :disabled="it.custom" style="{{ $cell }}" :style="it.custom ? 'opacity:.4' : ''">
                 <span style="font-size:11px;color:#a5b4fc;text-align:right" x-text="lineTotal(it).toFixed(2)"></span>
                 <div @click="remove(i)" style="width:24px;height:24px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#f87171;font-size:12px"><i class="ti ti-x"></i></div>
             </div>
             <div style="font-size:10px;color:#64748b;padding:2px 2px 0">
-                <template x-if="it.is_weighed && it.existing">
+                <template x-if="it.custom">
+                    <span>Custom line — recorded on the bill only, not added to stock.</span>
+                </template>
+                <template x-if="!it.custom && it.is_weighed && it.existing">
                     <span><i class="ti ti-lock" style="font-size:9px"></i> Qty/cost locked — already on the shelf at this average cost.</span>
                 </template>
-                <template x-if="it.is_weighed && !it.existing">
+                <template x-if="!it.custom && it.is_weighed && !it.existing">
                     <span>Weighted-avg cost → <b style="color:#a5b4fc" x-text="'Rs. ' + wac(it).toFixed(2)"></b> · set the sale price manually.</span>
                 </template>
             </div>
@@ -142,24 +157,30 @@ function purchaseEditForm(initialItems) {
     return {
         query: '', results: [], items: initialItems || [],
         discount: {{ (float) $purchase->discount_amount }}, tax: {{ (float) $purchase->tax_amount }},
+        uid: 0,
 
         search() {
             const q = this.query.trim();
             if (!q) { this.results = []; return; }
             fetch(`/api/products/search?q=${encodeURIComponent(q)}&category=`)
                 .then(r => r.json())
-                .then(list => { this.results = list.filter(p => !this.items.find(x => x.id === p.id)); })
+                .then(list => { this.results = list.filter(p => !this.items.find(x => !x.custom && x.id === p.id)); })
                 .catch(() => { this.results = []; });
         },
         add(p) {
-            if (!this.items.find(x => x.id === p.id)) {
+            if (!this.items.find(x => !x.custom && x.id === p.id)) {
                 this.items.push({
+                    _k: 'n' + (++this.uid), custom: false,
                     id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, unit: p.unit,
                     is_weighed: p.is_weighed, stock: p.stock, existing: false,
                     cur_cost: p.purchase_price, cur_sale: p.price, cur_mrp: p.mrp,
                     batch_no: '', qty: 1, unit_price: p.purchase_price, mrp: p.mrp || '', sale_price: p.price,
                 });
             }
+            this.query = ''; this.results = [];
+        },
+        addCustom() {
+            this.items.push({ _k: 'n' + (++this.uid), custom: true, id: null, name: '', batch_no: '', qty: 1, unit_price: 0, mrp: '', sale_price: '', existing: false });
             this.query = ''; this.results = [];
         },
         remove(i) { this.items.splice(i, 1); },

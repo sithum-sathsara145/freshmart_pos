@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CurrentBranch;
+
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
@@ -156,7 +158,7 @@ class PosController extends Controller
     {
         $q = $request->get('q', '');
         $category = $request->get('category');
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         $products = Product::with(['category', 'brand'])
             ->where('status', 'active')
@@ -171,7 +173,7 @@ class PosController extends Controller
             ->get()
             ->map(function ($product) use ($branchId) {
                 $stock = Stock::where('product_id', $product->id)
-                              ->where('branch_id', $branchId)
+                              ->whereBranch($branchId)
                               ->value('quantity') ?? 0;
                 return [
                     'id'          => $product->id,
@@ -192,7 +194,7 @@ class PosController extends Controller
     // Ajax: find product by barcode (scanner)
     public function findByBarcode(string $barcode)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         // 1) Exact match first — covers manufacturer barcodes AND our internal/custom
         //    store barcodes. Doing this before scale-parsing means a stored barcode can
@@ -203,11 +205,11 @@ class PosController extends Controller
 
         if ($product) {
             $stock = Stock::where('product_id', $product->id)
-                          ->where('branch_id', $branchId)
+                          ->whereBranch($branchId)
                           ->value('quantity') ?? 0;
 
             $priceOptions = $product->is_weighed ? [] : StockLayer::where('product_id', $product->id)
-                ->where('branch_id', $branchId)
+                ->whereBranch($branchId)
                 ->where('qty_remaining', '>', 0)
                 ->distinct()
                 ->orderBy('sale_price')
@@ -248,7 +250,7 @@ class PosController extends Controller
                 $qty = $unitPrice > 0 ? round($scale['value'] / $unitPrice, 3) : 0; // value is the line price
             }
 
-            $stock = Stock::where('product_id', $product->id)->where('branch_id', $branchId)->value('quantity') ?? 0;
+            $stock = Stock::where('product_id', $product->id)->whereBranch($branchId)->value('quantity') ?? 0;
 
             return response()->json([
                 'id'          => $product->id,
@@ -285,6 +287,14 @@ class PosController extends Controller
             'card_amount'    => 'nullable|numeric|min:0',
         ]);
 
+        // A sale belongs to exactly one branch, so All-branches mode can't ring one up.
+        if (! $branchId = CurrentBranch::requireId()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pick a working branch before making sales.',
+            ], 422);
+        }
+
         // An assigned counter must have an open session before any sale
         $counterId = auth()->user()->counter_id;
         if ($counterId && ! CounterSession::where('counter_id', $counterId)->where('status', 'open')->exists()) {
@@ -292,7 +302,6 @@ class PosController extends Controller
         }
 
         // Block overselling — total requested per product (across lines) must fit branch stock.
-        $branchId = auth()->user()->branch_id;
         $needByProduct = [];
         foreach ($request->items as $item) {
             if (! empty($item['id'])) {
@@ -300,7 +309,7 @@ class PosController extends Controller
             }
         }
         foreach ($needByProduct as $pid => $needed) {
-            $onHand = (float) (Stock::where('product_id', $pid)->where('branch_id', $branchId)->value('quantity') ?? 0);
+            $onHand = (float) (Stock::where('product_id', $pid)->whereBranch($branchId)->value('quantity') ?? 0);
             if ($needed - $onHand > 0.0001) {
                 $name = Product::where('id', $pid)->value('name');
                 return response()->json([
@@ -313,7 +322,7 @@ class PosController extends Controller
         DB::beginTransaction();
 
         try {
-            $branchId  = auth()->user()->branch_id;
+            $branchId  = CurrentBranch::id();
             $counterId = auth()->user()->counter_id;
             $userId    = auth()->id();
 
@@ -439,7 +448,7 @@ class PosController extends Controller
 
             // Payment record(s) — one per tender (split sales create a cash and a card record).
             if ($paidAmount > 0) {
-                $account = Account::where('branch_id', $branchId)
+                $account = Account::whereBranch($branchId)
                                   ->where('type', 'cash')
                                   ->first();
                 if ($account) {
@@ -520,8 +529,12 @@ class PosController extends Controller
             'total'      => 'nullable|numeric|min:0',
         ]);
 
+        if (! $branchId = CurrentBranch::requireId()) {
+            return response()->json(['success' => false, 'message' => CurrentBranch::pickBranchMessage()], 422);
+        }
+
         $bill = HeldBill::create([
-            'branch_id'  => auth()->user()->branch_id,
+            'branch_id'  => $branchId,
             'user_id'    => auth()->id(),
             'label'      => $request->label,
             'item_count' => $request->item_count ?? count($request->input('payload.cart', [])),
@@ -534,7 +547,7 @@ class PosController extends Controller
 
     public function heldBills()
     {
-        $bills = HeldBill::where('branch_id', auth()->user()->branch_id)
+        $bills = HeldBill::whereBranch(CurrentBranch::id())
             ->latest()
             ->get(['id', 'label', 'item_count', 'total', 'created_at']);
 
@@ -543,7 +556,7 @@ class PosController extends Controller
 
     public function resumeHeld($id)
     {
-        $bill = HeldBill::where('branch_id', auth()->user()->branch_id)->findOrFail($id);
+        $bill = HeldBill::whereBranch(CurrentBranch::id())->findOrFail($id);
         $payload = $bill->payload;
         $bill->delete();   // removed once it's back in the cart
 
@@ -552,7 +565,7 @@ class PosController extends Controller
 
     public function discardHeld($id)
     {
-        HeldBill::where('branch_id', auth()->user()->branch_id)->where('id', $id)->delete();
+        HeldBill::whereBranch(CurrentBranch::id())->where('id', $id)->delete();
         return response()->json(['success' => true]);
     }
 

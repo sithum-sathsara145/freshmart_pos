@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CurrentBranch;
+
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SaleReturn;
@@ -21,10 +23,10 @@ class SaleController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = auth()->user()->branch_id;
+        $branchId = CurrentBranch::id();
 
         $sales = Sale::with(['customer', 'user'])
-            ->where('branch_id', $branchId)
+            ->whereBranch($branchId)
             ->when($request->search, fn($q) => $q->where(function ($q) use ($request) {
                 $q->where('invoice_no', 'like', "%{$request->search}%")
                   ->orWhereHas('customer', fn($q) => $q->where('name', 'like', "%{$request->search}%"));
@@ -38,16 +40,16 @@ class SaleController extends Controller
             ->withQueryString();
 
         // Sales are immutable; net the revenue cards by returns recorded in the same window.
-        $returnsToday = SaleReturn::whereHas('sale', fn($q) => $q->where('branch_id', $branchId))
+        $returnsToday = SaleReturn::whereHas('sale', fn($q) => $q->whereBranch($branchId))
             ->whereDate('created_at', today())->sum('return_amount');
-        $returnsMonth = SaleReturn::whereHas('sale', fn($q) => $q->where('branch_id', $branchId))
+        $returnsMonth = SaleReturn::whereHas('sale', fn($q) => $q->whereBranch($branchId))
             ->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->sum('return_amount');
 
         $stats = [
-            'today_total'  => Sale::where('branch_id', $branchId)->whereDate('created_at', today())->sum('total') - $returnsToday,
-            'today_count'  => Sale::where('branch_id', $branchId)->whereDate('created_at', today())->count(),
-            'month_total'  => Sale::where('branch_id', $branchId)->whereMonth('created_at', now()->month)->sum('total') - $returnsMonth,
-            'pending_dues' => Sale::where('branch_id', $branchId)->where('status', 'partial')->sum(DB::raw('total - paid_amount')),
+            'today_total'  => Sale::whereBranch($branchId)->whereDate('created_at', today())->sum('total') - $returnsToday,
+            'today_count'  => Sale::whereBranch($branchId)->whereDate('created_at', today())->count(),
+            'month_total'  => Sale::whereBranch($branchId)->whereMonth('created_at', now()->month)->sum('total') - $returnsMonth,
+            'pending_dues' => Sale::whereBranch($branchId)->where('status', 'partial')->sum(DB::raw('total - paid_amount')),
         ];
 
         return view('sales.index', compact('sales', 'stats'));
@@ -55,9 +57,9 @@ class SaleController extends Controller
 
     public function create(Request $request)
     {
-        $branchId  = auth()->user()->branch_id;
+        $branchId  = CurrentBranch::id();
         $customers = Customer::orderBy('name')->get();
-        $accounts  = Account::where('branch_id', $branchId)->get();
+        $accounts  = Account::whereBranch($branchId)->get();
         $products  = Product::where('status', 'active')->orderBy('name')->get()
             ->map(function ($p) use ($branchId) {
                 $p->current_stock = $p->stockForBranch($branchId);
@@ -69,7 +71,7 @@ class SaleController extends Controller
         $prefill = null;
         if ($request->from_quote) {
             $quote = Quotation::with('items.product')
-                ->where('branch_id', $branchId)
+                ->whereBranch($branchId)
                 ->find($request->from_quote);
             if ($quote && $quote->status !== 'converted') {
                 $prefill = [
@@ -104,10 +106,12 @@ class SaleController extends Controller
         // Line subtotal net of its own discount %; shared by the header + item rows.
         $lineSub = fn($i) => (float) $i['quantity'] * (float) $i['unit_price'] * (1 - (float) ($i['discount_pct'] ?? 0) / 100);
 
+        if (! $branchId = CurrentBranch::requireId()) {
+            return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
+        }
+
         DB::beginTransaction();
         try {
-            $branchId = auth()->user()->branch_id;
-
             $subtotal = collect($request->items)->sum($lineSub);
             $tax      = collect($request->items)->sum(fn($i) => $i['quantity'] * $i['unit_price'] * ($i['tax_percent'] ?? 0) / 100);
             $discount = (float) ($request->discount_amount ?? 0);
@@ -159,8 +163,8 @@ class SaleController extends Controller
             // Payment record — honour the chosen account, and map the sale's payment
             // method to a valid payments.method ENUM value ('cash','card','bank','cheque').
             if ($paid > 0) {
-                $account = ($request->account_id ? Account::where('branch_id', $branchId)->find($request->account_id) : null)
-                        ?? Account::where('branch_id', $branchId)->where('type', 'cash')->first();
+                $account = ($request->account_id ? Account::whereBranch($branchId)->find($request->account_id) : null)
+                        ?? Account::whereBranch($branchId)->where('type', 'cash')->first();
                 if ($account) {
                     $methodMap = ['cash' => 'cash', 'card' => 'card', 'bank_transfer' => 'bank', 'credit' => 'cash'];
                     Payment::create([
@@ -181,7 +185,7 @@ class SaleController extends Controller
             // If this sale came from a quotation, mark it converted now (not before).
             if ($request->from_quote) {
                 Quotation::where('id', $request->from_quote)
-                    ->where('branch_id', $branchId)
+                    ->whereBranch($branchId)
                     ->where('status', '!=', 'converted')
                     ->update(['status' => 'converted']);
             }
@@ -197,14 +201,14 @@ class SaleController extends Controller
 
     public function show(Sale $sale)
     {
-        abort_if((int) $sale->branch_id !== (int) auth()->user()->branch_id, 404);
+        CurrentBranch::guard($sale->branch_id);
         $sale->load(['items.product', 'customer', 'branch', 'user', 'payments']);
         return view('sales.show', compact('sale'));
     }
 
     public function destroy(Sale $sale)
     {
-        if ((int) $sale->branch_id !== (int) auth()->user()->branch_id) {
+        if (! CurrentBranch::allows($sale->branch_id)) {
             return back()->with('error', 'Sale not found for this branch.');
         }
         // Returns already re-added stock / refunded separately; reverse those first.
@@ -266,7 +270,7 @@ class SaleController extends Controller
     public function invoice(int $id)
     {
         $sale     = Sale::with(['items.product', 'customer', 'branch', 'user'])
-            ->where('branch_id', auth()->user()->branch_id)->findOrFail($id);
+            ->whereBranch(CurrentBranch::id())->findOrFail($id);
         $settings = \App\Models\Setting::pluck('value', 'key_name');
 
         $pdf = Pdf::loadView('sales.invoice_pdf', compact('sale', 'settings'))
@@ -279,7 +283,7 @@ class SaleController extends Controller
     public function receipt(int $id)
     {
         $sale     = Sale::with(['items.product', 'customer', 'branch'])
-            ->where('branch_id', auth()->user()->branch_id)->findOrFail($id);
+            ->whereBranch(CurrentBranch::id())->findOrFail($id);
         $settings = \App\Models\Setting::pluck('value', 'key_name');
 
         return view('sales.receipt', compact('sale', 'settings'));

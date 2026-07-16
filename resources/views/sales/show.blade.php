@@ -75,7 +75,7 @@
             <input type="number" name="amount" placeholder="Amount" max="{{ $sale->total - $sale->paid_amount }}"
                 style="flex:1;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:6px 10px;outline:none">
             <select name="account_id" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:6px 8px;outline:none">
-                @foreach(\App\Models\Account::where('branch_id',auth()->user()->branch_id)->get() as $acc)
+                @foreach(\App\Models\Account::whereBranch(\App\Support\CurrentBranch::id())->get() as $acc)
                 <option value="{{ $acc->id }}">{{ $acc->name }}</option>
                 @endforeach
             </select>
