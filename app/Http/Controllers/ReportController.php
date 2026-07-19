@@ -14,6 +14,7 @@ use App\Models\Product;
 use App\Models\Stock;
 use App\Models\Payment;
 use App\Support\ReportRange;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -88,6 +89,19 @@ class ReportController extends Controller
             ['title' => 'Rate list',        'desc' => 'Current price list',                  'icon' => 'ti-list-numbers',    'color' => '#94a3b8', 'url' => route('reports.rate_list', $q)],
             ['title' => 'Staff activity',   'desc' => 'Sales by cashier',                    'icon' => 'ti-users',           'color' => '#818cf8', 'url' => route('reports.user_reports', $q)],
         ];
+
+        // HRM reports are only listed for people who can actually open them, so
+        // nobody is shown a card that 403s.
+        $user = auth()->user();
+
+        if ($user->can('hrm.view')) {
+            $cards[] = ['title' => 'Attendance summary', 'desc' => 'Days, hours and overtime per staff', 'icon' => 'ti-calendar-check', 'color' => '#2dd4bf', 'url' => route('reports.hrm_attendance', $q)];
+            $cards[] = ['title' => 'Leave summary',      'desc' => 'Entitled, used and remaining',       'icon' => 'ti-beach',          'color' => '#fb923c', 'url' => route('reports.hrm_leave', $q)];
+        }
+
+        if ($user->can('hrm.payroll.manage')) {
+            $cards[] = ['title' => 'Payroll register', 'desc' => 'Monthly salary sheet with EPF/ETF', 'icon' => 'ti-report-money', 'color' => '#4ade80', 'url' => route('reports.hrm_payroll', $q)];
+        }
 
         return view('reports.index', compact('range', 'kpis', 'trend', 'cards'));
     }
@@ -439,11 +453,67 @@ class ReportController extends Controller
     }
 
     // Export any report as PDF / Excel / CSV
+    // ── HRM reports ───────────────────────────────────────────────────────
+
+    public function hrmAttendance(Request $request)
+    {
+        $range   = ReportRange::fromRequest($request);
+        $summary = $this->attendanceSummary(CurrentBranch::id(), $range->fromDate(), $range->toDate());
+
+        $totals = [
+            'present' => $summary->sum('present'),
+            'leave'   => $summary->sum('leave'),
+            'absent'  => $summary->sum('absent'),
+            'hours'   => round($summary->sum('hours'), 1),
+            'ot'      => round($summary->sum('ot'), 1),
+        ];
+
+        return view('reports.hrm_attendance', compact('range', 'summary', 'totals'));
+    }
+
+    public function hrmPayroll(Request $request)
+    {
+        $range    = ReportRange::fromRequest($request);
+        $payrolls = $this->payrollRegister(CurrentBranch::id(), $range->fromDate(), $range->toDate());
+
+        $totals = [
+            'gross'    => $payrolls->sum('gross_salary'),
+            'epf_emp'  => $payrolls->sum('epf_employee'),
+            'deduct'   => $payrolls->sum('deductions'),
+            'net'      => $payrolls->sum('net_salary'),
+            'employer' => $payrolls->sum(fn ($p) => $p->employerCost()),
+        ];
+
+        return view('reports.hrm_payroll', compact('range', 'payrolls', 'totals'));
+    }
+
+    public function hrmLeave(Request $request)
+    {
+        $range   = ReportRange::fromRequest($request);
+        $year    = (int) Carbon::parse($range->fromDate())->year;
+        $summary = $this->leaveSummary(CurrentBranch::id(), $year);
+
+        return view('reports.hrm_leave', compact('range', 'summary', 'year'));
+    }
+
     public function export(Request $request, string $type)
     {
         [$from, $to] = $this->dateRange($request);
         $format      = strtolower($request->input('format', 'pdf'));
         $branchId    = CurrentBranch::id();
+
+        // This one route serves every export type, so `reports.export` alone is not
+        // enough for the sensitive ones — otherwise anyone who can export a rate
+        // list could also pull the payroll register.
+        $extraPermission = [
+            'hrm_attendance' => 'hrm.view',
+            'hrm_payroll'    => 'hrm.payroll.manage',
+            'hrm_leave'      => 'hrm.view',
+            'profit_loss'    => 'reports.profit',
+            'product_sales'  => 'reports.profit',
+        ][$type] ?? null;
+
+        abort_if($extraPermission && ! auth()->user()->can($extraPermission), 403);
 
         $spec = $this->exportSpec($type, $branchId, $from, $to);
         abort_unless($spec, 404);
@@ -572,9 +642,133 @@ class ReportController extends Controller
                         rtrim(rtrim(number_format((float) $s->quantity, 3), '0'), '.'),
                     ])->all();
                 return ['Stock on hand', ['Product', 'Quantity'], $rows];
+
+            case 'hrm_attendance':
+                $summary = $this->attendanceSummary($branchId, $from, $to);
+                $rows = $summary->map(fn ($r) => [
+                    $r['name'], $r['role'],
+                    $r['present'], $r['half_day'], $r['leave'], $r['absent'],
+                    $this->trim($r['hours']), $this->trim($r['ot']),
+                ])->all();
+                $rows[] = [
+                    'Total', '',
+                    $summary->sum('present'), $summary->sum('half_day'),
+                    $summary->sum('leave'), $summary->sum('absent'),
+                    $this->trim($summary->sum('hours')), $this->trim($summary->sum('ot')),
+                ];
+                return ['Attendance summary',
+                    ['Staff', 'Job title', 'Present', 'Half day', 'Leave', 'Absent', 'Hours', 'Overtime'], $rows];
+
+            case 'hrm_payroll':
+                $payrolls = $this->payrollRegister($branchId, $from, $to);
+                $rows = $payrolls->map(fn ($p) => [
+                    $p->staff?->name ?? '—', $p->periodLabel(),
+                    $money($p->contract_salary), $money($p->basic_salary), $money($p->overtime_pay),
+                    $money($p->allowances), $money($p->gross_salary),
+                    $money($p->epf_employee), $money($p->deductions), $money($p->net_salary),
+                    $money($p->epf_employer), $money($p->etf), $money($p->employerCost()),
+                    ucfirst($p->status),
+                ])->all();
+                $rows[] = [
+                    'Total', '',
+                    $money($payrolls->sum('contract_salary')), $money($payrolls->sum('basic_salary')),
+                    $money($payrolls->sum('overtime_pay')), $money($payrolls->sum('allowances')),
+                    $money($payrolls->sum('gross_salary')), $money($payrolls->sum('epf_employee')),
+                    $money($payrolls->sum('deductions')), $money($payrolls->sum('net_salary')),
+                    $money($payrolls->sum('epf_employer')), $money($payrolls->sum('etf')),
+                    $money($payrolls->sum(fn ($p) => $p->employerCost())), '',
+                ];
+                return ['Payroll register',
+                    ['Staff', 'Period', 'Contract', 'Basic earned', 'Overtime', 'Allowances', 'Gross',
+                     'EPF 8%', 'Deductions', 'Net pay', 'EPF 12%', 'ETF 3%', 'Employer cost', 'Status'], $rows];
+
+            case 'hrm_leave':
+                $year = (int) Carbon::parse($from)->year;
+                $rows = [];
+                foreach ($this->leaveSummary($branchId, $year) as $entry) {
+                    foreach ($entry['balances'] as $b) {
+                        $rows[] = [
+                            $entry['staff']->name, $entry['staff']->role, $b['label'],
+                            $b['tracked'] ? $this->trim($b['entitled']) : '—',
+                            $this->trim($b['used']),
+                            $b['tracked'] ? $this->trim($b['remaining']) : '—',
+                        ];
+                    }
+                }
+                return ["Leave summary {$year}",
+                    ['Staff', 'Job title', 'Leave type', 'Entitled', 'Used', 'Remaining'], $rows];
         }
 
         return null;
+    }
+
+    /** Trailing-zero-free number, for day/hour counts that are usually whole. */
+    private function trim($value, int $dp = 1): string
+    {
+        return rtrim(rtrim(number_format((float) $value, $dp), '0'), '.');
+    }
+
+    /**
+     * Per-staff attendance totals for a period. Branch-scoped through the staff
+     * record, since attendance has no branch column of its own.
+     */
+    private function attendanceSummary(?int $branchId, string $from, string $to)
+    {
+        $staff = \App\Models\Staff::whereBranch($branchId)->orderBy('name')->get();
+
+        $rows = \App\Models\Attendance::whereIn('staff_id', $staff->pluck('id'))
+            ->whereBetween('date', [$from, $to])
+            ->get()
+            ->groupBy('staff_id');
+
+        return $staff->map(function ($s) use ($rows) {
+            $own = $rows->get($s->id, collect());
+
+            return [
+                'staff'    => $s,
+                'name'     => $s->name,
+                'role'     => $s->role,
+                'present'  => $own->where('status', 'present')->count(),
+                'half_day' => $own->where('status', 'half_day')->count(),
+                'leave'    => $own->where('status', 'leave')->count(),
+                'absent'   => $own->where('status', 'absent')->count(),
+                'hours'    => round((float) $own->sum('worked_hours'), 1),
+                'ot'       => round((float) $own->sum('overtime_hours'), 1),
+            ];
+        });
+    }
+
+    /**
+     * Payroll rows whose PERIOD overlaps the selected range. Payroll is stored as
+     * month/year rather than a date, so the range is matched against the period
+     * itself — picking "this month" finds this month's payroll even though the
+     * row was generated later.
+     */
+    private function payrollRegister(?int $branchId, string $from, string $to)
+    {
+        $fromDate = Carbon::parse($from)->startOfDay();
+        $toDate   = Carbon::parse($to)->endOfDay();
+
+        return \App\Models\Payroll::with('staff')
+            ->whereHas('staff', fn ($q) => $q->whereBranch($branchId))
+            ->get()
+            ->filter(function ($p) use ($fromDate, $toDate) {
+                $start = Carbon::create($p->year, $p->month, 1)->startOfMonth();
+
+                return $start->lessThanOrEqualTo($toDate) && $start->copy()->endOfMonth()->greaterThanOrEqualTo($fromDate);
+            })
+            ->sortBy([fn ($a, $b) => [$b->year, $b->month] <=> [$a->year, $a->month], fn ($a, $b) => strcmp($a->staff?->name, $b->staff?->name)])
+            ->values();
+    }
+
+    /** Entitled / used / remaining per staff member for a year. */
+    private function leaveSummary(?int $branchId, int $year)
+    {
+        return \App\Models\Staff::whereBranch($branchId)->orderBy('name')->get()
+            ->map(fn ($s) => [
+                'staff'    => $s,
+                'balances' => \App\Support\LeaveBalance::for($s, $year),
+            ]);
     }
 
     /** Excel/CSV download via OpenSpout (same pattern as the products export). */
