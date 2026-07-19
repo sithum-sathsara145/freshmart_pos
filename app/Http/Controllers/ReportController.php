@@ -17,7 +17,6 @@ use App\Support\ReportRange;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
@@ -439,27 +438,165 @@ class ReportController extends Controller
         return view('reports.user_reports', compact('cashiers', 'from', 'to'));
     }
 
-    // Export PDF or Excel
+    // Export any report as PDF / Excel / CSV
     public function export(Request $request, string $type)
     {
         [$from, $to] = $this->dateRange($request);
-        $format      = $request->format ?? 'pdf';
+        $format      = strtolower($request->input('format', 'pdf'));
         $branchId    = CurrentBranch::id();
 
-        // Build data based on type
-        $data = match($type) {
-            'sales'    => Sale::whereBranch($branchId)->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->with('customer')->get(),
-            'stock'    => Stock::whereBranch($branchId)->with('product.category')->get(),
-            'expenses' => Expense::whereBranch($branchId)->whereBetween('expense_date', [$from, $to])->with('category')->get(),
-            default    => collect(),
-        };
+        $spec = $this->exportSpec($type, $branchId, $from, $to);
+        abort_unless($spec, 404);
+
+        [$title, $headers, $rows] = $spec;
+        $basename = $type . '-' . $from . '-to-' . $to;
 
         if ($format === 'pdf') {
-            $pdf = Pdf::loadView("reports.export.{$type}_pdf", compact('data', 'from', 'to'))->setPaper('A4');
-            return $pdf->download("{$type}-report-{$from}-to-{$to}.pdf");
+            return Pdf::loadView('reports.export.table_pdf', [
+                    'title'   => $title,
+                    'period'  => $from . ' → ' . $to,
+                    'branch'  => CurrentBranch::name(),
+                    'headers' => $headers,
+                    'rows'    => $rows,
+                ])->setPaper('A4')
+                  ->download($basename . '.pdf');
         }
 
-        // Excel export via Maatwebsite
-        return Excel::download(new \App\Exports\ReportExport($data, $type), "{$type}-{$from}-{$to}.xlsx");
+        // The UI sends 'excel'; accept 'xlsx' too. Anything else falls back to CSV.
+        return $this->downloadSpreadsheet($headers, $rows, in_array($format, ['excel', 'xlsx']) ? 'xlsx' : 'csv', $basename);
+    }
+
+    /**
+     * [$title, $headers, $rows] for each export the report pages link to,
+     * or null for an unknown type. Money is pre-formatted so PDF and
+     * spreadsheet output stay identical.
+     */
+    private function exportSpec(string $type, ?int $branchId, string $from, string $to): ?array
+    {
+        $money = fn ($v) => number_format((float) $v, 2);
+
+        switch ($type) {
+            case 'sales':
+                $sales = Sale::whereBranch($branchId)
+                    ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
+                    ->with('customer')->latest()->get();
+                $rows = $sales->map(fn ($s) => [
+                    $s->invoice_no, $s->created_at->format('Y-m-d H:i'),
+                    $s->customer?->name ?? 'Walk-in', ucfirst($s->payment_method),
+                    ucfirst($s->status), $money($s->total),
+                ])->all();
+                $rows[] = ['', '', '', '', 'Total', $money($sales->sum('total'))];
+                return ['Sales report', ['Invoice', 'Date', 'Customer', 'Method', 'Status', 'Total (Rs.)'], $rows];
+
+            case 'expenses':
+                $expenses = Expense::whereBranch($branchId)
+                    ->whereBetween('expense_date', [$from, $to])
+                    ->with('category')->orderBy('expense_date')->get();
+                $rows = $expenses->map(fn ($e) => [
+                    $e->expense_date, $e->category?->name ?? '—', $e->description, $money($e->amount),
+                ])->all();
+                $rows[] = ['', '', 'Total', $money($expenses->sum('amount'))];
+                return ['Expenses report', ['Date', 'Category', 'Description', 'Amount (Rs.)'], $rows];
+
+            case 'payments':
+                // payments has no branch column — scope through the account it hit.
+                $payments = Payment::with('account')
+                    ->when($branchId, fn ($q, $b) => $q->whereHas('account', fn ($a) => $a->where('branch_id', $b)))
+                    ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
+                    ->latest()->get();
+                $rows = $payments->map(fn ($p) => [
+                    $p->reference_no, $p->created_at->format('Y-m-d H:i'),
+                    $p->type === 'payment_in' ? 'In' : 'Out',
+                    ucfirst($p->method), $p->account?->name ?? '—', $money($p->amount),
+                ])->all();
+                $in  = $payments->where('type', 'payment_in')->sum('amount');
+                $out = $payments->where('type', '!=', 'payment_in')->sum('amount');
+                $rows[] = ['', '', '', '', 'Total in', $money($in)];
+                $rows[] = ['', '', '', '', 'Total out', $money($out)];
+                return ['Payments report', ['Reference', 'Date', 'Type', 'Method', 'Account', 'Amount (Rs.)'], $rows];
+
+            case 'product_sales':
+                $lines = SaleItem::whereHas('sale', fn ($q) => $q->whereBranch($branchId)
+                        ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]))
+                    ->selectRaw('product_id, SUM(quantity) qty, SUM(subtotal) revenue, SUM(COALESCE(cost,0)) cost')
+                    ->groupBy('product_id')->with('product')
+                    ->orderByRaw('SUM(subtotal) DESC')->get();
+                $rows = $lines->map(fn ($l) => [
+                    $l->product?->name ?? 'Deleted product', rtrim(rtrim(number_format((float) $l->qty, 3), '0'), '.'),
+                    $money($l->revenue), $money($l->cost), $money($l->revenue - $l->cost),
+                ])->all();
+                return ['Product sales report', ['Product', 'Qty sold', 'Revenue (Rs.)', 'Cost (Rs.)', 'Profit (Rs.)'], $rows];
+
+            case 'profit_loss':
+                $returns  = $this->returnTotals($branchId, $from, $to);
+                $revenue  = Sale::whereBranch($branchId)->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])->sum('total');
+                $cogs     = SaleItem::whereHas('sale', fn ($q) => $q->whereBranch($branchId)
+                                ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]))->sum('cost');
+                $expenses = Expense::whereBranch($branchId)->whereBetween('expense_date', [$from, $to])->sum('amount');
+                $net      = $revenue - $returns['amount'];
+                $gross    = $net - $cogs + $returns['cogs'];
+                $rows = [
+                    ['Gross sales',        $money($revenue)],
+                    ['Sales returns',      '-' . $money($returns['amount'])],
+                    ['Net sales',          $money($net)],
+                    ['Cost of goods sold', '-' . $money($cogs - $returns['cogs'])],
+                    ['Gross profit',       $money($gross)],
+                    ['Expenses',           '-' . $money($expenses)],
+                    ['Net profit',         $money($gross - $expenses)],
+                ];
+                return ['Profit & loss', ['', 'Amount (Rs.)'], $rows];
+
+            case 'rate_list':
+                $rows = Product::where('status', 'active')->orderBy('name')->get()
+                    ->map(fn ($p) => [
+                        $p->name, $p->barcode ?? '—', $p->unit,
+                        $p->mrp ? $money($p->mrp) : '—', $money($p->sale_price),
+                    ])->all();
+                return ['Rate list', ['Product', 'Barcode', 'Unit', 'MRP (Rs.)', 'Sale price (Rs.)'], $rows];
+
+            case 'stock_alert':
+                $rows = Product::where('status', 'active')->where('min_stock', '>', 0)
+                    ->with('stocks')->orderBy('name')->get()
+                    ->filter(fn ($p) => $p->stockForBranch($branchId) < $p->min_stock)
+                    ->map(fn ($p) => [
+                        $p->name, $p->barcode ?? '—',
+                        rtrim(rtrim(number_format($p->stockForBranch($branchId), 3), '0'), '.'),
+                        $p->min_stock,
+                    ])->values()->all();
+                return ['Stock alert (below minimum)', ['Product', 'Barcode', 'On hand', 'Minimum'], $rows];
+
+            case 'stock':
+                $rows = Stock::whereBranch($branchId)->with('product')->get()
+                    ->map(fn ($s) => [
+                        $s->product?->name ?? 'Deleted product',
+                        rtrim(rtrim(number_format((float) $s->quantity, 3), '0'), '.'),
+                    ])->all();
+                return ['Stock on hand', ['Product', 'Quantity'], $rows];
+        }
+
+        return null;
+    }
+
+    /** Excel/CSV download via OpenSpout (same pattern as the products export). */
+    private function downloadSpreadsheet(array $headers, array $rows, string $format, string $basename)
+    {
+        $writer = $format === 'xlsx'
+            ? new \OpenSpout\Writer\XLSX\Writer()
+            : new \OpenSpout\Writer\CSV\Writer();
+
+        $tmp = tempnam(sys_get_temp_dir(), 'rpt');
+        $writer->openToFile($tmp);
+        $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues($headers));
+        foreach ($rows as $row) {
+            $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues(array_map(fn ($v) => $v ?? '', $row)));
+        }
+        $writer->close();
+
+        $mime = $format === 'xlsx'
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'text/csv';
+
+        return response()->download($tmp, $basename . '.' . $format, ['Content-Type' => $mime])
+                         ->deleteFileAfterSend(true);
     }
 }

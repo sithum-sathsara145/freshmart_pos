@@ -228,7 +228,11 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('permission:website.manage')->group(function () {
         Route::get('/website', [WebsiteController::class, 'index'])->name('website.index');
         Route::post('/website/settings', [WebsiteController::class, 'saveSettings'])->name('website.settings');
-        Route::resource('website/banners', BannerController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
+        // ->names(): a resource at 'website/banners' auto-names routes 'banners.*',
+        // but every view + controller redirect calls route('website.banners.*').
+        Route::resource('website/banners', BannerController::class)
+            ->only(['index', 'store', 'edit', 'update', 'destroy'])
+            ->names('website.banners');
     });
 
     // Settings

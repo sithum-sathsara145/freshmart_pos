@@ -22,8 +22,10 @@ counter sessions, and payments/cash flow.
   stock_layers + stock_adjustments + stock_transfers + purchase/sale/return items).
 - Sales/P&L/product-sales/dashboard are already **returns-netted** via
   `ReportController::returnTotals()` / `returnsByProduct()` — reuse these.
-- Export pipeline exists (`reports.export` route → DomPDF / Maatwebsite Excel) for
-  sales/stock/expenses; extend for the new reports.
+- Export pipeline REBUILT (2026-07-19): `reports.export/{type}` now serves PDF (DomPDF,
+  shared `reports/export/table_pdf` view) + Excel/CSV (OpenSpout — Maatwebsite was never
+  installed) for sales / expenses / payments / product_sales / profit_loss / rate_list /
+  stock_alert, branch-scoped and returns-netted. Extend `exportSpec()` for new reports.
 
 ### Design system (GA look, adapted to the dark UI)
 1. **Shared report shell** (`reports/layout` + partials) used by every report:
