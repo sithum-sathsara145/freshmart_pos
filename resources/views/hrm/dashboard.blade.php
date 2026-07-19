@@ -4,6 +4,35 @@
 @section('page-title','HRM — Human Resource Management')
 @section('content')
 <div style="padding:14px 16px">
+
+{{-- Self check-in. The check-in/check-out endpoints existed from the start but
+     nothing in the app ever called them. Only shown when this login actually has
+     an HR record to record against. --}}
+@if($myStaff)
+<div x-data="clockCard()" style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+    <div style="width:34px;height:34px;background:#1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#60a5fa;flex-shrink:0">
+        <i class="ti ti-clock-hour-8" style="font-size:17px"></i>
+    </div>
+    <div style="flex:1">
+        <div style="font-size:12px;color:#e2e8f0;font-weight:500">{{ $myStaff->name }}</div>
+        <div style="font-size:11px;color:#64748b" x-text="statusText">
+            @if($myAttendance?->time_in)
+                In at {{ substr($myAttendance->time_in, 0, 5) }}{{ $myAttendance->time_out ? ' · out at '.substr($myAttendance->time_out, 0, 5).' · '.number_format($myAttendance->worked_hours, 1).'h' : '' }}
+            @else
+                Not checked in today
+            @endif
+        </div>
+    </div>
+    <div style="display:flex;gap:6px">
+        <button type="button" @click="clock('in')" :disabled="busy"
+            style="height:32px;padding:0 14px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:12px;cursor:pointer">Check in</button>
+        <button type="button" @click="clock('out')" :disabled="busy"
+            style="height:32px;padding:0 14px;background:#1e2130;color:#94a3b8;border:.5px solid #2a2d3a;border-radius:6px;font-size:12px;cursor:pointer">Check out</button>
+    </div>
+    <div x-show="error" x-cloak x-text="error" style="font-size:11px;color:#fca5a5"></div>
+</div>
+@endif
+
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
     @foreach([['Total staff',$stats['total'],'#e2e8f0','ti-users'],['On duty',$stats['on_duty'],'#4ade80','ti-user-check'],['On leave',$stats['on_leave'],'#fb923c','ti-beach'],['Payroll due','Rs. '.number_format($stats['payroll_due']),'#a5b4fc','ti-cash']] as [$l,$v,$c,$i])
     <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:10px 12px">
@@ -58,4 +87,43 @@
 </div>
 </div>
 </div>
+
+@if($myStaff)
+@push('scripts')
+<script>
+function clockCard() {
+    return {
+        busy: false,
+        error: '',
+        statusText: null,          // null = keep the server-rendered text
+        async clock(direction) {
+            this.busy = true;
+            this.error = '';
+            try {
+                const res = await fetch(direction === 'in' ? @js(route('hrm.attendance.check_in')) : @js(route('hrm.attendance.check_out')), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                        'Accept': 'application/json',
+                    },
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    this.error = data.message || 'Could not record that.';
+                } else {
+                    this.statusText = direction === 'in'
+                        ? `Checked in at ${data.time}`
+                        : `Checked out at ${data.time} · ${Number(data.hours).toFixed(1)}h`;
+                }
+            } catch (e) {
+                this.error = 'Network error — try again.';
+            } finally {
+                this.busy = false;
+            }
+        },
+    };
+}
+</script>
+@endpush
+@endif
 @endsection

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\AttendanceRecorder;
 use App\Support\CurrentBranch;
 
 use App\Models\Product;
@@ -87,6 +88,8 @@ class PosController extends Controller
             $counter->update(['status' => 'open', 'cash_balance' => $opening]);
         });
 
+        $this->recordAttendance('in');
+
         return response()->json(['success' => true, 'opening' => $opening, 'message' => 'Counter opened.']);
     }
 
@@ -122,6 +125,8 @@ class PosController extends Controller
             $counter->update(['status' => 'closed', 'cash_balance' => $counted]);
         });
 
+        $this->recordAttendance('out');
+
         return response()->json([
             'success'   => true,
             'opening'   => (float) $session->opening_balance,
@@ -131,6 +136,32 @@ class PosController extends Controller
             'variance'  => $variance,
             'message'   => 'Counter closed.',
         ]);
+    }
+
+    /**
+     * Mirror a counter open/close onto the staff attendance sheet.
+     *
+     * Deliberately best-effort and deliberately OUTSIDE the counter-session
+     * transaction: a user with no HR record is a normal no-op, and an attendance
+     * failure must never roll back a till or stop someone selling. Anything that
+     * goes wrong is logged and swallowed.
+     */
+    private function recordAttendance(string $direction): void
+    {
+        try {
+            $staff = auth()->user()?->staff;
+
+            if (! $staff) {
+                return;   // no HR record — nothing to record against
+            }
+
+            $direction === 'in'
+                ? AttendanceRecorder::clockIn($staff)
+                : AttendanceRecorder::clockOut($staff);
+
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     // Keep only valid denomination => quantity pairs

@@ -45,7 +45,13 @@ class StaffController extends Controller
             ->groupBy('role')
             ->get();
 
-        return view('hrm.dashboard', compact('stats', 'todayAttendance', 'byDepartment'));
+        // The self check-in card only appears for logins that have an HR record.
+        $myStaff      = auth()->user()->staff;
+        $myAttendance = $myStaff
+            ? Attendance::where('staff_id', $myStaff->id)->whereDate('date', $today)->first()
+            : null;
+
+        return view('hrm.dashboard', compact('stats', 'todayAttendance', 'byDepartment', 'myStaff', 'myAttendance'));
     }
 
     public function index(Request $request)
