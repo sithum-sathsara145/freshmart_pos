@@ -102,7 +102,10 @@ class StaffController extends Controller
             ->where('year', now()->year)
             ->first();
 
-        return view('hrm.staff.show', compact('staff', 'currentPayroll'));
+        $year          = (int) now()->year;
+        $leaveBalances = \App\Support\LeaveBalance::for($staff, $year);
+
+        return view('hrm.staff.show', compact('staff', 'currentPayroll', 'leaveBalances', 'year'));
     }
 
     public function edit(Staff $staff)
@@ -132,6 +135,34 @@ class StaffController extends Controller
         $staff->update(['status' => 'inactive']);
 
         return redirect()->route('hrm.staff.index')->with('success', 'Staff deactivated.');
+    }
+
+    /**
+     * Adjust one person's leave entitlement for a year — the config defaults are
+     * a starting point, not a rule (long service often earns more annual leave).
+     */
+    public function updateEntitlements(Request $request, Staff $staff)
+    {
+        CurrentBranch::guard($staff->branch_id);
+
+        $data = $request->validate([
+            'year'            => 'required|integer|min:2000|max:2100',
+            'days'            => 'required|array',
+            'days.*'          => 'nullable|numeric|min:0|max:365',
+        ]);
+
+        foreach ($data['days'] as $type => $value) {
+            if (! array_key_exists($type, config('hrm.leave.defaults', []))) {
+                continue;
+            }
+
+            \App\Models\LeaveEntitlement::updateOrCreate(
+                ['staff_id' => $staff->id, 'year' => $data['year'], 'type' => $type],
+                ['entitled_days' => (float) ($value ?? 0)]
+            );
+        }
+
+        return back()->with('success', 'Leave entitlement updated.');
     }
 
     // ── helpers ───────────────────────────────────────────────────────────

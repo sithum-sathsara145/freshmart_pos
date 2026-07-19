@@ -689,6 +689,21 @@ CREATE TABLE leave_requests (
     FOREIGN KEY (staff_id) REFERENCES staff(id)
 );
 
+-- How many days of each leave type a person is entitled to in a year. Only the
+-- entitlement is stored; days USED are always summed from approved
+-- leave_requests, so there is no counter that can drift out of step.
+CREATE TABLE leave_entitlements (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    staff_id BIGINT UNSIGNED NOT NULL,
+    year SMALLINT NOT NULL,
+    type ENUM('annual','sick','casual','other') NOT NULL,
+    entitled_days DECIMAL(4,1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY le_staff_year_type (staff_id, year, type),
+    CONSTRAINT le_staff_fk FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
+);
+
 CREATE TABLE payroll (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     staff_id BIGINT UNSIGNED NOT NULL,

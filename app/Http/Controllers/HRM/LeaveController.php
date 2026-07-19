@@ -7,6 +7,7 @@ use App\Models\Attendance;
 use App\Models\LeaveRequest;
 use App\Models\Staff;
 use App\Support\CurrentBranch;
+use App\Support\LeaveBalance;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -26,11 +27,16 @@ class LeaveController extends Controller
         return view('hrm.leaves.index', compact('leaves'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $staff = Staff::whereBranch(CurrentBranch::id())->where('status', 'active')->orderBy('name')->get();
 
-        return view('hrm.leaves.create', compact('staff'));
+        // Balances for every selectable person, so the form can show the remaining
+        // days for whoever is picked without another round-trip.
+        $year     = (int) now()->year;
+        $balances = $staff->mapWithKeys(fn ($s) => [$s->id => LeaveBalance::for($s, $year)]);
+
+        return view('hrm.leaves.create', compact('staff', 'balances', 'year'));
     }
 
     public function store(Request $request)
@@ -43,10 +49,18 @@ class LeaveController extends Controller
             'reason'    => 'nullable|string',
         ]);
 
-        $days = $this->countLeaveDays($request->from_date, $request->to_date);
+        $days = LeaveBalance::countDays($request->from_date, $request->to_date);
 
         if ($days < 1) {
             return back()->withInput()->with('error', 'That range is entirely holidays — no leave days to record.');
+        }
+
+        $staff = Staff::findOrFail($request->staff_id);
+        $year  = (int) Carbon::parse($request->from_date)->year;
+
+        // Checked server-side; the form only hides the option.
+        if ($reason = LeaveBalance::refusalReason($staff, $request->type, $days, $year)) {
+            return back()->withInput()->with('error', $reason);
         }
 
         LeaveRequest::create([
@@ -55,13 +69,25 @@ class LeaveController extends Controller
             'status' => 'pending',
         ]);
 
-        return redirect()->route('hrm.leaves.index')->with('success', 'Leave request submitted.');
+        return redirect()->route('hrm.leaves.index')->with('success', "Leave request submitted for {$days} day(s).");
     }
 
     public function approve(int $id)
     {
         $leave = LeaveRequest::with('staff')->findOrFail($id);
         CurrentBranch::guard($leave->staff?->branch_id);
+
+        if ($leave->status === 'approved') {
+            return back()->with('error', 'That request is already approved.');
+        }
+
+        // Re-checked here, not just at request time: "used" counts approved leave,
+        // so two pending requests can each look affordable on their own and only
+        // bust the balance once both are approved.
+        $year = (int) Carbon::parse($leave->from_date)->year;
+        if ($reason = LeaveBalance::refusalReason($leave->staff, $leave->type, (float) $leave->days, $year)) {
+            return back()->with('error', $reason);
+        }
 
         $leave->update(['status' => 'approved', 'approved_by' => auth()->id()]);
 
@@ -102,37 +128,6 @@ class LeaveController extends Controller
     }
 
     // ── helpers ───────────────────────────────────────────────────────────
-
-    /**
-     * Days in the range that actually consume leave. Public/company holidays
-     * don't — nobody should spend annual leave on a day the shop is closed.
-     */
-    private function countLeaveDays(string $from, string $to): int
-    {
-        $current  = Carbon::parse($from);
-        $end      = Carbon::parse($to);
-        $skipDays = (array) config('hrm.leave.exclude_weekdays', []);
-
-        $holidays = config('hrm.leave.exclude_holidays', true)
-            ? \App\Models\Holiday::whereBetween('date', [$current->toDateString(), $end->toDateString()])
-                ->pluck('date')
-                ->map(fn ($d) => $d instanceof Carbon ? $d->toDateString() : (string) $d)
-                ->flip()
-            : collect();
-
-        $days = 0;
-        while ($current->lessThanOrEqualTo($end)) {
-            $isHoliday = $holidays->has($current->toDateString());
-            $isSkipped = in_array($current->format('l'), $skipDays, true);
-
-            if (! $isHoliday && ! $isSkipped) {
-                $days++;
-            }
-            $current->addDay();
-        }
-
-        return $days;
-    }
 
     private function branchStaffRule(): Exists
     {

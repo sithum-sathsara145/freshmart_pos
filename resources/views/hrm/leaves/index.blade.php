@@ -21,8 +21,8 @@
     <tr style="border-bottom:.5px solid #1a1d2a">
         <td style="padding:9px 12px;color:#e2e8f0;font-weight:500">{{ $l->staff?->name }}</td>
         <td style="padding:9px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#312e81;color:#a5b4fc">{{ ucfirst($l->type) }}</span></td>
-        <td style="padding:9px 12px;color:#64748b">{{ \Carbon\Carbon::parse($l->from_date)->format('d M') }}</td>
-        <td style="padding:9px 12px;color:#64748b">{{ \Carbon\Carbon::parse($l->to_date)->format('d M Y') }}</td>
+        <td style="padding:9px 12px;color:#64748b">{{ $l->from_date?->format('d M') }}</td>
+        <td style="padding:9px 12px;color:#64748b">{{ $l->to_date?->format('d M Y') }}</td>
         <td style="padding:9px 12px;text-align:center;color:#e2e8f0">{{ $l->days }}</td>
         <td style="padding:9px 12px;color:#94a3b8;font-size:11px">{{ Str::limit($l->reason,22) }}</td>
         <td style="padding:9px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ ['pending'=>'#451a03','approved'=>'#14532d','rejected'=>'#7f1d1d'][$l->status]??'#1e2130' }};color:{{ ['pending'=>'#fb923c','approved'=>'#4ade80','rejected'=>'#fca5a5'][$l->status]??'#94a3b8' }}">{{ ucfirst($l->status) }}</span></td>

@@ -66,6 +66,55 @@
         <div style="color:#64748b;font-size:12px">Not generated yet.</div>
         @endif
     </div>
+
+    {{-- Entitlement is stored; "used" is always summed from approved requests, so
+         the remaining figure can't drift away from the requests themselves. --}}
+    <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px;margin-top:12px"
+         x-data="{ editing: false }">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:12px;font-weight:500;color:#94a3b8">Leave balance {{ $year }}</div>
+            @can('hrm.staff.manage')
+            <button type="button" @click="editing = !editing"
+                style="background:none;border:none;color:#a5b4fc;font-size:11px;cursor:pointer;padding:0"
+                x-text="editing ? 'Cancel' : 'Adjust'"></button>
+            @endcan
+        </div>
+
+        <div x-show="!editing">
+            @foreach($leaveBalances as $b)
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0;border-bottom:.5px solid #1a1d2a">
+                <span style="color:#64748b">{{ $b['label'] }}</span>
+                @if($b['tracked'])
+                <span>
+                    <span style="color:{{ $b['remaining'] <= 0 ? '#f87171' : '#4ade80' }};font-weight:500">{{ rtrim(rtrim(number_format($b['remaining'],1),'0'),'.') }}</span>
+                    <span style="color:#4a5568"> / {{ rtrim(rtrim(number_format($b['entitled'],1),'0'),'.') }}</span>
+                    @if($b['used'] > 0)
+                    <span style="color:#4a5568;font-size:10px"> · {{ rtrim(rtrim(number_format($b['used'],1),'0'),'.') }} taken</span>
+                    @endif
+                </span>
+                @else
+                <span style="color:#64748b;font-size:11px">unpaid · {{ rtrim(rtrim(number_format($b['used'],1),'0'),'.') }} taken</span>
+                @endif
+            </div>
+            @endforeach
+        </div>
+
+        @can('hrm.staff.manage')
+        <form x-show="editing" x-cloak method="POST" action="{{ route('hrm.staff.entitlements', $staff) }}">
+            @csrf @method('PUT')
+            <input type="hidden" name="year" value="{{ $year }}">
+            @foreach($leaveBalances as $b)
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0">
+                <label style="color:#64748b;font-size:12px">{{ $b['label'] }}</label>
+                <input type="number" name="days[{{ $b['type'] }}]" value="{{ rtrim(rtrim(number_format($b['entitled'],1),'0'),'.') }}"
+                    min="0" max="365" step="0.5"
+                    style="width:74px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:12px;padding:4px 7px;outline:none;text-align:right">
+            </div>
+            @endforeach
+            <button type="submit" style="width:100%;margin-top:8px;height:30px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:11px;cursor:pointer">Save entitlement</button>
+        </form>
+        @endcan
+    </div>
 </div>
 
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px">

@@ -203,6 +203,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [StaffController::class, 'dashboard'])->name('dashboard');
         Route::resource('staff', StaffController::class)
             ->middlewareFor(['create', 'store', 'edit', 'update', 'destroy'], 'permission:hrm.staff.manage');
+        Route::put('/staff/{staff}/entitlements', [StaffController::class, 'updateEntitlements'])
+            ->middleware('permission:hrm.staff.manage')->name('staff.entitlements');
         Route::resource('attendance', AttendanceController::class)->only(['index', 'store', 'edit', 'update', 'destroy'])
             ->middlewareFor(['store', 'edit', 'update', 'destroy'], 'permission:hrm.attendance.manage');
         Route::post('/attendance/bulk', [AttendanceController::class, 'bulk'])->middleware('permission:hrm.attendance.manage')->name('attendance.bulk');
