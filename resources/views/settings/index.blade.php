@@ -267,7 +267,16 @@
                 {{ $u->name }}
                 @if($u->is(auth()->user()))<span style="font-size:9px;color:#64748b"> (you)</span>@endif
             </td>
-            <td style="padding:7px;color:#64748b">{{ $u->email }}</td>
+            <td style="padding:7px;color:#64748b">
+                {{ $u->email }}
+                {{-- Surfaces the HR side of the link so the connection is visible from
+                     both ends; the link itself is set on the staff form. --}}
+                @if($u->staff)
+                <a href="{{ route('hrm.staff.show', $u->staff) }}" title="HR record: {{ $u->staff->name }}"
+                   style="font-size:9px;color:#a5b4fc;text-decoration:none;margin-left:5px;padding:1px 5px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:8px;white-space:nowrap">
+                   <i class="ti ti-id-badge-2" style="font-size:9px"></i> HR</a>
+                @endif
+            </td>
             <td style="padding:7px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:#312e81;color:#a5b4fc">{{ $role?->displayName() ?? '—' }}</span></td>
             <td style="padding:7px;color:#64748b">{{ $u->branch?->name ?? '—' }}</td>
             <td style="padding:7px;text-align:center">

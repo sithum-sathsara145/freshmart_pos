@@ -149,6 +149,9 @@ class StaffController extends Controller
                 'exists:users,id',
                 Rule::unique('staff', 'user_id')->ignore($staff?->id),
             ],
+        ], [
+            'user_id.unique' => 'That login is already linked to another staff member.',
+            'role.in'        => 'Choose a job title from the list.',
         ]);
     }
 

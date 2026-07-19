@@ -10,10 +10,13 @@
             <i class="ti ti-search" style="font-size:13px;color:#64748b"></i>
             <input name="search" value="{{ request('search') }}" placeholder="Search name, phone..." style="background:none;border:none;outline:none;color:#e2e8f0;font-size:12px;width:100%">
         </div>
+        {{-- Same config list the create/edit forms use. This filter used to have its
+             own hardcoded list that didn't match what the form could produce, so most
+             job titles could never be filtered for. --}}
         <select name="role" style="height:34px;background:#161821;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;padding:0 8px;outline:none">
-            <option value="">All roles</option>
-            @foreach(['Cashier','Supervisor','Stock Manager','Delivery','Cleaning'] as $r)
-            <option value="{{ $r }}" {{ request('role')===$r?'selected':'' }}>{{ $r }}</option>
+            <option value="">All job titles</option>
+            @foreach(config('hrm.job_titles') as $value => $label)
+            <option value="{{ $value }}" @selected(request('role') === $value)>{{ $label }}</option>
             @endforeach
         </select>
         <button type="submit" style="height:34px;padding:0 12px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Filter</button>

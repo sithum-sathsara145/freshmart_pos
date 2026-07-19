@@ -479,7 +479,7 @@ class SettingController extends Controller
         // Users tab — super_admin accounts are invisible to everyone else, and
         // people who can't see all branches only see their own branch's staff.
         $actor = auth()->user();
-        $users = \App\Models\User::with('roles', 'branch')
+        $users = \App\Models\User::with('roles', 'branch', 'staff')
             ->when(! $actor->isSuperAdmin(), fn ($q) => $q->whereDoesntHave(
                 'roles',
                 fn ($r) => $r->where('name', \App\Models\Role::SUPER_ADMIN)

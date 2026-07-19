@@ -30,10 +30,10 @@
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <div>
-            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Role *</label>
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Job title *</label>
             <select name="role" required style="{{ $inp }}">
-                @foreach(['Manager','Cashier','Sales Assistant','Stock Keeper','Cleaner','Security','Other'] as $r)
-                <option value="{{ $r }}" {{ old('role',$staff->role)===$r?'selected':'' }}>{{ $r }}</option>
+                @foreach($jobTitles as $value => $label)
+                <option value="{{ $value }}" @selected(old('role', $staff->role) === $value)>{{ $label }}</option>
                 @endforeach
             </select>
         </div>
@@ -55,6 +55,21 @@
             </select>
         </div>
     </div>
+</div>
+
+<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:16px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:4px">Login account</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:10px;line-height:1.5">
+        Linking a login lets their POS counter sessions record attendance automatically.
+        Unlinking leaves the attendance and payroll history untouched.
+    </div>
+    <select name="user_id" style="{{ $inp }}">
+        <option value="">— no login account —</option>
+        @foreach($users as $u)
+        <option value="{{ $u->id }}" @selected(old('user_id', $staff->user_id) == $u->id)>{{ $u->name }} ({{ $u->email }})</option>
+        @endforeach
+    </select>
+    @error('user_id')<div style="font-size:11px;color:#fca5a5;margin-top:5px">{{ $message }}</div>@enderror
 </div>
 <div style="display:flex;gap:8px">
     <a href="{{ route('hrm.staff.show',$staff) }}" style="height:36px;padding:0 16px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;display:flex;align-items:center;text-decoration:none">Cancel</a>

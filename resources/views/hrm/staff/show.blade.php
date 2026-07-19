@@ -18,17 +18,40 @@
     <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:10px">Details</div>
         @foreach([
-            ['Role',$staff->role ?? '—'],
+            ['Job title',$staff->role ?? '—'],
             ['Phone',$staff->phone ?? '—'],
             ['Email',$staff->email ?? '—'],
             ['Address',$staff->address ?? '—'],
             ['Basic salary','Rs. '.number_format($staff->basic_salary,2)],
-            ['Joined',$staff->join_date ? \Carbon\Carbon::parse($staff->join_date)->format('d M Y') : '—'],
+            ['Joined',$staff->join_date?->format('d M Y') ?? '—'],
+            ['Branch',$staff->branch?->name ?? '—'],
         ] as [$l,$v])
         <div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:.5px solid #1a1d2a;font-size:12px">
             <span style="color:#64748b;white-space:nowrap">{{ $l }}</span><span style="color:#e2e8f0;text-align:right">{{ $v }}</span>
         </div>
         @endforeach
+
+        {{-- Job title (above) is an HR label; the system role below is what the app
+             actually authorises. They're deliberately different things. --}}
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:.5px solid #1a1d2a;font-size:12px">
+            <span style="color:#64748b;white-space:nowrap">Login account</span>
+            <span style="text-align:right">
+                @if($staff->user)
+                <span style="color:#e2e8f0">{{ $staff->user->email }}</span>
+                @if($staff->user->roles->isNotEmpty())
+                <span style="display:block;font-size:10px;color:#a5b4fc;margin-top:2px">
+                    system role: {{ $staff->user->roles->pluck('name')->map(fn($r) => str_replace('_',' ',$r))->implode(', ') }}
+                </span>
+                @endif
+                @else
+                <span style="color:#64748b">Not linked</span>
+                @can('hrm.staff.manage')
+                <a href="{{ route('hrm.staff.edit',$staff) }}" style="display:block;font-size:10px;color:#a5b4fc;margin-top:2px;text-decoration:none">Link an account →</a>
+                @endcan
+                @endif
+            </span>
+        </div>
+
         <div style="margin-top:10px;text-align:center">
             <span style="font-size:11px;padding:4px 14px;border-radius:10px;font-weight:500;background:{{ $staff->status==='active'?'#14532d':'#7f1d1d' }};color:{{ $staff->status==='active'?'#4ade80':'#fca5a5' }}">{{ strtoupper($staff->status) }}</span>
         </div>
