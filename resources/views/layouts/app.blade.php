@@ -203,8 +203,9 @@
             </a>
             @endcan
 
-            @can('hrm.view')
+            @canany(['hrm.view','hrm.self.view'])
             <div class="sidebar-section">HRM</div>
+            @can('hrm.view')
             <a href="{{ route('hrm.dashboard') }}" class="sidebar-link {{ request()->routeIs('hrm.*') ? 'active' : '' }}">
                 <i class="ti ti-id-badge"></i>HRM
             </a>
@@ -212,6 +213,14 @@
                 <i class="ti ti-users"></i>Staff Members
             </a>
             @endcan
+            {{-- Self-service is separate from the management area: a cashier gets
+                 this link without hrm.view, and so without any HRM access. --}}
+            @can('hrm.self.view')
+            <a href="{{ route('my.index') }}" class="sidebar-link {{ request()->routeIs('my.*') ? 'active' : '' }}">
+                <i class="ti ti-user-circle"></i>My HR
+            </a>
+            @endcan
+            @endcanany
 
             @canany(['online_orders.view','website.manage'])
             <div class="sidebar-section">Online</div>

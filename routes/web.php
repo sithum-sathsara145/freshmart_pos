@@ -26,6 +26,7 @@ use App\Http\Controllers\HRM\AttendanceController;
 use App\Http\Controllers\HRM\LeaveController;
 use App\Http\Controllers\HRM\PayrollController;
 use App\Http\Controllers\HRM\HolidayController;
+use App\Http\Controllers\HRM\SelfServiceController;
 use App\Http\Controllers\OnlineOrderController;
 use App\Http\Controllers\WebsiteController;
 use App\Http\Controllers\SettingController;
@@ -223,6 +224,22 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('holidays', HolidayController::class)->only(['index', 'store', 'destroy'])
             ->middlewareFor(['store', 'destroy'], 'permission:hrm.holidays.manage');
         // 'appreciations' module was never built (no views, no links) — route removed.
+    });
+
+    // My HR (self-service) — deliberately OUTSIDE the /hrm group above. Those
+    // routes govern everyone's records and need hrm.view; these only ever expose
+    // the signed-in user's own data, so a cashier reaches them without gaining
+    // any access to the HRM management area.
+    Route::prefix('my')->name('my.')->group(function () {
+        Route::get('/', [SelfServiceController::class, 'index'])->middleware('permission:hrm.self.view')->name('index');
+        Route::get('/attendance', [SelfServiceController::class, 'attendance'])->middleware('permission:hrm.self.view')->name('attendance');
+        Route::get('/payslips', [SelfServiceController::class, 'payslips'])->middleware('permission:hrm.self.view')->name('payslips');
+        Route::get('/payslips/{payroll}', [SelfServiceController::class, 'payslip'])->middleware('permission:hrm.self.view')->name('payslip');
+        Route::get('/leave', [SelfServiceController::class, 'leave'])->middleware('permission:hrm.self.view')->name('leave');
+        Route::post('/leave', [SelfServiceController::class, 'storeLeave'])->middleware('permission:hrm.self.leave')->name('leave.store');
+        Route::delete('/leave/{leave}', [SelfServiceController::class, 'destroyLeave'])->middleware('permission:hrm.self.leave')->name('leave.destroy');
+        Route::post('/attendance/check-in', [SelfServiceController::class, 'clockIn'])->middleware('permission:hrm.self.attendance')->name('checkin');
+        Route::post('/attendance/check-out', [SelfServiceController::class, 'clockOut'])->middleware('permission:hrm.self.attendance')->name('checkout');
     });
 
     // Online Orders

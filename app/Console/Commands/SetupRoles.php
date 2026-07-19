@@ -108,6 +108,21 @@ class SetupRoles extends Command
             Role::where('name', $name)->first()?->revokePermissionTo('branches.view_all');
         }
 
+        // ── 5b. Everyone gets self-service ────────────────────────────────
+        // Applied explicitly rather than via grantIfEmpty(), which only fires for
+        // roles that have no permissions at all — on an existing install that
+        // would silently skip every role. These only expose the holder's OWN
+        // record, so they're safe for every rank.
+        foreach (['manager', 'stock_manager', 'cashier'] as $name) {
+            if ($role = Role::where('name', $name)->first()) {
+                foreach (['hrm.self.view', 'hrm.self.leave', 'hrm.self.attendance'] as $permission) {
+                    if (! $role->hasPermissionTo($permission)) {
+                        $role->givePermissionTo($permission);
+                    }
+                }
+            }
+        }
+
         // ── 6. Accounts ───────────────────────────────────────────────────
         // The old admin@freshmart.lk was super_admin; super_admin is now
         // developer-only, so move it down to the new admin role.

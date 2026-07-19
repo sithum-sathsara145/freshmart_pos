@@ -202,6 +202,21 @@ return [
         ],
     ],
 
+    /*
+    | Self-service is deliberately its own group, NOT part of the hrm group above.
+    | Those permissions govern the management area (other people's records); these
+    | only ever expose the signed-in user's own data, so a cashier can hold all of
+    | them without gaining any visibility into HRM.
+    */
+    'self_service' => [
+        'label'       => 'My HR (self-service)',
+        'permissions' => [
+            'hrm.self.view'       => 'View own profile, attendance &amp; payslips',
+            'hrm.self.leave'      => 'Request own leave',
+            'hrm.self.attendance' => 'Check in / out for oneself',
+        ],
+    ],
+
     'online_orders' => [
         'label'       => 'Online orders',
         'permissions' => [
