@@ -79,7 +79,7 @@ class SetupRoles extends Command
             'accounts.view', 'expenses.view', 'expenses.create',
             'counter_sessions.view',
             'reports.view', 'reports.profit', 'reports.export',
-            'hrm.view', 'hrm.attendance.manage', 'hrm.leaves.approve',
+            'hrm.view', 'hrm.attendance.manage', 'hrm.leaves.request', 'hrm.leaves.approve',
             'online_orders.view', 'online_orders.manage',
             'users.view',
         ]);

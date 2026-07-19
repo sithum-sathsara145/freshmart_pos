@@ -193,9 +193,9 @@ return [
         'label'       => 'Staff (HRM)',
         'permissions' => [
             'hrm.view'               => 'View the HRM area',
-            'hrm.manage'             => 'Manage HRM generally',
             'hrm.staff.manage'       => 'Add / edit staff members',
             'hrm.attendance.manage'  => 'Manage attendance',
+            'hrm.leaves.request'     => 'File or delete leave requests',
             'hrm.leaves.approve'     => 'Approve or reject leave',
             'hrm.payroll.manage'     => 'Generate &amp; manage payroll',
             'hrm.holidays.manage'    => 'Manage holidays',

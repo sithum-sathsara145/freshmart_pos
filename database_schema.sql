@@ -615,7 +615,10 @@ CREATE TABLE staff (
     status ENUM('active','inactive') DEFAULT 'active',
     created_at TIMESTAMP NULL,
     updated_at TIMESTAMP NULL,
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
+    FOREIGN KEY (branch_id) REFERENCES branches(id),
+    -- Links an HR record to a login account. Nullable: cleaners and security may
+    -- never log in, and the developer account has no HR record.
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE attendance (
@@ -629,6 +632,9 @@ CREATE TABLE attendance (
     status ENUM('present','absent','leave','half_day') DEFAULT 'present',
     created_at TIMESTAMP NULL,
     updated_at TIMESTAMP NULL,
+    -- Attendance is written by updateOrCreate from three places (manual sheet,
+    -- counter session, self check-in) — without this the three can race.
+    UNIQUE KEY attendance_staff_date_unique (staff_id, `date`),
     FOREIGN KEY (staff_id) REFERENCES staff(id)
 );
 
@@ -661,8 +667,15 @@ CREATE TABLE payroll (
     staff_id BIGINT UNSIGNED NOT NULL,
     month TINYINT NOT NULL,
     year SMALLINT NOT NULL,
+    -- contract_salary is the agreed monthly figure; basic_salary is what was
+    -- actually earned after unpaid absence. Storing only the latter (as the
+    -- original schema did) lost the contract permanently.
+    contract_salary DECIMAL(15,2) NOT NULL DEFAULT 0,
+    worked_days DECIMAL(5,1) NOT NULL DEFAULT 0,
+    ot_hours DECIMAL(6,2) NOT NULL DEFAULT 0,
     basic_salary DECIMAL(15,2) DEFAULT 0,
     overtime_pay DECIMAL(15,2) DEFAULT 0,
+    gross_salary DECIMAL(15,2) NOT NULL DEFAULT 0,
     allowances DECIMAL(15,2) DEFAULT 0,
     deductions DECIMAL(15,2) DEFAULT 0,
     epf_employee DECIMAL(15,2) DEFAULT 0,
@@ -673,6 +686,7 @@ CREATE TABLE payroll (
     paid_at TIMESTAMP NULL,
     created_at TIMESTAMP NULL,
     updated_at TIMESTAMP NULL,
+    UNIQUE KEY payroll_staff_month_year_unique (staff_id, month, year),
     FOREIGN KEY (staff_id) REFERENCES staff(id)
 );
 

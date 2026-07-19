@@ -11,6 +11,16 @@ class Staff extends Model
 
     protected $fillable = ['user_id', 'branch_id', 'name', 'phone', 'email', 'address', 'role', 'basic_salary', 'join_date', 'status'];
 
+    protected $casts = [
+        'join_date'    => 'date',
+        'basic_salary' => 'decimal:2',
+    ];
+
+    public function isActive(): bool
+    {
+        return $this->status === 'active';
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);

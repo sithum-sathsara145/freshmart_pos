@@ -47,7 +47,13 @@
         <a href="{{ route('hrm.staff.index') }}" style="font-size:11px;padding:5px 10px;background:#312e81;color:#a5b4fc;border-radius:6px;text-decoration:none">Staff members</a>
         <a href="{{ route('hrm.attendance.index') }}" style="font-size:11px;padding:5px 10px;background:#1e2130;color:#94a3b8;border-radius:6px;text-decoration:none">Attendance</a>
         <a href="{{ route('hrm.leaves.index') }}" style="font-size:11px;padding:5px 10px;background:#1e2130;color:#94a3b8;border-radius:6px;text-decoration:none">Leaves</a>
+        @can('hrm.holidays.manage')
+        <a href="{{ route('hrm.holidays.index') }}" style="font-size:11px;padding:5px 10px;background:#1e2130;color:#94a3b8;border-radius:6px;text-decoration:none">Holidays</a>
+        @endcan
+        {{-- Managers don't hold hrm.payroll.manage, so an ungated link was a guaranteed 403. --}}
+        @can('hrm.payroll.manage')
         <a href="{{ route('hrm.payroll.index') }}" style="font-size:11px;padding:5px 10px;background:#1e2130;color:#94a3b8;border-radius:6px;text-decoration:none">Payroll</a>
+        @endcan
     </div>
 </div>
 </div>

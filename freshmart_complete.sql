@@ -642,7 +642,10 @@ CREATE TABLE staff (
     status ENUM('active','inactive') DEFAULT 'active',
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (branch_id) REFERENCES branches(id)
+    FOREIGN KEY (branch_id) REFERENCES branches(id),
+    -- Links an HR record to a login account. Nullable: cleaners and security may
+    -- never log in, and the developer account has no HR record.
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE attendance (
@@ -656,6 +659,9 @@ CREATE TABLE attendance (
     status ENUM('present','absent','leave','half_day') DEFAULT 'present',
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    -- Attendance is written by updateOrCreate from three places (manual sheet,
+    -- counter session, self check-in) — without this the three can race.
+    UNIQUE KEY attendance_staff_date_unique (staff_id, `date`),
     FOREIGN KEY (staff_id) REFERENCES staff(id)
 );
 
@@ -688,8 +694,15 @@ CREATE TABLE payroll (
     staff_id BIGINT UNSIGNED NOT NULL,
     month TINYINT NOT NULL,
     year SMALLINT NOT NULL,
+    -- contract_salary is the agreed monthly figure; basic_salary is what was
+    -- actually earned after unpaid absence. Storing only the latter (as the
+    -- original schema did) lost the contract permanently.
+    contract_salary DECIMAL(15,2) NOT NULL DEFAULT 0,
+    worked_days DECIMAL(5,1) NOT NULL DEFAULT 0,
+    ot_hours DECIMAL(6,2) NOT NULL DEFAULT 0,
     basic_salary DECIMAL(15,2) DEFAULT 0,
     overtime_pay DECIMAL(15,2) DEFAULT 0,
+    gross_salary DECIMAL(15,2) NOT NULL DEFAULT 0,
     allowances DECIMAL(15,2) DEFAULT 0,
     deductions DECIMAL(15,2) DEFAULT 0,
     epf_employee DECIMAL(15,2) DEFAULT 0,
@@ -700,6 +713,7 @@ CREATE TABLE payroll (
     paid_at TIMESTAMP NULL,
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY payroll_staff_month_year_unique (staff_id, month, year),
     FOREIGN KEY (staff_id) REFERENCES staff(id)
 );
 
@@ -821,7 +835,11 @@ INSERT INTO permissions (name, guard_name) VALUES
 ('accounts.view','web'),('accounts.manage','web'),
 ('expenses.view','web'),('expenses.create','web'),
 ('reports.view','web'),
-('hrm.view','web'),('hrm.manage','web'),
+-- NOTE: this list is a minimal bootstrap only. config/permissions.php is the
+-- source of truth (77 permissions); run `php artisan permissions:sync` and
+-- `php artisan roles:setup` after importing to get the full catalogue and the
+-- rank ladder. `hrm.manage` was removed — nothing ever referenced it.
+('hrm.view','web'),
 ('settings.access','web'),
 ('online_orders.view','web'),('online_orders.manage','web');
 
@@ -831,12 +849,15 @@ SELECT id, 1 FROM permissions;
 
 -- ── USERS ─────────────────────────────────────────────────
 -- Password for all: admin123 (bcrypt)
+-- The hash below is verified against 'admin123'. The previous one was NOT — it
+-- decoded to something else, so every account restored from this dump was
+-- impossible to log into despite the comment above claiming otherwise.
 INSERT INTO users (name, email, phone, password, branch_id, counter_id, status) VALUES
-('Admin User',     'admin@freshmart.lk',   '077-0000001', '$2y$12$8KGBdJFWGCEGFNxd7b4gOeSmzdaE6FDl5Ek0HJoJXZvl9L7wy6t3m', 1, 1, 'active'),
-('Sithara Perera', 'manager@freshmart.lk', '071-9876543', '$2y$12$8KGBdJFWGCEGFNxd7b4gOeSmzdaE6FDl5Ek0HJoJXZvl9L7wy6t3m', 1, NULL,'active'),
-('Nimal Kumara',   'cashier@freshmart.lk', '077-1234567', '$2y$12$8KGBdJFWGCEGFNxd7b4gOeSmzdaE6FDl5Ek0HJoJXZvl9L7wy6t3m', 1, 1,  'active'),
-('Ruwan Jayakody', 'stock@freshmart.lk',   '076-5554433', '$2y$12$8KGBdJFWGCEGFNxd7b4gOeSmzdaE6FDl5Ek0HJoJXZvl9L7wy6t3m', 1, NULL,'active'),
-('Amaya Mendis',   'kandy@freshmart.lk',   '078-3321100', '$2y$12$8KGBdJFWGCEGFNxd7b4gOeSmzdaE6FDl5Ek0HJoJXZvl9L7wy6t3m', 2, 3,  'active');
+('Admin User',     'admin@freshmart.lk',   '077-0000001', '$2y$12$eAtQe8G6tF56CuqcQvI2i.5vaoRezYm4u10Oj.qK66X1zCTJ0ESf2', 1, 1, 'active'),
+('Sithara Perera', 'manager@freshmart.lk', '071-9876543', '$2y$12$eAtQe8G6tF56CuqcQvI2i.5vaoRezYm4u10Oj.qK66X1zCTJ0ESf2', 1, NULL,'active'),
+('Nimal Kumara',   'cashier@freshmart.lk', '077-1234567', '$2y$12$eAtQe8G6tF56CuqcQvI2i.5vaoRezYm4u10Oj.qK66X1zCTJ0ESf2', 1, 1,  'active'),
+('Ruwan Jayakody', 'stock@freshmart.lk',   '076-5554433', '$2y$12$eAtQe8G6tF56CuqcQvI2i.5vaoRezYm4u10Oj.qK66X1zCTJ0ESf2', 1, NULL,'active'),
+('Amaya Mendis',   'kandy@freshmart.lk',   '078-3321100', '$2y$12$eAtQe8G6tF56CuqcQvI2i.5vaoRezYm4u10Oj.qK66X1zCTJ0ESf2', 2, 3,  'active');
 
 -- Assign roles
 INSERT INTO model_has_roles (role_id, model_type, model_id) VALUES
@@ -1167,18 +1188,20 @@ INSERT INTO leave_requests (staff_id, type, from_date, to_date, days, reason, st
 (2, 'annual', '2025-08-01', '2025-08-10',10, 'Overseas travel',               'approved', 1);
 
 -- ── PAYROLL ──────────────────────────────────────────────
-INSERT INTO payroll (staff_id, month, year, basic_salary, overtime_pay, allowances, deductions, epf_employee, epf_employer, etf, net_salary, status, paid_at) VALUES
+-- net_salary = basic + overtime + allowances - epf_employee - deductions.
+-- epf_employer and etf are employer contributions and are NOT subtracted.
+INSERT INTO payroll (staff_id, month, year, contract_salary, worked_days, ot_hours, basic_salary, overtime_pay, gross_salary, allowances, deductions, epf_employee, epf_employer, etf, net_salary, status, paid_at) VALUES
 -- May 2025 payroll
-(1, 5, 2025, 28000.00, 2100.00, 1500.00, 0.00, 2240.00, 3360.00, 840.00, 29360.00, 'paid', '2025-05-31 10:00:00'),
-(2, 5, 2025, 42000.00, 1500.00, 3000.00, 0.00, 3360.00, 5040.00,1260.00, 43140.00, 'paid', '2025-05-31 10:00:00'),
-(3, 5, 2025, 35000.00, 2100.00, 2000.00, 0.00, 2800.00, 4200.00,1050.00, 36300.00, 'paid', '2025-05-31 10:00:00'),
-(4, 5, 2025, 26000.00, 0.00,    1000.00, 0.00, 2080.00, 3120.00, 780.00, 24920.00, 'paid', '2025-05-31 10:00:00'),
-(5, 5, 2025, 22000.00, 0.00,    500.00,  0.00, 1760.00, 2640.00, 660.00, 20740.00, 'paid', '2025-05-31 10:00:00'),
-(6, 5, 2025, 18000.00, 0.00,    500.00,  0.00, 1440.00, 2160.00, 540.00, 17060.00, 'paid', '2025-05-31 10:00:00'),
+(1, 5, 2025, 28000.00, 26.0, 12.00, 28000.00, 2100.00, 31600.00, 1500.00, 0.00, 2240.00, 3360.00, 840.00, 29360.00, 'paid', '2025-05-31 10:00:00'),
+(2, 5, 2025, 42000.00, 26.0,  6.00, 42000.00, 1500.00, 46500.00, 3000.00, 0.00, 3360.00, 5040.00,1260.00, 43140.00, 'paid', '2025-05-31 10:00:00'),
+(3, 5, 2025, 35000.00, 26.0, 10.00, 35000.00, 2100.00, 39100.00, 2000.00, 0.00, 2800.00, 4200.00,1050.00, 36300.00, 'paid', '2025-05-31 10:00:00'),
+(4, 5, 2025, 26000.00, 26.0,  0.00, 26000.00, 0.00,    27000.00, 1000.00, 0.00, 2080.00, 3120.00, 780.00, 24920.00, 'paid', '2025-05-31 10:00:00'),
+(5, 5, 2025, 22000.00, 26.0,  0.00, 22000.00, 0.00,    22500.00, 500.00,  0.00, 1760.00, 2640.00, 660.00, 20740.00, 'paid', '2025-05-31 10:00:00'),
+(6, 5, 2025, 18000.00, 26.0,  0.00, 18000.00, 0.00,    18500.00, 500.00,  0.00, 1440.00, 2160.00, 540.00, 17060.00, 'paid', '2025-05-31 10:00:00'),
 -- June 2025 (pending)
-(1, 6, 2025, 28000.00, 2700.00, 1500.00, 0.00, 2240.00, 3360.00, 840.00, 29960.00, 'pending', NULL),
-(2, 6, 2025, 42000.00, 1500.00, 3000.00, 0.00, 3360.00, 5040.00,1260.00, 43140.00, 'pending', NULL),
-(3, 6, 2025, 35000.00, 2100.00, 2000.00, 0.00, 2800.00, 4200.00,1050.00, 36300.00, 'pending', NULL);
+(1, 6, 2025, 28000.00, 26.0, 15.00, 28000.00, 2700.00, 32200.00, 1500.00, 0.00, 2240.00, 3360.00, 840.00, 29960.00, 'pending', NULL),
+(2, 6, 2025, 42000.00, 26.0,  6.00, 42000.00, 1500.00, 46500.00, 3000.00, 0.00, 3360.00, 5040.00,1260.00, 43140.00, 'pending', NULL),
+(3, 6, 2025, 35000.00, 26.0, 10.00, 35000.00, 2100.00, 39100.00, 2000.00, 0.00, 2800.00, 4200.00,1050.00, 36300.00, 'pending', NULL);
 
 -- ── APPRECIATIONS ────────────────────────────────────────
 INSERT INTO appreciations (staff_id, category, note, given_by) VALUES

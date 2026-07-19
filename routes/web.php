@@ -205,13 +205,19 @@ Route::middleware(['auth'])->group(function () {
             ->middlewareFor(['create', 'store', 'edit', 'update', 'destroy'], 'permission:hrm.staff.manage');
         Route::resource('attendance', AttendanceController::class)->only(['index', 'store', 'edit', 'update', 'destroy'])
             ->middlewareFor(['store', 'edit', 'update', 'destroy'], 'permission:hrm.attendance.manage');
+        Route::post('/attendance/bulk', [AttendanceController::class, 'bulk'])->middleware('permission:hrm.attendance.manage')->name('attendance.bulk');
         Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn'])->name('attendance.check_in');
         Route::post('/attendance/check-out', [AttendanceController::class, 'checkOut'])->name('attendance.check_out');
-        Route::resource('leaves', LeaveController::class)->only(['index', 'create', 'store', 'destroy']);
+        // Filing/deleting leave was gated only by hrm.view, so anyone who could read
+        // the HRM area could file or delete leave for any employee.
+        Route::resource('leaves', LeaveController::class)->only(['index', 'create', 'store', 'destroy'])
+            ->middlewareFor(['create', 'store', 'destroy'], 'permission:hrm.leaves.request');
         Route::patch('/leaves/{id}/approve', [LeaveController::class, 'approve'])->middleware('permission:hrm.leaves.approve')->name('leaves.approve');
         Route::patch('/leaves/{id}/reject', [LeaveController::class, 'reject'])->middleware('permission:hrm.leaves.approve')->name('leaves.reject');
         Route::resource('payroll', PayrollController::class)->only(['index', 'update', 'destroy'])->middleware('permission:hrm.payroll.manage');
         Route::post('/payroll/generate', [PayrollController::class, 'generate'])->middleware('permission:hrm.payroll.manage')->name('payroll.generate');
+        Route::patch('/payroll/{payroll}/paid', [PayrollController::class, 'markPaid'])->middleware('permission:hrm.payroll.manage')->name('payroll.paid');
+        Route::get('/payroll/{payroll}/payslip', [PayrollController::class, 'payslip'])->middleware('permission:hrm.payroll.manage')->name('payroll.payslip');
         Route::resource('holidays', HolidayController::class)->only(['index', 'store', 'destroy'])
             ->middlewareFor(['store', 'destroy'], 'permission:hrm.holidays.manage');
         // 'appreciations' module was never built (no views, no links) — route removed.

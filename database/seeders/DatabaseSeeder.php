@@ -3,10 +3,9 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\Models\Permission;
 use App\Models\User;
 use App\Models\Branch;
 use App\Models\Counter;
@@ -37,59 +36,26 @@ class DatabaseSeeder extends Seeder
         Counter::create(['branch_id' => $main->id, 'name' => 'Counter 2', 'status' => 'closed', 'cash_balance' => 0]);
         Counter::create(['branch_id' => $kandy->id, 'name' => 'Counter 1', 'status' => 'open', 'cash_balance' => 0]);
 
-        // ── Permissions ───────────────────────────────────────
-        $permissions = [
-            'pos.access',
-            'dashboard.view',
-            'sales.view', 'sales.create', 'sales.edit', 'sales.delete',
-            'purchases.view', 'purchases.create', 'purchases.edit', 'purchases.delete',
-            'products.view', 'products.create', 'products.edit', 'products.delete',
-            'stock.view', 'stock.adjust', 'stock.transfer',
-            'customers.view', 'customers.create', 'customers.edit',
-            'suppliers.view', 'suppliers.create', 'suppliers.edit',
-            'accounts.view', 'accounts.manage',
-            'expenses.view', 'expenses.create',
-            'reports.view',
-            'hrm.view', 'hrm.manage',
-            'settings.access',
-            'online_orders.view', 'online_orders.manage',
-        ];
-
-        foreach ($permissions as $perm) {
-            Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
-        }
-
-        // ── Roles ─────────────────────────────────────────────
-        $superAdmin = Role::firstOrCreate(['name' => 'super_admin']);
-        $superAdmin->givePermissionTo(Permission::all());
-
-        $manager = Role::firstOrCreate(['name' => 'manager']);
-        $manager->givePermissionTo([
-            'dashboard.view', 'pos.access',
-            'sales.view', 'sales.create', 'sales.edit',
-            'purchases.view', 'purchases.create',
-            'products.view', 'products.create', 'products.edit',
-            'stock.view', 'stock.adjust',
-            'customers.view', 'customers.create',
-            'suppliers.view',
-            'accounts.view',
-            'expenses.view', 'expenses.create',
-            'reports.view',
-            'hrm.view',
-            'online_orders.view', 'online_orders.manage',
-        ]);
-
-        $cashier = Role::firstOrCreate(['name' => 'cashier']);
-        $cashier->givePermissionTo(['dashboard.view', 'pos.access', 'sales.view', 'sales.create', 'customers.view', 'customers.create', 'products.view']);
-
-        $stockMgr = Role::firstOrCreate(['name' => 'stock_manager']);
-        $stockMgr->givePermissionTo(['dashboard.view', 'products.view', 'products.create', 'products.edit', 'stock.view', 'stock.adjust', 'stock.transfer', 'purchases.view', 'purchases.create']);
+        // ── Permissions & roles ───────────────────────────────
+        // Delegated to the canonical commands rather than duplicated here. This
+        // seeder used to carry its own hardcoded list, which drifted badly: it
+        // knew 34 permissions against the catalogue's 77, still created the dead
+        // `hrm.manage`, and granted nothing to most roles — so a fresh `db:seed`
+        // left every newer route 403 for everyone but super_admin.
+        //
+        // config/permissions.php is the source of truth; roles:setup owns the
+        // rank ladder and the baseline grants. Both are idempotent.
+        Artisan::call('permissions:sync');
+        Artisan::call('roles:setup');
 
         // ── Users ─────────────────────────────────────────────
         $admin = User::firstOrCreate(['email' => 'admin@freshmart.lk'], [
             'name' => 'Admin User', 'password' => Hash::make('admin123'), 'branch_id' => $main->id, 'counter_id' => $counter1->id, 'status' => 'active',
         ]);
-        $admin->assignRole('super_admin');
+        // Admin, not super_admin: super_admin is the hidden developer account that
+        // roles:setup creates separately. Assigning it here would hand every fresh
+        // install a second invisible all-access account.
+        $admin->syncRoles(['admin']);
 
         $mgr = User::firstOrCreate(['email' => 'manager@freshmart.lk'], [
             'name' => 'Sithara Perera', 'password' => Hash::make('admin123'), 'branch_id' => $main->id, 'status' => 'active',
