@@ -95,6 +95,7 @@ Written for everyone (no technical knowledge needed).
 _Newest first. New ideas and improvements are added here as they come up._
 
 <!-- NEW-FEATURES -->
+- **2026-07-20 — End-of-day cash float & banking** — Set a float per counter that stays in the drawer overnight. When the counter is closed, the rest is banked into the cash or bank account the cashier picks.
 - **2026-07-20 — Import received goods** — Upload a supplier's invoice as a spreadsheet to add stock for many products at once. It creates a real purchase at the cost you were charged and puts the amount on the supplier's balance.
 - **2026-07-20 — Supplier list import & export** — Download the supplier list as CSV/Excel, edit it, and upload it back — matching rows update instead of duplicating.
 - **2026-07-19 — Light & dark mode** — The whole system now comes in a light theme as well as the original dark one. Use the sun/moon button in the top bar to switch; your choice is remembered on that device.

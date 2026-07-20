@@ -414,22 +414,31 @@
 </div>
 
 <div id="sec-counters" class="settings-section" style="display:none">
-<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px">
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:10px">POS Counters</div>
+<div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:14px">
+    <div style="font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:4px">POS Counters</div>
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">
+        The <b style="color:var(--text-2)">float</b> is the cash left in the drawer when the counter is closed, ready for the next day.
+        Everything above it gets banked into the account the cashier picks at close.
+    </div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="border-bottom:.5px solid #2a2d3a">
-            <th style="padding:7px;text-align:left;color:#64748b;font-weight:500;font-size:11px">Counter</th>
-            <th style="padding:7px;color:#64748b;font-weight:500;font-size:11px">Branch</th>
-            <th style="padding:7px;color:#64748b;font-weight:500;font-size:11px">Cash balance</th>
-            <th style="padding:7px;color:#64748b;font-weight:500;font-size:11px">Status</th>
+        <thead><tr style="border-bottom:.5px solid var(--border)">
+            <th style="padding:7px;text-align:left;color:var(--text-3);font-weight:500;font-size:11px">Counter</th>
+            <th style="padding:7px;color:var(--text-3);font-weight:500;font-size:11px">Branch</th>
+            <th style="padding:7px;color:var(--text-3);font-weight:500;font-size:11px">Cash balance</th>
+            <th style="padding:7px;color:var(--text-3);font-weight:500;font-size:11px">Float kept at close</th>
+            <th style="padding:7px;color:var(--text-3);font-weight:500;font-size:11px">Status</th>
         </tr></thead>
         <tbody>
         @foreach($counters as $c)
-        <tr style="border-bottom:.5px solid #1a1d2a">
-            <td style="padding:7px;color:#e2e8f0;font-weight:500">{{ $c->name }}</td>
-            <td style="padding:7px;color:#94a3b8">{{ $c->branch?->name }}</td>
-            <td style="padding:7px;color:#4ade80">Rs. {{ number_format($c->cash_balance) }}</td>
-            <td style="padding:7px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ $c->status==='open'?'#14532d':'#1e2130' }};color:{{ $c->status==='open'?'#4ade80':'#94a3b8' }}">{{ ucfirst($c->status) }}</span></td>
+        <tr style="border-bottom:.5px solid var(--surface-3)">
+            <td style="padding:7px;color:var(--text);font-weight:500">{{ $c->name }}</td>
+            <td style="padding:7px;color:var(--text-2)">{{ $c->branch?->name }}</td>
+            <td style="padding:7px;color:var(--success)">Rs. {{ number_format($c->cash_balance) }}</td>
+            <td style="padding:7px">
+                <input type="number" name="counter_float[{{ $c->id }}]" value="{{ (float) $c->float_amount }}" min="0" step="0.01"
+                    style="width:110px;height:28px;background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;padding:0 8px;outline:none">
+            </td>
+            <td style="padding:7px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ $c->status==='open'?'var(--success-soft)':'var(--surface-2)' }};color:{{ $c->status==='open'?'var(--success)':'var(--text-2)' }}">{{ ucfirst($c->status) }}</span></td>
         </tr>
         @endforeach
         </tbody>

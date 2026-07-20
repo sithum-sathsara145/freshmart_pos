@@ -706,7 +706,36 @@ input[type=number]{-moz-appearance:textfield}
                     <span x-text="closeVariance===0 ? 'Balanced' : (closeVariance>0 ? 'Over by' : 'Short by')"></span>
                     <span x-text="'Rs. ' + Math.abs(closeVariance).toLocaleString()"></span>
                 </div>
-                <div x-show="closeError" x-cloak x-text="closeError" style="color:#f87171;font-size:11px;margin-top:8px"></div>
+                {{-- Float stays in the drawer for tomorrow; the rest gets banked. --}}
+                <div x-show="closeTotal > 0" x-cloak
+                     style="background:var(--bg);border:.5px solid var(--border);border-radius:8px;padding:10px;margin-top:10px;font-size:12px">
+                    <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px">
+                        <span>Leave in till</span>
+                        <span x-text="'Rs. ' + closeFloat.toLocaleString()"></span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;color:var(--text);font-weight:600">
+                        <span>Bank</span>
+                        <span x-text="'Rs. ' + closeDeposit.toLocaleString()"></span>
+                    </div>
+                    <template x-if="closeDeposit > 0 && depositAccounts.length">
+                        <select x-model="depositAccountId"
+                                style="width:100%;height:32px;margin-top:8px;background:var(--surface);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:0 8px;outline:none">
+                            <option value="">Leave it in the till</option>
+                            <template x-for="a in depositAccounts" :key="a.id">
+                                <option :value="a.id" x-text="a.name + ' (' + a.type + ')'"></option>
+                            </template>
+                        </select>
+                    </template>
+                    <div x-show="closeDeposit > 0 && !depositAccounts.length" x-cloak
+                         style="font-size:10px;color:var(--text-3);margin-top:6px">
+                        No account to bank into — add one under Cash &amp; Bank first.
+                    </div>
+                    <div x-show="floatAmount > closeTotal" x-cloak
+                         style="font-size:10px;color:var(--warning);margin-top:6px">
+                        Counted less than the Rs. <span x-text="floatAmount.toLocaleString()"></span> float — everything stays in the till.
+                    </div>
+                </div>
+                <div x-show="closeError" x-cloak x-text="closeError" style="color:var(--danger);font-size:11px;margin-top:8px"></div>
                 <div style="display:flex;gap:8px;margin-top:14px">
                     <button @click="showCloseModal=false" style="flex:1;height:36px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
                     <button @click="submitClose()" style="flex:1;height:36px;background:var(--danger-solid);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Close counter</button>
@@ -728,6 +757,16 @@ input[type=number]{-moz-appearance:textfield}
                          :style="(closeResult && closeResult.variance===0) ? 'color:var(--success)' : 'color:var(--danger)'">
                         <span x-text="!closeResult ? '' : (closeResult.variance===0 ? 'Balanced' : (closeResult.variance>0 ? 'Over by' : 'Short by'))"></span>
                         <span x-text="closeResult ? 'Rs. ' + Math.abs(closeResult.variance).toLocaleString() : ''"></span>
+                    </div>
+                    <div style="margin-top:8px;padding-top:8px;border-top:.5px solid var(--border)">
+                        <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px">
+                            <span>Left in till</span>
+                            <span x-text="closeResult ? 'Rs. ' + (closeResult.float || 0).toLocaleString() : ''"></span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;color:var(--text-2)">
+                            <span x-text="closeResult && closeResult.deposit_to ? 'Banked to ' + closeResult.deposit_to : 'Banked'"></span>
+                            <span x-text="closeResult ? 'Rs. ' + (closeResult.deposit || 0).toLocaleString() : ''"></span>
+                        </div>
                     </div>
                 </div>
                 <button @click="window.location.href = dashboardUrl" style="width:100%;height:38px;background:var(--primary-soft);border:.5px solid var(--primary-border);border-radius:7px;color:var(--primary-text);font-size:13px;font-weight:600;cursor:pointer">Done</button>
@@ -816,6 +855,8 @@ window.__POS = {
     openingBalance: {{ $openSession ? (float) $openSession->opening_balance : 0 }},
     cashSalesSoFar: {{ $openSession ? (float) ($openSession->cash_sales_so_far ?? 0) : 0 }},
     prevClose: @json($lastClose ? ['balance' => (float) $lastClose->closing_balance, 'denoms' => ($lastClose->closing_denoms ?? [])] : null),
+    floatAmount: {{ $counter ? (float) $counter->float_amount : 0 }},
+    depositAccounts: @json($depositAccounts),
 };
 </script>
 <script>
@@ -990,6 +1031,9 @@ function posScreen() {
         openingBalance: (window.__POS && window.__POS.openingBalance) || 0,
         cashSalesSoFar: (window.__POS && window.__POS.cashSalesSoFar) || 0,
         prevClose: (window.__POS && window.__POS.prevClose) || null,
+        floatAmount: (window.__POS && window.__POS.floatAmount) || 0,
+        depositAccounts: (window.__POS && window.__POS.depositAccounts) || [],
+        depositAccountId: '',
         showOpenModal: false,
         showCloseModal: false,
         openDenoms: {},
@@ -1574,6 +1618,9 @@ function posScreen() {
         get closeTotal() { return this.denomsTotal(this.closeDenoms); },
         get closeExpected() { return this.openingBalance + this.cashSalesSoFar; },
         get closeVariance() { return Math.round((this.closeTotal - this.closeExpected) * 100) / 100; },
+        // You can only leave behind what you actually counted.
+        get closeFloat() { return Math.min(this.floatAmount, this.closeTotal); },
+        get closeDeposit() { return Math.round((this.closeTotal - this.closeFloat) * 100) / 100; },
 
         openCounterPrompt() {
             this.openError = '';
@@ -1614,7 +1661,7 @@ function posScreen() {
                 const res = await fetch('/pos/counter/close', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
-                    body: JSON.stringify({ denoms: this.closeDenoms }),
+                    body: JSON.stringify({ denoms: this.closeDenoms, deposit_account_id: this.depositAccountId || null }),
                 });
                 const data = await res.json();
                 if (data.success) {

@@ -31,7 +31,7 @@ class CounterSessionController extends Controller
 
     public function show(CounterSession $counterSession)
     {
-        $counterSession->load(['counter', 'openedBy', 'closedBy']);
+        $counterSession->load(['counter', 'openedBy', 'closedBy', 'depositAccount']);
         return view('counter-sessions.show', compact('counterSession'));
     }
 }

@@ -665,13 +665,19 @@ class SettingController extends Controller
 
     public function save(Request $request)
     {
+        // Per-counter floats live on the counters table, not in settings.
+        foreach ($request->input('counter_float', []) as $counterId => $amount) {
+            \App\Models\Counter::where('id', $counterId)
+                ->update(['float_amount' => max(0, (float) $amount)]);
+        }
+
         // Never let API-key fields flow through the generic plaintext save.
         $reserved = collect(config('api_credentials', []))
             ->flatMap(fn ($g) => array_keys($g['fields']))
             ->flatMap(fn ($k) => [$k, $k . '_clear'])
             ->all();
 
-        foreach ($request->except(array_merge(['_token', '_method'], $reserved)) as $key => $value) {
+        foreach ($request->except(array_merge(['_token', '_method', 'counter_float'], $reserved)) as $key => $value) {
             Setting::updateOrCreate(['key_name' => $key], ['value' => $value]);
         }
         return back()->with('success', 'Settings saved.');

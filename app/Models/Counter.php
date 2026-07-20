@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Counter extends Model
 {
-    protected $fillable = ['branch_id', 'name', 'cash_balance', 'status'];
+    protected $fillable = ['branch_id', 'name', 'cash_balance', 'float_amount', 'status'];
 
     public function branch(): BelongsTo
     {

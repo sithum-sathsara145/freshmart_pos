@@ -47,7 +47,20 @@ class PosController extends Controller
             }
         }
 
-        return view('pos.index', compact('categories', 'branch', 'counter', 'openSession', 'lastClose')
+        // Where the day's takings can be banked. The branch cash account is left
+        // out: it is the one POS sales already pay into, so "moving" cash there
+        // would not represent anything.
+        $cashAccountId = $counter
+            ? Account::whereBranch($counter->branch_id)->where('type', 'cash')->value('id')
+            : null;
+
+        $depositAccounts = $counter
+            ? Account::whereBranch($counter->branch_id)
+                ->when($cashAccountId, fn ($q) => $q->where('id', '!=', $cashAccountId))
+                ->orderBy('type')->orderBy('name')->get(['id', 'name', 'type'])
+            : collect();
+
+        return view('pos.index', compact('categories', 'branch', 'counter', 'openSession', 'lastClose', 'depositAccounts')
             + ['denominations' => self::DENOMINATIONS]);
     }
 
@@ -111,30 +124,79 @@ class PosController extends Controller
         $expected  = (float) $session->opening_balance + $cashSales;
         $variance  = round($counted - $expected, 2);
 
-        DB::transaction(function () use ($session, $counter, $denoms, $counted, $cashSales, $expected, $variance) {
+        // Keep tomorrow's float in the drawer and bank the rest. You cannot leave
+        // behind more than was actually counted, however the float is configured.
+        $float   = min((float) $counter->float_amount, $counted);
+        $deposit = round($counted - $float, 2);
+
+        // POS sales already credit the branch cash account as they happen, so
+        // banking the takings is a transfer OUT of that account — crediting the
+        // destination without debiting it would count the same money twice.
+        $cashAccount = Account::whereBranch($counter->branch_id)->where('type', 'cash')->first();
+        $destination = $request->filled('deposit_account_id')
+            ? Account::whereBranch($counter->branch_id)->find($request->deposit_account_id)
+            : null;
+
+        if ($deposit > 0 && $destination && $cashAccount && $destination->id === $cashAccount->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'That is the account the till already pays into — pick a different one to bank into.',
+            ], 422);
+        }
+
+        $banked = ($deposit > 0 && $destination && $cashAccount) ? $deposit : 0.0;
+
+        DB::transaction(function () use (
+            $session, $counter, $denoms, $counted, $cashSales, $expected,
+            $variance, $float, $banked, $cashAccount, $destination
+        ) {
             $session->update([
-                'closed_by'        => auth()->id(),
-                'closing_denoms'   => $denoms,
-                'closing_balance'  => $counted,
-                'cash_sales'       => $cashSales,
-                'expected_closing' => $expected,
-                'variance'         => $variance,
-                'status'           => 'closed',
-                'closed_at'        => now(),
+                'closed_by'          => auth()->id(),
+                'closing_denoms'     => $denoms,
+                'closing_balance'    => $counted,
+                'cash_sales'         => $cashSales,
+                'expected_closing'   => $expected,
+                'variance'           => $variance,
+                'float_retained'     => $float,
+                'deposit_amount'     => $banked,
+                'deposit_account_id' => $banked > 0 ? $destination->id : null,
+                'status'             => 'closed',
+                'closed_at'          => now(),
             ]);
-            $counter->update(['status' => 'closed', 'cash_balance' => $counted]);
+
+            // cash_balance is what is physically left in the drawer.
+            $counter->update(['status' => 'closed', 'cash_balance' => $float]);
+
+            if ($banked > 0) {
+                $cashAccount->decrement('balance', $banked);
+                $destination->increment('balance', $banked);
+
+                Payment::create([
+                    'reference_no'  => 'DEP-' . strtoupper(Str::random(8)),
+                    'type'          => 'transfer',
+                    'account_id'    => $cashAccount->id,
+                    'to_account_id' => $destination->id,
+                    'amount'        => $banked,
+                    'method'        => 'cash',
+                    'notes'         => "End-of-day banking — {$counter->name}",
+                    'created_by'    => auth()->id(),
+                ]);
+            }
         });
 
         $this->recordAttendance('out');
 
         return response()->json([
-            'success'   => true,
-            'opening'   => (float) $session->opening_balance,
-            'cash_sales'=> $cashSales,
-            'expected'  => $expected,
-            'counted'   => $counted,
-            'variance'  => $variance,
-            'message'   => 'Counter closed.',
+            'success'    => true,
+            'opening'    => (float) $session->opening_balance,
+            'cash_sales' => $cashSales,
+            'expected'   => $expected,
+            'counted'    => $counted,
+            'variance'   => $variance,
+            'float'      => $float,
+            'deposit'    => $banked,
+            'deposit_to' => $banked > 0 ? $destination->name : null,
+            'message'    => 'Counter closed.',
         ]);
     }
 

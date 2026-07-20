@@ -11,7 +11,8 @@ class CounterSession extends Model
         'counter_id', 'branch_id', 'opened_by', 'closed_by',
         'opening_balance', 'opening_denoms',
         'cash_sales', 'expected_closing', 'closing_balance', 'closing_denoms',
-        'variance', 'status', 'opened_at', 'closed_at',
+        'variance', 'float_retained', 'deposit_amount', 'deposit_account_id',
+        'status', 'opened_at', 'closed_at',
     ];
 
     protected $casts = [
@@ -22,6 +23,8 @@ class CounterSession extends Model
         'expected_closing' => 'decimal:2',
         'closing_balance'  => 'decimal:2',
         'variance'         => 'decimal:2',
+        'float_retained'   => 'decimal:2',
+        'deposit_amount'   => 'decimal:2',
         'opened_at'        => 'datetime',
         'closed_at'        => 'datetime',
     ];
@@ -39,5 +42,11 @@ class CounterSession extends Model
     public function closedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'closed_by');
+    }
+
+    /** Where the takings were banked when the counter was closed. */
+    public function depositAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'deposit_account_id');
     }
 }

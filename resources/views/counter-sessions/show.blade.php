@@ -38,6 +38,20 @@
         <span>Rs. {{ number_format(abs($s->variance), 2) }}</span>
     </div>
     @endif
+
+    {{-- What happened to the cash after counting --}}
+    @if($s->float_retained !== null)
+    <div style="margin-top:10px;padding-top:8px;border-top:.5px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px">
+            <span>Left in till</span>
+            <span style="color:var(--text)">Rs. {{ number_format($s->float_retained, 2) }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2)">
+            <span>Banked{{ $s->depositAccount ? ' to ' . $s->depositAccount->name : '' }}</span>
+            <span style="color:{{ $s->deposit_amount > 0 ? 'var(--success)' : 'var(--text-3)' }}">Rs. {{ number_format($s->deposit_amount ?? 0, 2) }}</span>
+        </div>
+    </div>
+    @endif
 </div>
 
 {{-- Denomination breakdowns --}}
