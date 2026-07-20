@@ -3,14 +3,14 @@
 @section('title','New Leave Request')
 @section('page-title','New Leave Request')
 @section('content')
-@php $inp = 'width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box'; @endphp
+@php $inp = 'width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box'; @endphp
 <div style="padding:14px 16px;max-width:480px" x-data="leaveForm()">
 <form method="POST" action="{{ route('hrm.leaves.store') }}">
 @csrf
-<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:16px;margin-bottom:12px">
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Leave details</div>
+<div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:12px">Leave details</div>
     <div style="margin-bottom:10px">
-        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Staff member *</label>
+        <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Staff member *</label>
         <select name="staff_id" x-model="staffId" required style="{{ $inp }}">
             <option value="">— Select staff —</option>
             @foreach($staff as $s)
@@ -21,14 +21,14 @@
 
     {{-- Remaining days for whoever is selected. Server re-checks on submit; this
          is only here so nobody fills in a request they can't have. --}}
-    <div x-show="balance" x-cloak style="margin-bottom:10px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:9px 11px">
-        <div style="font-size:10px;color:#64748b;margin-bottom:6px">Balance for {{ $year }}</div>
+    <div x-show="balance" x-cloak style="margin-bottom:10px;background:var(--bg);border:.5px solid var(--border);border-radius:6px;padding:9px 11px">
+        <div style="font-size:10px;color:var(--text-3);margin-bottom:6px">Balance for {{ $year }}</div>
         <div style="display:flex;gap:14px;flex-wrap:wrap">
             <template x-for="row in (balance || [])" :key="row.type">
                 <div style="font-size:11px">
-                    <span style="color:#64748b" x-text="row.label"></span>
+                    <span style="color:var(--text-3)" x-text="row.label"></span>
                     <span style="margin-left:4px;font-weight:500"
-                          :style="row.tracked && row.remaining <= 0 ? 'color:#f87171' : (row.tracked ? 'color:#4ade80' : 'color:#94a3b8')"
+                          :style="row.tracked && row.remaining <= 0 ? 'color:var(--danger)' : (row.tracked ? 'color:var(--success)' : 'color:var(--text-2)')"
                           x-text="row.tracked ? (row.remaining + ' / ' + row.entitled) : 'unpaid'"></span>
                 </div>
             </template>
@@ -36,7 +36,7 @@
     </div>
 
     <div style="margin-bottom:10px">
-        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Leave type *</label>
+        <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Leave type *</label>
         <select name="type" x-model="type" required style="{{ $inp }}">
             @foreach(['annual'=>'Annual','sick'=>'Sick','casual'=>'Casual','other'=>'Other (unpaid)'] as $v=>$l)
             <option value="{{ $v }}" {{ old('type','casual')===$v?'selected':'' }}>{{ $l }}</option>
@@ -45,25 +45,25 @@
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <div>
-            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">From *</label>
+            <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">From *</label>
             <input type="date" name="from_date" x-model="from" value="{{ old('from_date',today()->toDateString()) }}" required style="{{ $inp }}">
         </div>
         <div>
-            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">To *</label>
+            <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">To *</label>
             <input type="date" name="to_date" x-model="to" value="{{ old('to_date',today()->toDateString()) }}" required style="{{ $inp }}">
         </div>
     </div>
 
-    <div x-show="warning" x-cloak style="margin-bottom:10px;background:#451a03;border:.5px solid #854d0e;border-radius:6px;padding:8px 11px;font-size:11px;color:#fbbf24" x-text="warning"></div>
+    <div x-show="warning" x-cloak style="margin-bottom:10px;background:var(--warning-soft);border:.5px solid var(--warning-border);border-radius:6px;padding:8px 11px;font-size:11px;color:var(--warning-2)" x-text="warning"></div>
 
     <div>
-        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Reason</label>
+        <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Reason</label>
         <input type="text" name="reason" value="{{ old('reason') }}" placeholder="optional" style="{{ $inp }}">
     </div>
 </div>
 <div style="display:flex;gap:8px">
-    <a href="{{ route('hrm.leaves.index') }}" style="height:36px;padding:0 16px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;display:flex;align-items:center;text-decoration:none">Cancel</a>
-    <button type="submit" style="height:36px;padding:0 20px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-check" style="font-size:13px;margin-right:4px"></i>Submit Request</button>
+    <a href="{{ route('hrm.leaves.index') }}" style="height:36px;padding:0 16px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;display:flex;align-items:center;text-decoration:none">Cancel</a>
+    <button type="submit" style="height:36px;padding:0 20px;background:var(--success-soft);color:var(--success);border:.5px solid var(--success-border);border-radius:6px;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-check" style="font-size:13px;margin-right:4px"></i>Submit Request</button>
 </div>
 </form>
 </div>

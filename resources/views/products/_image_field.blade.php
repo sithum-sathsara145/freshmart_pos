@@ -7,23 +7,23 @@
 @endpush
 
 @php $hasImg = ($product ?? null) && $product->imageUrl(); @endphp
-<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px">
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Product image</div>
+<div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:14px">
+    <div style="font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:12px">Product image</div>
 
     {{-- Preview: existing image, or the just-confirmed crop (shown via JS) --}}
     <div id="img-preview-wrap" style="{{ $hasImg ? '' : 'display:none' }};position:relative;margin-bottom:8px">
         <img id="img-preview" src="{{ $hasImg ? $product->imageUrl() : '' }}"
-             style="width:100%;height:160px;object-fit:cover;border-radius:8px;background:#0f1117">
+             style="width:100%;height:160px;object-fit:cover;border-radius:8px;background:var(--bg)">
         <button type="button" id="img-remove" title="Remove image"
-            style="position:absolute;top:6px;right:6px;width:26px;height:26px;background:rgba(15,17,23,.85);border:.5px solid #2a2d3a;border-radius:6px;color:#f87171;cursor:pointer;display:flex;align-items:center;justify-content:center">
+            style="position:absolute;top:6px;right:6px;width:26px;height:26px;background:var(--overlay);border:.5px solid var(--border);border-radius:6px;color:var(--danger);cursor:pointer;display:flex;align-items:center;justify-content:center">
             <i class="ti ti-trash" style="font-size:14px"></i>
         </button>
         {{-- Upload progress overlay --}}
-        <div id="img-progress" style="display:none;position:absolute;inset:0;background:rgba(8,9,13,.72);border-radius:8px;flex-direction:column;align-items:center;justify-content:center;gap:8px">
-            <div style="width:78%;height:6px;background:#2a2d3a;border-radius:3px;overflow:hidden">
-                <div id="img-progress-bar" style="height:100%;width:0;background:#4ade80;transition:width .15s"></div>
+        <div id="img-progress" style="display:none;position:absolute;inset:0;background:var(--overlay);border-radius:8px;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+            <div style="width:78%;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+                <div id="img-progress-bar" style="height:100%;width:0;background:var(--success);transition:width .15s"></div>
             </div>
-            <div id="img-progress-text" style="color:#cbd5e1;font-size:11px">Uploading 0%</div>
+            <div id="img-progress-text" style="color:var(--text-hi);font-size:11px">Uploading 0%</div>
         </div>
     </div>
 
@@ -31,7 +31,7 @@
     <div id="img-status" style="display:none;align-items:center;gap:5px;font-size:11px;margin-bottom:8px"></div>
 
     <label id="img-drop" for="image-input"
-        style="width:100%;height:{{ $hasImg ? '42px' : '160px' }};background:#0f1117;border:.5px dashed #2a2d3a;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;gap:6px;color:#64748b;font-size:12px">
+        style="width:100%;height:{{ $hasImg ? '42px' : '160px' }};background:var(--bg);border:.5px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;gap:6px;color:var(--text-3);font-size:12px">
         <i class="ti ti-upload" style="font-size:16px"></i><span id="img-drop-label">{{ $hasImg ? 'Change image' : 'Click to upload image' }}</span>
     </label>
 
@@ -42,27 +42,27 @@
     <input type="hidden" name="image_public_id" id="image-public-id" value="">
     <input type="hidden" name="remove_image" id="remove-image" value="0">
 
-    @error('image')<div style="color:#f87171;font-size:10px;margin-top:6px">{{ $message }}</div>@enderror
+    @error('image')<div style="color:var(--danger);font-size:10px;margin-top:6px">{{ $message }}</div>@enderror
 </div>
 
 {{-- ── Editor modal ─────────────────────────────────────────────────── --}}
-<div id="img-editor" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(8,9,13,.82);align-items:center;justify-content:center;padding:20px">
-    <div style="background:#13151d;border:.5px solid #2a2d3a;border-radius:12px;width:100%;max-width:620px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
-        <div style="padding:13px 16px;border-bottom:.5px solid #2a2d3a;display:flex;align-items:center;gap:8px">
-            <div style="font-size:13px;font-weight:600;color:#e2e8f0;flex:1">Edit image</div>
-            <button type="button" id="ed-cancel-x" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;line-height:1"><i class="ti ti-x"></i></button>
+<div id="img-editor" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--overlay);align-items:center;justify-content:center;padding:20px">
+    <div style="background:var(--sunken);border:.5px solid var(--border);border-radius:12px;width:100%;max-width:620px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:13px 16px;border-bottom:.5px solid var(--border);display:flex;align-items:center;gap:8px">
+            <div style="font-size:13px;font-weight:600;color:var(--text);flex:1">Edit image</div>
+            <button type="button" id="ed-cancel-x" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:18px;line-height:1"><i class="ti ti-x"></i></button>
         </div>
 
-        <div style="padding:14px;background:#0b0c11;flex:1;min-height:0;overflow:auto">
+        <div style="padding:14px;background:var(--sunken-2);flex:1;min-height:0;overflow:auto">
             <div style="max-height:54vh"><img id="cropper-img" style="max-width:100%;display:block"></div>
         </div>
 
         {{-- Toolbar --}}
-        <div style="padding:10px 14px;border-top:.5px solid #2a2d3a;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-            @php $btn = 'height:30px;min-width:30px;padding:0 9px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#cbd5e1;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px'; @endphp
+        <div style="padding:10px 14px;border-top:.5px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+            @php $btn = 'height:30px;min-width:30px;padding:0 9px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-hi);font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:4px'; @endphp
             <button type="button" id="ed-ratio-sq"   style="{{ $btn }}" title="Square crop"><i class="ti ti-square"></i>1:1</button>
             <button type="button" id="ed-ratio-free" style="{{ $btn }}" title="Free crop"><i class="ti ti-crop"></i>Free</button>
-            <span style="width:1px;height:18px;background:#2a2d3a;margin:0 2px"></span>
+            <span style="width:1px;height:18px;background:var(--border);margin:0 2px"></span>
             <button type="button" id="ed-zoom-in"  style="{{ $btn }}" title="Zoom in"><i class="ti ti-zoom-in"></i></button>
             <button type="button" id="ed-zoom-out" style="{{ $btn }}" title="Zoom out"><i class="ti ti-zoom-out"></i></button>
             <button type="button" id="ed-rot-l" style="{{ $btn }}" title="Rotate left"><i class="ti ti-rotate-2"></i></button>
@@ -71,20 +71,20 @@
             <button type="button" id="ed-reset" style="{{ $btn }}" title="Reset"><i class="ti ti-refresh"></i></button>
         </div>
 
-        <div style="padding:12px 16px;border-top:.5px solid #2a2d3a;display:flex;justify-content:space-between;align-items:center;gap:8px">
-            <div style="font-size:10px;color:#64748b">Drag to move · scroll to zoom · uploaded as compressed WebP</div>
+        <div style="padding:12px 16px;border-top:.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <div style="font-size:10px;color:var(--text-3)">Drag to move · scroll to zoom · uploaded as compressed WebP</div>
             <div style="display:flex;gap:8px">
-                <button type="button" id="ed-cancel" style="height:34px;padding:0 16px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
-                <button type="button" id="ed-confirm" style="height:34px;padding:0 18px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer"><i class="ti ti-check" style="margin-right:4px"></i>Confirm</button>
+                <button type="button" id="ed-cancel" style="height:34px;padding:0 16px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
+                <button type="button" id="ed-confirm" style="height:34px;padding:0 18px;background:var(--success-soft);color:var(--success);border:.5px solid var(--success-border);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer"><i class="ti ti-check" style="margin-right:4px"></i>Confirm</button>
             </div>
         </div>
     </div>
 </div>
 
 {{-- ── Saving overlay (shown while the product form submits) ──────────── --}}
-<div id="img-uploading" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(8,9,13,.80);align-items:center;justify-content:center;flex-direction:column;gap:14px">
-    <div style="width:38px;height:38px;border:3px solid #2a2d3a;border-top-color:#4ade80;border-radius:50%;animation:imgspin .8s linear infinite"></div>
-    <div style="color:#cbd5e1;font-size:13px">Saving… please wait</div>
+<div id="img-uploading" style="display:none;position:fixed;inset:0;z-index:10000;background:var(--overlay);align-items:center;justify-content:center;flex-direction:column;gap:14px">
+    <div style="width:38px;height:38px;border:3px solid var(--border);border-top-color:var(--success);border-radius:50%;animation:imgspin .8s linear infinite"></div>
+    <div style="color:var(--text-hi);font-size:13px">Saving… please wait</div>
 </div>
 <style>@keyframes imgspin{to{transform:rotate(360deg)}}</style>
 
@@ -140,10 +140,10 @@
             progressTxt.textContent = 'Uploading ' + (pct || 0) + '%';
         }
         if (state === 'done') {
-            statusLine.style.display = 'flex'; statusLine.style.color = '#4ade80';
+            statusLine.style.display = 'flex'; statusLine.style.color = 'var(--success)';
             statusLine.innerHTML = '<i class="ti ti-cloud-check" style="font-size:13px"></i> Image uploaded';
         } else if (state === 'pending') {
-            statusLine.style.display = 'flex'; statusLine.style.color = '#fbbf24';
+            statusLine.style.display = 'flex'; statusLine.style.color = 'var(--warning-2)';
             statusLine.innerHTML = '<i class="ti ti-clock" style="font-size:13px"></i> Will upload when you save';
         } else if (state !== 'uploading') {
             statusLine.style.display = 'none';
@@ -284,7 +284,7 @@
     function ensureErrBox() {
         if (errBox) return errBox;
         errBox = document.createElement('div');
-        errBox.style.cssText = 'background:#7f1d1d;color:#fca5a5;border:.5px solid #991b1b;border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;display:none';
+        errBox.style.cssText = 'background:var(--danger-soft);color:var(--danger-text);border:.5px solid var(--danger-border);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;display:none';
         form.prepend(errBox);
         return errBox;
     }

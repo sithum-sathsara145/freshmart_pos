@@ -5,50 +5,50 @@
 
 @push('styles')
 <style>
-.pos-wrap{display:grid;grid-template-columns:1fr 340px;height:calc(100vh - 56px);background:#0f1117}
+.pos-wrap{display:grid;grid-template-columns:1fr 340px;height:calc(100vh - 56px);background:var(--bg)}
 .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;padding:12px;overflow-y:auto;align-content:start}
-.prod-card{aspect-ratio:1;background:#161821;border:0.5px solid #2a2d3a;border-radius:8px;padding:8px;cursor:pointer;transition:border-color .12s;display:flex;flex-direction:column;gap:4px}
-.prod-card:hover{border-color:#818cf8}
-.prod-card:focus-visible{outline:2px solid #818cf8;outline-offset:1px}
-.prod-img{flex:1;min-height:0;background:#1e2130;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:30px}
+.prod-card{aspect-ratio:1;background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;transition:border-color .12s;display:flex;flex-direction:column;gap:4px}
+.prod-card:hover{border-color:var(--primary)}
+.prod-card:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.prod-img{flex:1;min-height:0;background:var(--surface-2);border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:30px}
 .prod-img img{width:100%;height:100%;object-fit:cover}
-.prod-name{font-size:12px;color:#e2e8f0;font-weight:500;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.prod-price{font-size:13px;color:#a5b4fc;font-weight:500}
-.prod-stock{font-size:10px;color:#64748b}
+.prod-name{font-size:12px;color:var(--text);font-weight:500;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.prod-price{font-size:13px;color:var(--primary-text);font-weight:500}
+.prod-stock{font-size:10px;color:var(--text-3)}
 .prod-foot{display:flex;justify-content:space-between;align-items:center}
 /* Full-screen focus mode hides the side navigation */
 body.pos-fullscreen .app-sidebar{display:none!important}
-.cart-panel{background:#161821;border-left:0.5px solid #2a2d3a;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.cart-panel{background:var(--surface);border-left:0.5px solid var(--border);display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .cart-list{flex:1;overflow-y:auto;padding:8px 12px;min-height:0}
 .cart-fixed{flex-shrink:0}
 [x-cloak]{display:none!important}
-.cust-input{width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:8px 10px;outline:none;margin-bottom:8px;font-family:inherit}
-.amt-input{width:92px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:12px;padding:4px 8px;text-align:right;outline:none;font-family:inherit}
-.calc-key{height:42px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:7px;color:#e2e8f0;font-size:15px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.calc-key:hover{background:#252840}
-.calc-key.op{background:#312e81;color:#a5b4fc;border-color:#534AB7}
-.sc-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid #1a1d2a;font-size:12px}
-.sc-key{font-family:monospace;font-size:11px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:4px;padding:2px 7px;color:#a5b4fc}
+.cust-input{width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:8px 10px;outline:none;margin-bottom:8px;font-family:inherit}
+.amt-input{width:92px;background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;padding:4px 8px;text-align:right;outline:none;font-family:inherit}
+.calc-key{height:42px;background:var(--surface-2);border:.5px solid var(--border);border-radius:7px;color:var(--text);font-size:15px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.calc-key:hover{background:var(--surface-4)}
+.calc-key.op{background:var(--primary-soft);color:var(--primary-text);border-color:var(--primary-border)}
+.sc-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid var(--surface-3);font-size:12px}
+.sc-key{font-family:monospace;font-size:11px;background:var(--surface-2);border:.5px solid var(--border);border-radius:4px;padding:2px 7px;color:var(--primary-text)}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 input[type=number]{-moz-appearance:textfield}
-.ci{padding:8px 0;border-bottom:0.5px solid #1a1d2a}
+.ci{padding:8px 0;border-bottom:0.5px solid var(--surface-3)}
 .ci:last-child{border-bottom:none}
-.ci-active{background:#191c2b;box-shadow:inset 2px 0 0 #818cf8;border-radius:4px}
-.ci-name{font-size:12px;color:#e2e8f0;font-weight:500}
-.ci-meta{font-size:11px;color:#64748b;margin-top:1px}
+.ci-active{background:var(--surface-active);box-shadow:inset 2px 0 0 var(--primary);border-radius:4px}
+.ci-name{font-size:12px;color:var(--text);font-weight:500}
+.ci-meta{font-size:11px;color:var(--text-3);margin-top:1px}
 .ci-row{display:flex;align-items:center;justify-content:space-between;margin-top:5px}
-.qty-btn{width:22px;height:22px;background:#252840;border:0.5px solid #2a2d3a;border-radius:4px;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}
-.np-key{height:36px;background:#1e2130;border:0.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .1s}
-.np-key:hover{background:#252840}
-.np-key.action{background:#312e81;color:#a5b4fc;border-color:#534AB7}
+.qty-btn{width:22px;height:22px;background:var(--surface-4);border:0.5px solid var(--border);border-radius:4px;color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}
+.np-key{height:36px;background:var(--surface-2);border:0.5px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .1s}
+.np-key:hover{background:var(--surface-4)}
+.np-key.action{background:var(--primary-soft);color:var(--primary-text);border-color:var(--primary-border)}
 .pay-btn{height:40px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:none;display:flex;align-items:center;justify-content:center;gap:6px;transition:opacity .15s}
 .pay-btn:hover{opacity:.85}
-.cats{display:flex;gap:6px;padding:10px 12px;border-bottom:0.5px solid #2a2d3a;overflow-x:auto}
-.cat-pill{padding:4px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:0.5px solid #2a2d3a;color:#94a3b8;background:#161821;white-space:nowrap}
-.cat-pill.active{background:#312e81;color:#a5b4fc;border-color:#534AB7}
-.scan-bar{height:48px;background:#161821;border-bottom:0.5px solid #2a2d3a;display:flex;align-items:center;gap:8px;padding:0 12px}
-.scan-input{flex:1;background:#0f1117;border:0.5px solid #2a2d3a;border-radius:6px;padding:0 10px;height:34px;color:#e2e8f0;font-size:13px;outline:none;font-family:inherit}
-.scan-input:focus{border-color:#818cf8}
+.cats{display:flex;gap:6px;padding:10px 12px;border-bottom:0.5px solid var(--border);overflow-x:auto}
+.cat-pill{padding:4px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:0.5px solid var(--border);color:var(--text-2);background:var(--surface);white-space:nowrap}
+.cat-pill.active{background:var(--primary-soft);color:var(--primary-text);border-color:var(--primary-border)}
+.scan-bar{height:48px;background:var(--surface);border-bottom:0.5px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 12px}
+.scan-input{flex:1;background:var(--bg);border:0.5px solid var(--border);border-radius:6px;padding:0 10px;height:34px;color:var(--text);font-size:13px;outline:none;font-family:inherit}
+.scan-input:focus{border-color:var(--primary)}
 </style>
 @endpush
 
@@ -58,7 +58,7 @@ input[type=number]{-moz-appearance:textfield}
     <div style="display:flex;flex-direction:column;overflow:hidden">
         {{-- Scan bar --}}
         <div class="scan-bar">
-            <i class="ti ti-scan" style="font-size:16px;color:#64748b"></i>
+            <i class="ti ti-scan" style="font-size:16px;color:var(--text-3)"></i>
             <div style="flex:1;position:relative" @click.away="showSuggest=false">
                 <input class="scan-input" id="scan-input" x-model="query" autofocus style="width:100%" title="Search (F2)"
                        @focus="numpadTarget='search'; if (query) showSuggest=true"
@@ -70,16 +70,16 @@ input[type=number]{-moz-appearance:textfield}
                        placeholder="Scan barcode or search product...">
                 {{-- Auto-suggestions --}}
                 <div x-show="showSuggest && suggestions.length" x-cloak
-                     style="position:absolute;top:40px;left:0;right:0;background:#161821;border:.5px solid #2a2d3a;border-radius:6px;z-index:40;max-height:300px;overflow-y:auto;box-shadow:0 10px 28px rgba(0,0,0,.5)">
+                     style="position:absolute;top:40px;left:0;right:0;background:var(--surface);border:.5px solid var(--border);border-radius:6px;z-index:40;max-height:300px;overflow-y:auto;box-shadow:0 10px 28px var(--shadow)">
                     <template x-for="(s, i) in suggestions" :key="s.id">
                         <div @click="chooseSuggestAt(i)" @mouseenter="suggestIdx=i"
-                             :style="i===suggestIdx ? 'background:#1e2130' : 'background:transparent'"
-                             style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer;border-bottom:.5px solid #1a1d2a">
+                             :style="i===suggestIdx ? 'background:var(--surface-2)' : 'background:transparent'"
+                             style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer;border-bottom:.5px solid var(--surface-3)">
                             <div style="min-width:0">
-                                <div style="font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="s.name"></div>
-                                <div style="font-size:10px;color:#64748b" x-text="'SKU ' + s.sku + '  ·  ' + (s.barcode || 'No barcode') + '  ·  Stock: ' + s.stock"></div>
+                                <div style="font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="s.name"></div>
+                                <div style="font-size:10px;color:var(--text-3)" x-text="'SKU ' + s.sku + '  ·  ' + (s.barcode || 'No barcode') + '  ·  Stock: ' + s.stock"></div>
                             </div>
-                            <div style="font-size:12px;color:#a5b4fc;font-weight:500;white-space:nowrap;margin-left:8px" x-text="'Rs. ' + parseFloat(s.price).toLocaleString()"></div>
+                            <div style="font-size:12px;color:var(--primary-text);font-weight:500;white-space:nowrap;margin-left:8px" x-text="'Rs. ' + parseFloat(s.price).toLocaleString()"></div>
                         </div>
                     </template>
                 </div>
@@ -94,7 +94,7 @@ input[type=number]{-moz-appearance:textfield}
                 <span x-text="customer ? customer.name.split(' ')[0] : 'Customer'"></span>
             </button>
             <button class="np-key" style="width:92px;height:34px;font-size:12px"
-                    :style="counterOpen ? 'background:#14532d;color:#4ade80;border-color:#166534' : 'background:#3f1d1d;color:#fca5a5;border-color:#7f1d1d'"
+                    :style="counterOpen ? 'background:var(--success-soft);color:var(--success);border-color:var(--success-border)' : 'background:var(--danger-soft-2);color:var(--danger-text);border-color:var(--danger-soft)'"
                     @click="counterOpen ? closeCounterPrompt() : openCounterPrompt()"
                     :title="counterOpen ? 'Close counter' : 'Open counter'">
                 <i class="ti ti-cash" style="font-size:13px"></i>
@@ -136,7 +136,7 @@ input[type=number]{-moz-appearance:textfield}
                 </div>
             </template>
             <template x-if="products.length === 0">
-                <div style="grid-column:1/-1;text-align:center;color:#4a5568;padding:32px;font-size:13px">
+                <div style="grid-column:1/-1;text-align:center;color:var(--text-4);padding:32px;font-size:13px">
                     <i class="ti ti-search" style="font-size:28px;display:block;margin-bottom:8px"></i>
                     No products found
                 </div>
@@ -148,41 +148,41 @@ input[type=number]{-moz-appearance:textfield}
     <div class="cart-panel">
 
         {{-- Cart header --}}
-        <div class="cart-fixed" style="padding:10px 12px;border-bottom:0.5px solid #2a2d3a">
+        <div class="cart-fixed" style="padding:10px 12px;border-bottom:0.5px solid var(--border)">
             <div style="display:flex;align-items:center;justify-content:space-between">
-                <span style="font-size:13px;font-weight:500;color:#e2e8f0">
-                    <i class="ti ti-shopping-cart" style="color:#818cf8;margin-right:4px"></i>
-                    Cart <span style="font-size:11px;color:#64748b" x-text="'(' + cartCount + ' items)'"></span>
+                <span style="font-size:13px;font-weight:500;color:var(--text)">
+                    <i class="ti ti-shopping-cart" style="color:var(--primary);margin-right:4px"></i>
+                    Cart <span style="font-size:11px;color:var(--text-3)" x-text="'(' + cartCount + ' items)'"></span>
                 </span>
                 <div style="display:flex;align-items:center;gap:10px">
-                    <span style="font-size:11px;color:#a5b4fc;cursor:pointer" @click="openCustomItem()" title="Add a one-off / custom item">
+                    <span style="font-size:11px;color:var(--primary-text);cursor:pointer" @click="openCustomItem()" title="Add a one-off / custom item">
                         <i class="ti ti-plus" style="font-size:12px"></i> Custom
                     </span>
-                    <span style="font-size:11px;color:#fbbf24;cursor:pointer" @click="holdBill()" title="Hold this bill to finish later">
+                    <span style="font-size:11px;color:var(--warning-2);cursor:pointer" @click="holdBill()" title="Hold this bill to finish later">
                         <i class="ti ti-player-pause" style="font-size:12px"></i> Hold
                     </span>
-                    <span style="font-size:11px;color:#60a5fa;cursor:pointer" @click="openHeldBills()" title="Resume a held bill">
+                    <span style="font-size:11px;color:var(--info);cursor:pointer" @click="openHeldBills()" title="Resume a held bill">
                         <i class="ti ti-clipboard-list" style="font-size:12px"></i> Held<span x-show="heldBills.length" x-text="' (' + heldBills.length + ')'"></span>
                     </span>
-                    <span style="font-size:11px;color:#ef4444;cursor:pointer" @click="clearCart()">
+                    <span style="font-size:11px;color:var(--danger-2);cursor:pointer" @click="clearCart()">
                         <i class="ti ti-trash" style="font-size:12px"></i> Clear
                     </span>
                 </div>
             </div>
             {{-- Customer row --}}
-            <div style="display:flex;align-items:center;gap:6px;margin-top:8px;background:#0f1117;border:0.5px solid #2a2d3a;border-radius:6px;padding:5px 9px">
-                <i class="ti ti-user" style="font-size:12px;color:#64748b"></i>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:8px;background:var(--bg);border:0.5px solid var(--border);border-radius:6px;padding:5px 9px">
+                <i class="ti ti-user" style="font-size:12px;color:var(--text-3)"></i>
                 <template x-if="!customer">
                     <div style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer" @click="openCustomerSearch()">
-                        <span style="font-size:11px;color:#64748b;flex:1">Walk-in — tap to search / add</span>
-                        <i class="ti ti-search" style="font-size:12px;color:#818cf8"></i>
+                        <span style="font-size:11px;color:var(--text-3);flex:1">Walk-in — tap to search / add</span>
+                        <i class="ti ti-search" style="font-size:12px;color:var(--primary)"></i>
                     </div>
                 </template>
                 <template x-if="customer">
                     <div style="flex:1;display:flex;align-items:center;gap:6px">
-                        <span style="font-size:11px;color:#e2e8f0;flex:1" x-text="customer.name + (customer.phone ? ' · ' + customer.phone : '')"></span>
-                        <span x-show="customer.credit_approved" x-cloak title="Approved for credit" style="font-size:9px;padding:1px 6px;border-radius:8px;background:#14532d;color:#4ade80">credit</span>
-                        <i class="ti ti-x" style="font-size:13px;color:#ef4444;cursor:pointer" @click="clearCustomer()" title="Remove customer"></i>
+                        <span style="font-size:11px;color:var(--text);flex:1" x-text="customer.name + (customer.phone ? ' · ' + customer.phone : '')"></span>
+                        <span x-show="customer.credit_approved" x-cloak title="Approved for credit" style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--success-soft);color:var(--success)">credit</span>
+                        <i class="ti ti-x" style="font-size:13px;color:var(--danger-2);cursor:pointer" @click="clearCustomer()" title="Remove customer"></i>
                     </div>
                 </template>
             </div>
@@ -191,7 +191,7 @@ input[type=number]{-moz-appearance:textfield}
         {{-- Cart items --}}
         <div class="cart-list">
             <template x-if="cart.length === 0">
-                <div style="text-align:center;color:#4a5568;font-size:12px;padding:24px 0">
+                <div style="text-align:center;color:var(--text-4);font-size:12px;padding:24px 0">
                     <i class="ti ti-shopping-cart" style="font-size:28px;display:block;margin-bottom:8px"></i>
                     Cart is empty
                 </div>
@@ -200,32 +200,32 @@ input[type=number]{-moz-appearance:textfield}
                 <div class="ci" :id="'cart-item-'+idx" :class="{ 'ci-active': idx === activeIdx }">
                     <div style="display:flex;justify-content:space-between;align-items:start">
                         <div class="ci-name" x-text="item.name"></div>
-                        <i class="ti ti-x" style="font-size:13px;color:#ef4444;cursor:pointer;margin-left:6px"
+                        <i class="ti ti-x" style="font-size:13px;color:var(--danger-2);cursor:pointer;margin-left:6px"
                            @click="removeItem(idx)"></i>
                     </div>
                     <div class="ci-meta">
                         <template x-if="editPriceIdx !== idx">
                             <span @click="startEditPrice(idx)" title="Click to change the unit price"
-                                  style="cursor:pointer;border-bottom:1px dashed #475569"
+                                  style="cursor:pointer;border-bottom:1px dashed var(--text-5)"
                                   x-text="'Rs. ' + parseFloat(item.price).toLocaleString() + ' each'"></span>
                         </template>
                         <template x-if="editPriceIdx === idx">
                             <span style="display:inline-flex;align-items:center;gap:4px">
-                                <span style="color:#64748b">Rs.</span>
+                                <span style="color:var(--text-3)">Rs.</span>
                                 <input type="number" min="0" step="0.01" x-model.number="item.price" :id="'price-input-'+idx"
                                        @keydown.enter.stop.prevent="commitPrice(idx)" @keydown.escape="editPriceIdx=-1" @blur="commitPrice(idx)"
-                                       style="width:78px;background:#0f1117;border:.5px solid #534AB7;border-radius:4px;color:#e2e8f0;font-size:11px;padding:2px 6px;outline:none">
-                                <span style="color:#64748b">each</span>
+                                       style="width:78px;background:var(--bg);border:.5px solid var(--primary-border);border-radius:4px;color:var(--text);font-size:11px;padding:2px 6px;outline:none">
+                                <span style="color:var(--text-3)">each</span>
                             </span>
                         </template>
                     </div>
                     <div class="ci-row">
                         <div style="display:flex;align-items:center;gap:5px">
                             <div class="qty-btn" @click="changeQty(idx, -1)">−</div>
-                            <span style="font-size:12px;color:#e2e8f0;min-width:20px;text-align:center" x-text="item.qty"></span>
+                            <span style="font-size:12px;color:var(--text);min-width:20px;text-align:center" x-text="item.qty"></span>
                             <div class="qty-btn" @click="changeQty(idx, 1)">+</div>
                         </div>
-                        <span style="font-size:13px;color:#a5b4fc;font-weight:500"
+                        <span style="font-size:13px;color:var(--primary-text);font-weight:500"
                               x-text="'Rs. ' + (item.price * item.qty).toLocaleString()"></span>
                     </div>
                 </div>
@@ -233,50 +233,50 @@ input[type=number]{-moz-appearance:textfield}
         </div>
 
         {{-- Totals --}}
-        <div class="cart-fixed" style="padding:10px 12px;border-top:0.5px solid #2a2d3a">
-            <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-bottom:5px">
+        <div class="cart-fixed" style="padding:10px 12px;border-top:0.5px solid var(--border)">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);margin-bottom:5px">
                 <span>Subtotal</span><span x-text="'Rs. ' + subtotal.toLocaleString()"></span>
             </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#94a3b8;margin-bottom:5px">
-                <span>Discount <span style="color:#4ade80" x-show="couponCode" x-text="couponCode ? '(' + couponCode + ')' : ''"></span></span>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-2);margin-bottom:5px">
+                <span>Discount <span style="color:var(--success)" x-show="couponCode" x-text="couponCode ? '(' + couponCode + ')' : ''"></span></span>
                 <div style="display:flex;align-items:center;gap:5px">
                     <button type="button" @click="discountMode = discountMode === 'amount' ? 'percent' : 'amount'"
-                            style="width:34px;height:26px;background:#1e2130;border:.5px solid #534AB7;border-radius:5px;color:#a5b4fc;font-size:11px;font-weight:600;cursor:pointer"
+                            style="width:34px;height:26px;background:var(--surface-2);border:.5px solid var(--primary-border);border-radius:5px;color:var(--primary-text);font-size:11px;font-weight:600;cursor:pointer"
                             x-text="discountMode === 'amount' ? 'Rs' : '%'"></button>
                     <input type="text" inputmode="decimal" x-model="discountInput" placeholder="0" class="amt-input"
                            @focus="numpadTarget='discount'"
                            @input="discountInput = discountInput.replace(/[^0-9.]/g,'').replace(/(\..*)\./g,'$1')">
                 </div>
             </div>
-            <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:3px" x-show="discountValue > 0">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-bottom:3px" x-show="discountValue > 0">
                 <span>Discount applied</span><span x-text="'- Rs. ' + discountValue.toLocaleString()"></span>
             </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#94a3b8;margin-bottom:5px">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-2);margin-bottom:5px">
                 <span>Tax (%)</span>
                 <input type="text" inputmode="decimal" x-model="taxPercent" placeholder="0" class="amt-input"
                        @focus="numpadTarget='tax'"
                        @input="taxPercent = taxPercent.replace(/[^0-9.]/g,'').replace(/(\..*)\./g,'$1')">
             </div>
-            <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:3px" x-show="tax > 0">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-bottom:3px" x-show="tax > 0">
                 <span>Tax amount</span><span x-text="'Rs. ' + tax.toLocaleString()"></span>
             </div>
-            <div style="display:flex;justify-content:space-between;font-size:14px;color:#e2e8f0;font-weight:500;padding-top:6px;border-top:0.5px solid #2a2d3a;margin-top:4px">
+            <div style="display:flex;justify-content:space-between;font-size:14px;color:var(--text);font-weight:500;padding-top:6px;border-top:0.5px solid var(--border);margin-top:4px">
                 <span>Total</span><span x-text="'Rs. ' + total.toLocaleString()"></span>
             </div>
         </div>
 
         {{-- Numpad --}}
-        <div class="cart-fixed" style="padding:8px 12px;border-top:0.5px solid #2a2d3a">
-            <div style="background:#0f1117;border:0.5px solid #2a2d3a;border-radius:6px;padding:6px 10px;margin-bottom:8px">
-                <div style="font-size:10px;color:#64748b">Cash received <span style="color:#475569">(F3)</span></div>
+        <div class="cart-fixed" style="padding:8px 12px;border-top:0.5px solid var(--border)">
+            <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:8px">
+                <div style="font-size:10px;color:var(--text-3)">Cash received <span style="color:var(--text-5)">(F3)</span></div>
                 <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
-                    <span style="font-size:14px;color:#64748b">Rs.</span>
+                    <span style="font-size:14px;color:var(--text-3)">Rs.</span>
                     <input type="text" inputmode="decimal" id="cash-input" x-model="cashStr"
                            @focus="numpadTarget='cash'; $event.target.select()"
                            @input="cashStr = cashStr.replace(/[^0-9.]/g,'').replace(/(\..*)\./g,'$1')"
-                           style="width:130px;background:transparent;border:none;outline:none;color:#e2e8f0;font-size:20px;font-weight:500;text-align:right;font-family:inherit;padding:0">
+                           style="width:130px;background:transparent;border:none;outline:none;color:var(--text);font-size:20px;font-weight:500;text-align:right;font-family:inherit;padding:0">
                 </div>
-                <div style="font-size:11px;color:#4ade80;text-align:right" x-show="cashNum >= total && cart.length > 0"
+                <div style="font-size:11px;color:var(--success);text-align:right" x-show="cashNum >= total && cart.length > 0"
                      x-text="'Change: Rs. ' + Math.max(0, cashNum - total).toLocaleString()"></div>
             </div>
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:6px">
@@ -297,18 +297,18 @@ input[type=number]{-moz-appearance:textfield}
                 <div class="np-key" @click="np('000')">000</div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-                <button class="pay-btn" style="background:#1D9E75;color:#fff" @click="pay('cash')">
+                <button class="pay-btn" style="background:var(--success-solid);color:#fff" @click="pay('cash')">
                     <i class="ti ti-cash"></i> Cash
                 </button>
-                <button class="pay-btn" style="background:#534AB7;color:#fff" @click="pay('card')">
+                <button class="pay-btn" style="background:var(--primary-solid);color:#fff" @click="pay('card')">
                     <i class="ti ti-credit-card"></i> Card
                 </button>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
-                <button class="pay-btn" style="background:#0E7490;color:#fff" @click="openSplit()" title="Split / credit payment (F5)">
+                <button class="pay-btn" style="background:var(--info-solid);color:#fff" @click="openSplit()" title="Split / credit payment (F5)">
                     <i class="ti ti-arrows-split-2"></i> Split
                 </button>
-                <button class="pay-btn" style="background:#B45309;color:#fff" @click="openCredit()" title="Sell on credit">
+                <button class="pay-btn" style="background:var(--warning-solid);color:#fff" @click="openCredit()" title="Sell on credit">
                     <i class="ti ti-calendar-due"></i> Credit
                 </button>
             </div>
@@ -318,29 +318,29 @@ input[type=number]{-moz-appearance:textfield}
     {{-- New customer modal --}}
     <template x-teleport="body">
     <div x-show="showCustomerModal" x-cloak @keydown.escape.window="showCustomerModal=false" @click.self="showCustomerModal=false"
-         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:330px">
-            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:12px;display:flex;align-items:center;gap:6px">
-                <i class="ti ti-user" style="color:#818cf8"></i> Customer
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:10px;padding:18px;width:330px">
+            <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:6px">
+                <i class="ti ti-user" style="color:var(--primary)"></i> Customer
             </div>
 
             {{-- Search existing --}}
             <input class="cust-input" x-model="customerQuery" @input.debounce.300ms="searchCustomers()" placeholder="Search name or phone...">
-            <div x-show="customerResults.length" x-cloak style="max-height:150px;overflow-y:auto;border:.5px solid #2a2d3a;border-radius:6px;margin-bottom:8px">
+            <div x-show="customerResults.length" x-cloak style="max-height:150px;overflow-y:auto;border:.5px solid var(--border);border-radius:6px;margin-bottom:8px">
                 <template x-for="c in customerResults" :key="c.id">
-                    <div @click="selectCustomer(c)" @mouseover="$el.style.background='#1e2130'" @mouseout="$el.style.background='transparent'"
-                         style="display:flex;justify-content:space-between;padding:7px 10px;cursor:pointer;border-bottom:.5px solid #1a1d2a;font-size:12px">
-                        <span style="color:#e2e8f0" x-text="c.name"></span>
-                        <span style="color:#64748b" x-text="c.phone || ''"></span>
+                    <div @click="selectCustomer(c)" @mouseover="$el.style.background='var(--surface-2)'" @mouseout="$el.style.background='transparent'"
+                         style="display:flex;justify-content:space-between;padding:7px 10px;cursor:pointer;border-bottom:.5px solid var(--surface-3);font-size:12px">
+                        <span style="color:var(--text)" x-text="c.name"></span>
+                        <span style="color:var(--text-3)" x-text="c.phone || ''"></span>
                     </div>
                 </template>
             </div>
-            <div x-show="customerQuery && !customerResults.length && !customerSearching" x-cloak style="text-align:center;color:#64748b;font-size:11px;margin-bottom:8px">No matches — register below</div>
+            <div x-show="customerQuery && !customerResults.length && !customerSearching" x-cloak style="text-align:center;color:var(--text-3);font-size:11px;margin-bottom:8px">No matches — register below</div>
 
             <div style="display:flex;align-items:center;gap:8px;margin:10px 0">
-                <div style="flex:1;height:1px;background:#2a2d3a"></div>
-                <span style="font-size:10px;color:#475569;letter-spacing:.5px">OR REGISTER NEW</span>
-                <div style="flex:1;height:1px;background:#2a2d3a"></div>
+                <div style="flex:1;height:1px;background:var(--border)"></div>
+                <span style="font-size:10px;color:var(--text-5);letter-spacing:.5px">OR REGISTER NEW</span>
+                <div style="flex:1;height:1px;background:var(--border)"></div>
             </div>
 
             <input class="cust-input" x-model="newCustomer.name" placeholder="Full name *" @keydown.enter="saveCustomer()">
@@ -348,10 +348,10 @@ input[type=number]{-moz-appearance:textfield}
             <input class="cust-input" x-model="newCustomer.nic" placeholder="NIC (needed for credit)" @keydown.enter="saveCustomer()">
             <input class="cust-input" x-model="newCustomer.address" placeholder="Address (for credit bill)" @keydown.enter="saveCustomer()">
             <input class="cust-input" type="email" x-model="newCustomer.email" placeholder="Email (optional)" @keydown.enter="saveCustomer()">
-            <div x-show="customerError" x-cloak x-text="customerError" style="color:#f87171;font-size:11px;margin-bottom:8px"></div>
+            <div x-show="customerError" x-cloak x-text="customerError" style="color:var(--danger);font-size:11px;margin-bottom:8px"></div>
             <div style="display:flex;gap:8px;margin-top:4px">
-                <button @click="showCustomerModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
-                <button @click="saveCustomer()" style="flex:1;height:36px;background:#14532d;border:.5px solid #166534;border-radius:6px;color:#4ade80;font-size:12px;font-weight:500;cursor:pointer">Save &amp; select</button>
+                <button @click="showCustomerModal=false" style="flex:1;height:36px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
+                <button @click="saveCustomer()" style="flex:1;height:36px;background:var(--success-soft);border:.5px solid var(--success-border);border-radius:6px;color:var(--success);font-size:12px;font-weight:500;cursor:pointer">Save &amp; select</button>
             </div>
         </div>
     </div>
@@ -360,42 +360,42 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Sale success popup --}}
     <template x-teleport="body">
     <div x-show="showSaleModal" x-cloak @keydown.escape.window="if (!(lastSale && lastSale.is_credit)) showSaleModal=false"
-         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:22px;width:320px;text-align:center">
-            <div style="width:52px;height:52px;border-radius:50%;background:#14532d;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
-                <i class="ti ti-check" style="font-size:28px;color:#4ade80"></i>
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:22px;width:320px;text-align:center">
+            <div style="width:52px;height:52px;border-radius:50%;background:var(--success-soft);display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+                <i class="ti ti-check" style="font-size:28px;color:var(--success)"></i>
             </div>
-            <div style="font-size:15px;font-weight:600;color:#e2e8f0;margin-bottom:4px" x-text="lastSale && lastSale.is_credit ? 'Credit sale recorded' : 'Payment successful'"></div>
-            <div style="font-size:12px;color:#64748b;margin-bottom:14px" x-text="lastSale ? 'Invoice ' + lastSale.invoice_no : ''"></div>
-            <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:8px;padding:12px;margin-bottom:16px">
-                <div style="display:flex;justify-content:space-between;font-size:13px;color:#e2e8f0;margin-bottom:4px">
+            <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px" x-text="lastSale && lastSale.is_credit ? 'Credit sale recorded' : 'Payment successful'"></div>
+            <div style="font-size:12px;color:var(--text-3);margin-bottom:14px" x-text="lastSale ? 'Invoice ' + lastSale.invoice_no : ''"></div>
+            <div style="background:var(--bg);border:.5px solid var(--border);border-radius:8px;padding:12px;margin-bottom:16px">
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text);margin-bottom:4px">
                     <span>Total</span><span x-text="lastSale ? 'Rs. ' + Number(lastSale.total).toLocaleString() : ''"></span>
                 </div>
-                <div style="display:flex;justify-content:space-between;font-size:13px;color:#4ade80" x-show="lastSale && lastSale.change > 0">
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--success)" x-show="lastSale && lastSale.change > 0">
                     <span>Change</span><span x-text="lastSale ? 'Rs. ' + Number(lastSale.change).toLocaleString() : ''"></span>
                 </div>
-                <div style="display:flex;justify-content:space-between;font-size:13px;color:#fbbf24;margin-top:4px" x-show="lastSale && lastSale.is_credit">
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--warning-2);margin-top:4px" x-show="lastSale && lastSale.is_credit">
                     <span>On credit</span><span x-text="lastSale ? 'Rs. ' + Number(lastSale.balance_due).toLocaleString() : ''"></span>
                 </div>
             </div>
             {{-- Non-credit sale: close + print --}}
             <template x-if="!(lastSale && lastSale.is_credit)">
             <div style="display:flex;gap:8px">
-                <button @click="showSaleModal=false" style="flex:1;height:38px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:7px;color:#94a3b8;font-size:13px;cursor:pointer">Close</button>
-                <button x-ref="printBtn" @click="printReceipt()" style="flex:1;height:38px;background:#312e81;border:.5px solid #534AB7;border-radius:7px;color:#a5b4fc;font-size:13px;font-weight:500;cursor:pointer">Next <i class="ti ti-arrow-right" style="font-size:13px"></i></button>
+                <button @click="showSaleModal=false" style="flex:1;height:38px;background:var(--surface-2);border:.5px solid var(--border);border-radius:7px;color:var(--text-2);font-size:13px;cursor:pointer">Close</button>
+                <button x-ref="printBtn" @click="printReceipt()" style="flex:1;height:38px;background:var(--primary-soft);border:.5px solid var(--primary-border);border-radius:7px;color:var(--primary-text);font-size:13px;font-weight:500;cursor:pointer">Next <i class="ti ti-arrow-right" style="font-size:13px"></i></button>
             </div>
             </template>
             {{-- Credit sale: BOTH steps are required — print the bill, then attach the signed photo. No skip. --}}
             <template x-if="lastSale && lastSale.is_credit">
             <div>
-                <div style="font-size:11px;color:#fbbf24;background:#3a2c0c;border:.5px solid #78531a;border-radius:6px;padding:7px 9px;margin-bottom:10px;text-align:center">Print the bill, get it signed, then attach the signed copy — both are required.</div>
+                <div style="font-size:11px;color:var(--warning-2);background:var(--warning-soft-3);border:.5px solid var(--warning-border-2);border-radius:6px;padding:7px 9px;margin-bottom:10px;text-align:center">Print the bill, get it signed, then attach the signed copy — both are required.</div>
                 <button x-ref="printBtn" @click="printCreditBill()" style="width:100%;height:38px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer"
-                        :style="creditBillPrinted ? 'background:#14532d;border:.5px solid #166534;color:#4ade80' : 'background:#312e81;border:.5px solid #534AB7;color:#a5b4fc'">
+                        :style="creditBillPrinted ? 'background:var(--success-soft);border:.5px solid var(--success-border);color:var(--success)' : 'background:var(--primary-soft);border:.5px solid var(--primary-border);color:var(--primary-text)'">
                     <i class="ti" :class="creditBillPrinted ? 'ti-check' : 'ti-printer'" style="font-size:14px"></i>
                     <span x-text="creditBillPrinted ? 'Bill printed — reprint' : 'Print credit bill'"></span>
                 </button>
                 <button @click="openEvidence()" :disabled="!creditBillPrinted" :style="!creditBillPrinted ? 'opacity:.5;cursor:not-allowed' : ''"
-                        style="width:100%;height:38px;margin-top:8px;background:#14532d;border:.5px solid #166534;border-radius:7px;color:#4ade80;font-size:13px;font-weight:600;cursor:pointer">
+                        style="width:100%;height:38px;margin-top:8px;background:var(--success-soft);border:.5px solid var(--success-border);border-radius:7px;color:var(--success);font-size:13px;font-weight:600;cursor:pointer">
                     <i class="ti ti-signature" style="font-size:14px"></i> Attach signed copy
                 </button>
             </div>
@@ -407,22 +407,22 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Card payment popup --}}
     <template x-teleport="body">
     <div x-show="showCardModal" x-cloak @keydown.escape.window="showCardModal=false" @click.self="showCardModal=false"
-         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:20px;width:300px">
-            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:4px;display:flex;align-items:center;gap:6px">
-                <i class="ti ti-credit-card" style="color:#818cf8"></i> Card payment
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:20px;width:300px">
+            <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px">
+                <i class="ti ti-credit-card" style="color:var(--primary)"></i> Card payment
             </div>
-            <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="'Amount: Rs. ' + total.toLocaleString()"></div>
-            <label style="font-size:11px;color:#64748b">Last 4 digits of card *</label>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:12px" x-text="'Amount: Rs. ' + total.toLocaleString()"></div>
+            <label style="font-size:11px;color:var(--text-3)">Last 4 digits of card *</label>
             <input x-ref="cardInput" x-model="cardLast4" inputmode="numeric" maxlength="4" placeholder="1234" class="cust-input"
                    style="margin-top:4px;text-align:center;letter-spacing:5px;font-size:16px"
                    @input="cardLast4 = cardLast4.replace(/\D/g,'').slice(0,4); if (cardLast4.length === 4) $nextTick(() => $refs.cardBtn.focus())"
                    @keydown.enter="confirmCard()">
             <div style="display:flex;gap:8px;margin-top:4px">
-                <button @click="showCardModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+                <button @click="showCardModal=false" style="flex:1;height:36px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
                 <button x-ref="cardBtn" @click="confirmCard()" :disabled="cardLast4.length !== 4"
                         @keydown.backspace.prevent="cardLast4 = cardLast4.slice(0,-1); $refs.cardInput.focus()"
-                        style="flex:1;height:36px;background:#534AB7;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Pay by card</button>
+                        style="flex:1;height:36px;background:var(--primary-solid);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Pay by card</button>
             </div>
         </div>
     </div>
@@ -431,18 +431,18 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Price chooser popup (products with multiple in-stock sale prices) --}}
     <template x-teleport="body">
     <div x-show="showPriceModal" x-cloak @keydown.escape.window="showPriceModal=false" @click.self="showPriceModal=false"
-         style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:320px">
-            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Choose price</div>
-            <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="priceChooserProduct?.name"></div>
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:60">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:10px;padding:18px;width:320px">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Choose price</div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:12px" x-text="priceChooserProduct?.name"></div>
             <div style="display:flex;flex-direction:column;gap:8px">
                 <template x-for="opt in priceChooserOptions" :key="opt">
                     <button type="button" @click="pickPrice(opt)"
-                        style="height:44px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:7px;color:#e2e8f0;font-size:15px;font-weight:600;cursor:pointer"
+                        style="height:44px;background:var(--surface-2);border:.5px solid var(--border);border-radius:7px;color:var(--text);font-size:15px;font-weight:600;cursor:pointer"
                         x-text="'Rs. ' + Number(opt).toLocaleString()"></button>
                 </template>
             </div>
-            <button type="button" @click="showPriceModal=false" style="width:100%;height:34px;margin-top:12px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+            <button type="button" @click="showPriceModal=false" style="width:100%;height:34px;margin-top:12px;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
         </div>
     </div>
     </template>
@@ -450,49 +450,49 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Split / credit payment (cash + card + credit) popup --}}
     <template x-teleport="body">
     <div x-show="showSplitModal" x-cloak @keydown.escape.window="showSplitModal=false" @click.self="showSplitModal=false"
-         style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:340px;max-height:94vh;overflow-y:auto">
-            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Split / credit payment</div>
-            <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="'Total: Rs. ' + total.toLocaleString()"></div>
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:60">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:10px;padding:18px;width:340px;max-height:94vh;overflow-y:auto">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Split / credit payment</div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:12px" x-text="'Total: Rs. ' + total.toLocaleString()"></div>
 
-            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Card amount (Rs.)</label>
+            <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Card amount (Rs.)</label>
             <input type="number" min="0" step="0.01" x-model.number="splitCard" x-ref="splitCardInput" placeholder="0.00"
                    @keydown.enter.prevent="$refs.splitLast4Input.focus()"
-                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;padding:8px 10px;outline:none;margin-bottom:8px">
+                   style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:8px 10px;outline:none;margin-bottom:8px">
 
-            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Card last 4 digits</label>
+            <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Card last 4 digits</label>
             <input type="text" inputmode="numeric" maxlength="4" x-model="splitLast4" x-ref="splitLast4Input" placeholder="1234"
                    @input="splitLast4 = splitLast4.replace(/\D/g,'').slice(0,4)"
                    @keydown.enter.prevent="$refs.splitCashInput.focus()"
-                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;padding:8px 10px;outline:none;letter-spacing:3px;text-align:center;margin-bottom:8px">
+                   style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:8px 10px;outline:none;letter-spacing:3px;text-align:center;margin-bottom:8px">
 
-            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Cash amount (Rs.)</label>
+            <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Cash amount (Rs.)</label>
             <input type="number" min="0" step="0.01" x-model.number="splitCash" x-ref="splitCashInput" placeholder="0.00"
                    @keydown.enter.prevent="$refs.splitCreditInput.focus()"
-                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;padding:8px 10px;outline:none;margin-bottom:8px">
+                   style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:8px 10px;outline:none;margin-bottom:8px">
 
-            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Credit — on account (Rs.)</label>
+            <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Credit — on account (Rs.)</label>
             <input type="number" min="0" step="0.01" x-model.number="splitCredit" x-ref="splitCreditInput" placeholder="0.00"
                    @keydown.enter.prevent="if (splitValid) $refs.splitBtn.focus()"
-                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;padding:8px 10px;outline:none;margin-bottom:8px">
+                   style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;padding:8px 10px;outline:none;margin-bottom:8px">
 
             <div x-show="splitCreditNum > 0" x-cloak style="font-size:11px;border-radius:6px;padding:7px 9px;margin-bottom:10px"
-                 :style="creditCustomerOk ? 'background:#0f2a1b;border:.5px solid #14532d;color:#4ade80' : 'background:#3a1414;border:.5px solid #7f1d1d;color:#fca5a5'">
+                 :style="creditCustomerOk ? 'background:var(--success-soft-2);border:.5px solid var(--success-soft);color:var(--success)' : 'background:var(--danger-soft-3);border:.5px solid var(--danger-soft);color:var(--danger-text)'">
                 <span x-show="creditCustomerOk">On account for <b x-text="customer ? customer.name : ''"></b> · NIC <span x-text="customer && customer.nic ? customer.nic : '—'"></span></span>
                 <span x-show="!creditCustomerOk" x-text="creditCustomerError"></span>
             </div>
 
-            <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:12px">
-                <div style="display:flex;justify-content:space-between;color:#94a3b8"><span>Cash needed</span><span x-text="'Rs. ' + splitCashNeeded.toLocaleString()"></span></div>
-                <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-top:3px"><span>Change</span><span x-text="'Rs. ' + splitChange.toLocaleString()"></span></div>
-                <div x-show="splitCreditNum > 0" style="display:flex;justify-content:space-between;color:#fbbf24;margin-top:3px"><span>On credit</span><span x-text="'Rs. ' + splitCreditNum.toLocaleString()"></span></div>
-                <div x-show="splitError" style="color:#f87171;margin-top:5px;font-size:11px" x-text="splitError"></div>
+            <div style="background:var(--bg);border:.5px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;color:var(--text-2)"><span>Cash needed</span><span x-text="'Rs. ' + splitCashNeeded.toLocaleString()"></span></div>
+                <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-top:3px"><span>Change</span><span x-text="'Rs. ' + splitChange.toLocaleString()"></span></div>
+                <div x-show="splitCreditNum > 0" style="display:flex;justify-content:space-between;color:var(--warning-2);margin-top:3px"><span>On credit</span><span x-text="'Rs. ' + splitCreditNum.toLocaleString()"></span></div>
+                <div x-show="splitError" style="color:var(--danger);margin-top:5px;font-size:11px" x-text="splitError"></div>
             </div>
 
             <div style="display:flex;gap:8px">
-                <button @click="showSplitModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+                <button @click="showSplitModal=false" style="flex:1;height:36px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
                 <button @click="confirmSplit()" x-ref="splitBtn" :disabled="!splitValid" @keydown.enter.prevent="confirmSplit()" :style="!splitValid?'opacity:.5;cursor:not-allowed':''"
-                        style="flex:1;height:36px;background:#534AB7;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Complete sale</button>
+                        style="flex:1;height:36px;background:var(--primary-solid);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Complete sale</button>
             </div>
         </div>
     </div>
@@ -501,21 +501,21 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Credit signed-document evidence popup (webcam or phone QR) --}}
     <template x-teleport="body">
     <div x-show="showEvidenceModal" x-cloak @keydown.escape.window="evidenceDone ? closeEvidence() : evBack()"
-         style="position:fixed;inset:0;background:rgba(8,9,13,.72);display:flex;align-items:center;justify-content:center;z-index:70">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:18px;width:400px;max-height:94vh;overflow-y:auto">
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:70">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:18px;width:400px;max-height:94vh;overflow-y:auto">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                <div style="font-size:14px;font-weight:600;color:#e2e8f0;display:flex;align-items:center;gap:6px"><i class="ti ti-signature" style="color:#818cf8"></i> Signed copy</div>
-                <i class="ti ti-x" @click="closeEvidence()" style="font-size:16px;color:#64748b;cursor:pointer"></i>
+                <div style="font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px"><i class="ti ti-signature" style="color:var(--primary)"></i> Signed copy</div>
+                <i class="ti ti-x" @click="closeEvidence()" style="font-size:16px;color:var(--text-3);cursor:pointer"></i>
             </div>
-            <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="lastSale ? 'Invoice ' + lastSale.invoice_no + ' · photograph the signed bill' : ''"></div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:12px" x-text="lastSale ? 'Invoice ' + lastSale.invoice_no + ' · photograph the signed bill' : ''"></div>
 
             {{-- Done --}}
             <template x-if="evidenceDone">
                 <div style="text-align:center;padding:18px 0">
-                    <div style="width:52px;height:52px;border-radius:50%;background:#14532d;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="ti ti-check" style="font-size:28px;color:#4ade80"></i></div>
-                    <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:4px">Signed copy attached</div>
-                    <div style="font-size:12px;color:#64748b;margin-bottom:16px">Saved as evidence for this credit sale.</div>
-                    <button @click="closeEvidence()" style="width:100%;height:38px;background:#312e81;border:.5px solid #534AB7;border-radius:7px;color:#a5b4fc;font-size:13px;font-weight:600;cursor:pointer">Done</button>
+                    <div style="width:52px;height:52px;border-radius:50%;background:var(--success-soft);display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="ti ti-check" style="font-size:28px;color:var(--success)"></i></div>
+                    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">Signed copy attached</div>
+                    <div style="font-size:12px;color:var(--text-3);margin-bottom:16px">Saved as evidence for this credit sale.</div>
+                    <button @click="closeEvidence()" style="width:100%;height:38px;background:var(--primary-soft);border:.5px solid var(--primary-border);border-radius:7px;color:var(--primary-text);font-size:13px;font-weight:600;cursor:pointer">Done</button>
                 </div>
             </template>
 
@@ -523,33 +523,33 @@ input[type=number]{-moz-appearance:textfield}
             <template x-if="!evidenceDone">
               <div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
-                    <button @click="switchEvidenceTab('webcam')" :style="evidenceTab==='webcam' ? 'background:#312e81;color:#a5b4fc;border-color:#534AB7' : 'background:#1e2130;color:#94a3b8;border-color:#2a2d3a'"
+                    <button @click="switchEvidenceTab('webcam')" :style="evidenceTab==='webcam' ? 'background:var(--primary-soft);color:var(--primary-text);border-color:var(--primary-border)' : 'background:var(--surface-2);color:var(--text-2);border-color:var(--border)'"
                             style="height:34px;border:.5px solid;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-camera" style="font-size:13px"></i> Webcam</button>
-                    <button @click="switchEvidenceTab('phone')" :style="evidenceTab==='phone' ? 'background:#312e81;color:#a5b4fc;border-color:#534AB7' : 'background:#1e2130;color:#94a3b8;border-color:#2a2d3a'"
+                    <button @click="switchEvidenceTab('phone')" :style="evidenceTab==='phone' ? 'background:var(--primary-soft);color:var(--primary-text);border-color:var(--primary-border)' : 'background:var(--surface-2);color:var(--text-2);border-color:var(--border)'"
                             style="height:34px;border:.5px solid;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-device-mobile" style="font-size:13px"></i> Use my phone</button>
                 </div>
 
                 {{-- Webcam --}}
                 <div x-show="evidenceTab==='webcam'">
-                    <video x-ref="evidenceVideo" autoplay playsinline muted style="width:100%;border-radius:8px;background:#0f1117;aspect-ratio:4/3;object-fit:cover"></video>
-                    <button @click="captureWebcam()" :disabled="evidenceBusy" style="width:100%;height:40px;margin-top:10px;background:#14532d;border:.5px solid #166534;border-radius:7px;color:#4ade80;font-size:13px;font-weight:600;cursor:pointer"><i class="ti ti-camera" style="font-size:14px"></i> <span x-text="evidenceBusy ? 'Uploading…' : 'Capture & upload'"></span></button>
+                    <video x-ref="evidenceVideo" autoplay playsinline muted style="width:100%;border-radius:8px;background:var(--bg);aspect-ratio:4/3;object-fit:cover"></video>
+                    <button @click="captureWebcam()" :disabled="evidenceBusy" style="width:100%;height:40px;margin-top:10px;background:var(--success-soft);border:.5px solid var(--success-border);border-radius:7px;color:var(--success);font-size:13px;font-weight:600;cursor:pointer"><i class="ti ti-camera" style="font-size:14px"></i> <span x-text="evidenceBusy ? 'Uploading…' : 'Capture & upload'"></span></button>
                 </div>
 
                 {{-- Phone / QR --}}
                 <div x-show="evidenceTab==='phone'" style="text-align:center">
-                    <div style="font-size:12px;color:#94a3b8;margin-bottom:10px">Scan with the cashier's phone, then enter the code on the phone.</div>
+                    <div style="font-size:12px;color:var(--text-2);margin-bottom:10px">Scan with the cashier's phone, then enter the code on the phone.</div>
                     <div style="background:#fff;border-radius:8px;padding:10px;display:inline-block;min-width:180px;min-height:180px" x-html="qrSvg"></div>
-                    <div x-show="qrLoading" x-cloak style="font-size:11px;color:#64748b;margin-top:8px">Creating link…</div>
+                    <div x-show="qrLoading" x-cloak style="font-size:11px;color:var(--text-3);margin-top:8px">Creating link…</div>
                     <div x-show="qrCode" x-cloak style="margin-top:12px">
-                        <div style="font-size:11px;color:#64748b">Security code</div>
-                        <div style="font-size:26px;font-weight:700;letter-spacing:6px;color:#e2e8f0" x-text="qrCode"></div>
-                        <div style="font-size:10px;color:#475569;margin-top:2px">Or the cashier can enter their own login password on the phone.</div>
+                        <div style="font-size:11px;color:var(--text-3)">Security code</div>
+                        <div style="font-size:26px;font-weight:700;letter-spacing:6px;color:var(--text)" x-text="qrCode"></div>
+                        <div style="font-size:10px;color:var(--text-5);margin-top:2px">Or the cashier can enter their own login password on the phone.</div>
                     </div>
-                    <div style="font-size:11px;color:#a5b4fc;margin-top:12px"><i class="ti ti-loader-2" style="font-size:12px"></i> Waiting for the phone upload…</div>
+                    <div style="font-size:11px;color:var(--primary-text);margin-top:12px"><i class="ti ti-loader-2" style="font-size:12px"></i> Waiting for the phone upload…</div>
                 </div>
 
-                <div x-show="evidenceMsg" x-cloak style="font-size:11px;color:#f87171;margin-top:10px;text-align:center" x-text="evidenceMsg"></div>
-                <button @click="evBack()" style="width:100%;height:34px;margin-top:12px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer"><i class="ti ti-arrow-left" style="font-size:12px"></i> Back (print / reprint)</button>
+                <div x-show="evidenceMsg" x-cloak style="font-size:11px;color:var(--danger);margin-top:10px;text-align:center" x-text="evidenceMsg"></div>
+                <button @click="evBack()" style="width:100%;height:34px;margin-top:12px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer"><i class="ti ti-arrow-left" style="font-size:12px"></i> Back (print / reprint)</button>
               </div>
             </template>
         </div>
@@ -559,29 +559,29 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Held / parked bills popup --}}
     <template x-teleport="body">
     <div x-show="showHeldModal" x-cloak @keydown.escape.window="showHeldModal=false" @click.self="showHeldModal=false"
-         style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:16px;width:420px;max-height:80vh;display:flex;flex-direction:column">
-            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Held bills</div>
-            <div style="font-size:11px;color:#64748b;margin-bottom:12px">Resume a parked bill, or discard it.</div>
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:60">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:10px;padding:16px;width:420px;max-height:80vh;display:flex;flex-direction:column">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Held bills</div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Resume a parked bill, or discard it.</div>
             <div style="overflow-y:auto;flex:1">
                 <template x-if="heldBills.length === 0">
-                    <div style="text-align:center;color:#4a5568;font-size:12px;padding:24px">No held bills.</div>
+                    <div style="text-align:center;color:var(--text-4);font-size:12px;padding:24px">No held bills.</div>
                 </template>
                 <template x-for="b in heldBills" :key="b.id">
-                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0f1117;border:.5px solid #2a2d3a;border-radius:7px;padding:9px 11px;margin-bottom:7px">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg);border:.5px solid var(--border);border-radius:7px;padding:9px 11px;margin-bottom:7px">
                         <div style="min-width:0">
-                            <div style="font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                            <div style="font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
                                  x-text="b.label || ('Bill #' + b.id)"></div>
-                            <div style="font-size:10px;color:#64748b" x-text="b.item_count + ' item(s) · Rs. ' + Number(b.total).toLocaleString()"></div>
+                            <div style="font-size:10px;color:var(--text-3)" x-text="b.item_count + ' item(s) · Rs. ' + Number(b.total).toLocaleString()"></div>
                         </div>
                         <div style="display:flex;gap:6px;flex-shrink:0">
-                            <button @click="resumeBill(b.id)" style="height:30px;padding:0 12px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Resume</button>
-                            <button @click="discardBill(b.id)" title="Discard" style="width:30px;height:30px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#f87171;cursor:pointer"><i class="ti ti-trash" style="font-size:13px"></i></button>
+                            <button @click="resumeBill(b.id)" style="height:30px;padding:0 12px;background:var(--success-soft);color:var(--success);border:.5px solid var(--success-border);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Resume</button>
+                            <button @click="discardBill(b.id)" title="Discard" style="width:30px;height:30px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--danger);cursor:pointer"><i class="ti ti-trash" style="font-size:13px"></i></button>
                         </div>
                     </div>
                 </template>
             </div>
-            <button @click="showHeldModal=false" style="width:100%;height:34px;margin-top:10px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Close</button>
+            <button @click="showHeldModal=false" style="width:100%;height:34px;margin-top:10px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Close</button>
         </div>
     </div>
     </template>
@@ -589,29 +589,29 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Custom / temporary item popup --}}
     <template x-teleport="body">
     <div x-show="showCustomModal" x-cloak @keydown.escape.window="showCustomModal=false" @click.self="showCustomModal=false"
-         style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:340px">
-            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Custom item</div>
-            <div style="font-size:11px;color:#64748b;margin-bottom:14px">A one-off item that isn't in the catalogue. It won't affect stock.</div>
-            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Item name *</label>
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:60">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:10px;padding:18px;width:340px">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">Custom item</div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:14px">A one-off item that isn't in the catalogue. It won't affect stock.</div>
+            <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Item name *</label>
             <input x-ref="customNameInput" x-model="customName" placeholder="e.g. Miscellaneous" @keydown.enter="$refs.customPriceInput.focus()"
-                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:8px 10px;outline:none;margin-bottom:10px">
+                   style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:8px 10px;outline:none;margin-bottom:10px">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
                 <div>
-                    <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Unit price (Rs.) *</label>
+                    <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Unit price (Rs.) *</label>
                     <input x-ref="customPriceInput" type="number" min="0" step="0.01" x-model.number="customPrice" placeholder="0.00"
                            @keydown.enter="addCustomItem()"
-                           style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:8px 10px;outline:none">
+                           style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:8px 10px;outline:none">
                 </div>
                 <div>
-                    <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Quantity</label>
+                    <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Quantity</label>
                     <input type="number" min="0.001" step="0.001" x-model.number="customQty"
-                           style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:8px 10px;outline:none">
+                           style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:8px 10px;outline:none">
                 </div>
             </div>
             <div style="display:flex;gap:8px">
-                <button @click="showCustomModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
-                <button @click="addCustomItem()" style="flex:1;height:36px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Add to cart</button>
+                <button @click="showCustomModal=false" style="flex:1;height:36px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
+                <button @click="addCustomItem()" style="flex:1;height:36px;background:var(--success-soft);color:var(--success);border:.5px solid var(--success-border);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Add to cart</button>
             </div>
         </div>
     </div>
@@ -620,19 +620,19 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Cash payment popup --}}
     <template x-teleport="body">
     <div x-show="showCashModal" x-cloak @keydown.escape.window="showCashModal=false" @click.self="showCashModal=false"
-         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:20px;width:300px">
-            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:12px;display:flex;align-items:center;gap:6px">
-                <i class="ti ti-cash" style="color:#4ade80"></i> Cash payment
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:20px;width:300px">
+            <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:6px">
+                <i class="ti ti-cash" style="color:var(--success)"></i> Cash payment
             </div>
-            <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:8px;padding:12px;margin-bottom:14px">
-                <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-bottom:5px"><span>Total</span><span x-text="'Rs. ' + total.toLocaleString()"></span></div>
-                <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-bottom:5px"><span>Cash received</span><span x-text="'Rs. ' + cashNum.toLocaleString()"></span></div>
-                <div style="display:flex;justify-content:space-between;font-size:13px;color:#4ade80;font-weight:500;padding-top:6px;border-top:.5px solid #2a2d3a"><span>Change</span><span x-text="'Rs. ' + Math.max(0, cashNum - total).toLocaleString()"></span></div>
+            <div style="background:var(--bg);border:.5px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);margin-bottom:5px"><span>Total</span><span x-text="'Rs. ' + total.toLocaleString()"></span></div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);margin-bottom:5px"><span>Cash received</span><span x-text="'Rs. ' + cashNum.toLocaleString()"></span></div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--success);font-weight:500;padding-top:6px;border-top:.5px solid var(--border)"><span>Change</span><span x-text="'Rs. ' + Math.max(0, cashNum - total).toLocaleString()"></span></div>
             </div>
             <div style="display:flex;gap:8px">
-                <button @click="showCashModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
-                <button x-ref="cashBtn" @click="confirmCash()" style="flex:1;height:36px;background:#1D9E75;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Complete sale</button>
+                <button @click="showCashModal=false" style="flex:1;height:36px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
+                <button x-ref="cashBtn" @click="confirmCash()" style="flex:1;height:36px;background:var(--success-solid);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Complete sale</button>
             </div>
         </div>
     </div>
@@ -641,32 +641,32 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Open counter popup (required — blocks POS until a session is open) --}}
     <template x-teleport="body">
     <div x-show="showOpenModal" x-cloak
-         style="position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:50">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:18px;width:340px;max-height:92vh;overflow-y:auto">
-            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:4px;display:flex;align-items:center;gap:6px">
-                <i class="ti ti-cash" style="color:#4ade80"></i> Open counter
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:18px;width:340px;max-height:92vh;overflow-y:auto">
+            <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px">
+                <i class="ti ti-cash" style="color:var(--success)"></i> Open counter
             </div>
-            <div style="font-size:11px;color:#64748b;margin-bottom:12px">Count the cash float — type a count, press <b style="color:#94a3b8">Tab</b> for the next.</div>
-            <div x-show="prevClose" x-cloak style="font-size:11px;color:#fbbf24;background:#3a2c0c;border:.5px solid #78531a;border-radius:6px;padding:6px 9px;margin-bottom:10px">
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Count the cash float — type a count, press <b style="color:var(--text-2)">Tab</b> for the next.</div>
+            <div x-show="prevClose" x-cloak style="font-size:11px;color:var(--warning-2);background:var(--warning-soft-3);border:.5px solid var(--warning-border-2);border-radius:6px;padding:6px 9px;margin-bottom:10px">
                 Last close was <b x-text="'Rs. ' + (prevClose ? prevClose.balance.toLocaleString() : '')"></b> — the drawer should match this.
             </div>
             <template x-for="d in denoms" :key="d">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-                    <span style="width:58px;font-size:12px;color:#94a3b8;text-align:right">Rs. <span x-text="d.toLocaleString()"></span></span>
-                    <span style="color:#475569">×</span>
+                    <span style="width:58px;font-size:12px;color:var(--text-2);text-align:right">Rs. <span x-text="d.toLocaleString()"></span></span>
+                    <span style="color:var(--text-5)">×</span>
                     <input type="text" inputmode="numeric" class="amt-input denom-open" style="width:64px;text-align:center"
                            x-model="openDenoms[d]" @focus="$event.target.select()"
                            @input="openDenoms[d] = String(openDenoms[d]).replace(/\D/g,'')">
-                    <span style="flex:1;text-align:right;font-size:12px;color:#e2e8f0" x-text="'Rs. ' + (d * (parseInt(openDenoms[d])||0)).toLocaleString()"></span>
+                    <span style="flex:1;text-align:right;font-size:12px;color:var(--text)" x-text="'Rs. ' + (d * (parseInt(openDenoms[d])||0)).toLocaleString()"></span>
                 </div>
             </template>
-            <div style="display:flex;justify-content:space-between;font-size:14px;color:#e2e8f0;font-weight:600;padding-top:8px;margin-top:6px;border-top:.5px solid #2a2d3a">
+            <div style="display:flex;justify-content:space-between;font-size:14px;color:var(--text);font-weight:600;padding-top:8px;margin-top:6px;border-top:.5px solid var(--border)">
                 <span>Opening float</span><span x-text="'Rs. ' + openTotal.toLocaleString()"></span>
             </div>
-            <div x-show="openError" x-cloak x-text="openError" style="color:#f87171;font-size:11px;margin-top:8px"></div>
+            <div x-show="openError" x-cloak x-text="openError" style="color:var(--danger);font-size:11px;margin-top:8px"></div>
             <div style="display:flex;gap:8px;margin-top:14px">
-                <a href="{{ route('dashboard') }}" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none">Exit POS</a>
-                <button @click="submitOpen()" style="flex:1;height:36px;background:#14532d;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Open counter</button>
+                <a href="{{ route('dashboard') }}" style="flex:1;height:36px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none">Exit POS</a>
+                <button @click="submitOpen()" style="flex:1;height:36px;background:var(--success-solid);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Open counter</button>
             </div>
         </div>
     </div>
@@ -675,41 +675,41 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Close counter popup --}}
     <template x-teleport="body">
     <div x-show="showCloseModal" x-cloak @keydown.escape.window="!closeResult && (showCloseModal=false)" @click.self="!closeResult && (showCloseModal=false)"
-         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:18px;width:340px;max-height:92vh;overflow-y:auto">
-            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:12px;display:flex;align-items:center;gap:6px">
-                <i class="ti ti-lock" style="color:#fbbf24"></i> Close counter
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:18px;width:340px;max-height:92vh;overflow-y:auto">
+            <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:6px">
+                <i class="ti ti-lock" style="color:var(--warning-2)"></i> Close counter
             </div>
 
             {{-- Counting form --}}
             <template x-if="!closeResult">
             <div>
-                <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
-                    <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-bottom:4px"><span>Opening float</span><span x-text="'Rs. ' + openingBalance.toLocaleString()"></span></div>
-                    <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-bottom:4px"><span>Cash sales</span><span x-text="'Rs. ' + cashSalesSoFar.toLocaleString()"></span></div>
-                    <div style="display:flex;justify-content:space-between;color:#e2e8f0;font-weight:600;padding-top:5px;border-top:.5px solid #2a2d3a"><span>Expected in drawer</span><span x-text="'Rs. ' + closeExpected.toLocaleString()"></span></div>
+                <div style="background:var(--bg);border:.5px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
+                    <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px"><span>Opening float</span><span x-text="'Rs. ' + openingBalance.toLocaleString()"></span></div>
+                    <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px"><span>Cash sales</span><span x-text="'Rs. ' + cashSalesSoFar.toLocaleString()"></span></div>
+                    <div style="display:flex;justify-content:space-between;color:var(--text);font-weight:600;padding-top:5px;border-top:.5px solid var(--border)"><span>Expected in drawer</span><span x-text="'Rs. ' + closeExpected.toLocaleString()"></span></div>
                 </div>
-                <div style="font-size:11px;color:#64748b;margin-bottom:8px">Count the cash now — type a count, <b style="color:#94a3b8">Tab</b> for the next:</div>
+                <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">Count the cash now — type a count, <b style="color:var(--text-2)">Tab</b> for the next:</div>
                 <template x-for="d in denoms" :key="d">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-                        <span style="width:58px;font-size:12px;color:#94a3b8;text-align:right">Rs. <span x-text="d.toLocaleString()"></span></span>
-                        <span style="color:#475569">×</span>
+                        <span style="width:58px;font-size:12px;color:var(--text-2);text-align:right">Rs. <span x-text="d.toLocaleString()"></span></span>
+                        <span style="color:var(--text-5)">×</span>
                         <input type="text" inputmode="numeric" class="amt-input denom-close" style="width:64px;text-align:center"
                                x-model="closeDenoms[d]" @focus="$event.target.select()"
                                @input="closeDenoms[d] = String(closeDenoms[d]).replace(/\D/g,'')">
-                        <span style="flex:1;text-align:right;font-size:12px;color:#e2e8f0" x-text="'Rs. ' + (d * (parseInt(closeDenoms[d])||0)).toLocaleString()"></span>
+                        <span style="flex:1;text-align:right;font-size:12px;color:var(--text)" x-text="'Rs. ' + (d * (parseInt(closeDenoms[d])||0)).toLocaleString()"></span>
                     </div>
                 </template>
-                <div style="display:flex;justify-content:space-between;font-size:13px;color:#e2e8f0;font-weight:600;padding-top:8px;margin-top:6px;border-top:.5px solid #2a2d3a"><span>Counted</span><span x-text="'Rs. ' + closeTotal.toLocaleString()"></span></div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text);font-weight:600;padding-top:8px;margin-top:6px;border-top:.5px solid var(--border)"><span>Counted</span><span x-text="'Rs. ' + closeTotal.toLocaleString()"></span></div>
                 <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-top:4px"
-                     :style="closeVariance===0 ? 'color:#4ade80' : 'color:#f87171'">
+                     :style="closeVariance===0 ? 'color:var(--success)' : 'color:var(--danger)'">
                     <span x-text="closeVariance===0 ? 'Balanced' : (closeVariance>0 ? 'Over by' : 'Short by')"></span>
                     <span x-text="'Rs. ' + Math.abs(closeVariance).toLocaleString()"></span>
                 </div>
                 <div x-show="closeError" x-cloak x-text="closeError" style="color:#f87171;font-size:11px;margin-top:8px"></div>
                 <div style="display:flex;gap:8px;margin-top:14px">
-                    <button @click="showCloseModal=false" style="flex:1;height:36px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
-                    <button @click="submitClose()" style="flex:1;height:36px;background:#7f1d1d;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Close counter</button>
+                    <button @click="showCloseModal=false" style="flex:1;height:36px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
+                    <button @click="submitClose()" style="flex:1;height:36px;background:var(--danger-solid);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Close counter</button>
                 </div>
             </div>
             </template>
@@ -717,20 +717,20 @@ input[type=number]{-moz-appearance:textfield}
             {{-- Result --}}
             <template x-if="closeResult">
             <div style="text-align:center">
-                <div style="width:48px;height:48px;border-radius:50%;background:#14532d;display:flex;align-items:center;justify-content:center;margin:4px auto 12px">
-                    <i class="ti ti-check" style="font-size:24px;color:#4ade80"></i>
+                <div style="width:48px;height:48px;border-radius:50%;background:var(--success-soft);display:flex;align-items:center;justify-content:center;margin:4px auto 12px">
+                    <i class="ti ti-check" style="font-size:24px;color:var(--success)"></i>
                 </div>
-                <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:12px">Counter closed</div>
-                <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:8px;padding:12px;margin-bottom:14px;text-align:left;font-size:12px">
-                    <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-bottom:4px"><span>Expected</span><span x-text="closeResult ? 'Rs. ' + closeResult.expected.toLocaleString() : ''"></span></div>
-                    <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-bottom:4px"><span>Counted</span><span x-text="closeResult ? 'Rs. ' + closeResult.counted.toLocaleString() : ''"></span></div>
-                    <div style="display:flex;justify-content:space-between;font-weight:600;padding-top:5px;border-top:.5px solid #2a2d3a"
-                         :style="(closeResult && closeResult.variance===0) ? 'color:#4ade80' : 'color:#f87171'">
+                <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px">Counter closed</div>
+                <div style="background:var(--bg);border:.5px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px;text-align:left;font-size:12px">
+                    <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px"><span>Expected</span><span x-text="closeResult ? 'Rs. ' + closeResult.expected.toLocaleString() : ''"></span></div>
+                    <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px"><span>Counted</span><span x-text="closeResult ? 'Rs. ' + closeResult.counted.toLocaleString() : ''"></span></div>
+                    <div style="display:flex;justify-content:space-between;font-weight:600;padding-top:5px;border-top:.5px solid var(--border)"
+                         :style="(closeResult && closeResult.variance===0) ? 'color:var(--success)' : 'color:var(--danger)'">
                         <span x-text="!closeResult ? '' : (closeResult.variance===0 ? 'Balanced' : (closeResult.variance>0 ? 'Over by' : 'Short by'))"></span>
                         <span x-text="closeResult ? 'Rs. ' + Math.abs(closeResult.variance).toLocaleString() : ''"></span>
                     </div>
                 </div>
-                <button @click="window.location.href = dashboardUrl" style="width:100%;height:38px;background:#312e81;border:.5px solid #534AB7;border-radius:7px;color:#a5b4fc;font-size:13px;font-weight:600;cursor:pointer">Done</button>
+                <button @click="window.location.href = dashboardUrl" style="width:100%;height:38px;background:var(--primary-soft);border:.5px solid var(--primary-border);border-radius:7px;color:var(--primary-text);font-size:13px;font-weight:600;cursor:pointer">Done</button>
             </div>
             </template>
         </div>
@@ -740,10 +740,10 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Keyboard shortcuts popup --}}
     <template x-teleport="body">
     <div x-show="showShortcuts" x-cloak @keydown.escape.window="showShortcuts=false" @click.self="showShortcuts=false"
-         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:18px;width:360px;max-height:88vh;overflow-y:auto">
-            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-                <i class="ti ti-keyboard" style="color:#818cf8"></i> Keyboard shortcuts
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:18px;width:360px;max-height:88vh;overflow-y:auto">
+            <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+                <i class="ti ti-keyboard" style="color:var(--primary)"></i> Keyboard shortcuts
             </div>
             @foreach([
                 ['F1','Show this help'],
@@ -760,9 +760,9 @@ input[type=number]{-moz-appearance:textfield}
                 ['Tab','Next count field (counter popups)'],
                 ['Esc','Close a popup'],
             ] as [$k,$desc])
-            <div class="sc-row"><span style="color:#94a3b8">{{ $desc }}</span><span class="sc-key">{{ $k }}</span></div>
+            <div class="sc-row"><span style="color:var(--text-2)">{{ $desc }}</span><span class="sc-key">{{ $k }}</span></div>
             @endforeach
-            <button @click="showShortcuts=false" style="width:100%;height:36px;margin-top:14px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Close</button>
+            <button @click="showShortcuts=false" style="width:100%;height:36px;margin-top:14px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Close</button>
         </div>
     </div>
     </template>
@@ -770,18 +770,18 @@ input[type=number]{-moz-appearance:textfield}
     {{-- Calculator popup --}}
     <template x-teleport="body">
     <div x-show="showCalc" x-cloak @keydown.escape.window="showCalc=false" @click.self="showCalc=false"
-         style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:16px;width:280px">
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:16px;width:280px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-                <div style="font-size:13px;font-weight:600;color:#e2e8f0;display:flex;align-items:center;gap:6px"><i class="ti ti-calculator" style="color:#818cf8"></i> Calculator</div>
-                <i class="ti ti-x" @click="showCalc=false" style="font-size:15px;color:#64748b;cursor:pointer"></i>
+                <div style="font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px"><i class="ti ti-calculator" style="color:var(--primary)"></i> Calculator</div>
+                <i class="ti ti-x" @click="showCalc=false" style="font-size:15px;color:var(--text-3);cursor:pointer"></i>
             </div>
-            <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:8px;padding:8px 12px;margin-bottom:10px;text-align:right">
-                <div style="font-size:11px;color:#475569;min-height:14px" x-text="calcSub"></div>
-                <div style="font-size:26px;color:#e2e8f0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="calcDisplay"></div>
+            <div style="background:var(--bg);border:.5px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px;text-align:right">
+                <div style="font-size:11px;color:var(--text-5);min-height:14px" x-text="calcSub"></div>
+                <div style="font-size:26px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="calcDisplay"></div>
             </div>
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
-                <button class="calc-key" @click="calcClear()" style="color:#f87171">C</button>
+                <button class="calc-key" @click="calcClear()" style="color:var(--danger)">C</button>
                 <button class="calc-key" @click="calcBackspace()"><i class="ti ti-backspace"></i></button>
                 <button class="calc-key op" @click="calcOperator('/')">÷</button>
                 <button class="calc-key op" @click="calcOperator('*')">×</button>

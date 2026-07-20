@@ -7,9 +7,9 @@
 <div style="padding:14px 16px">
 
 @if(!empty($prefill))
-<div style="display:flex;align-items:center;gap:8px;background:#1e2130;border:.5px solid #534AB7;border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:#a5b4fc">
+<div style="display:flex;align-items:center;gap:8px;background:var(--surface-2);border:.5px solid var(--primary-border);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:var(--primary-text)">
     <i class="ti ti-file-invoice" style="font-size:14px"></i>
-    Converting quotation <strong style="color:#e2e8f0;margin:0 3px">{{ $prefill['quote_no'] }}</strong> — review the items and save to complete the sale.
+    Converting quotation <strong style="color:var(--text);margin:0 3px">{{ $prefill['quote_no'] }}</strong> — review the items and save to complete the sale.
 </div>
 @endif
 
@@ -21,11 +21,11 @@
 
 {{-- Left — Items --}}
 <div>
-<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px;margin-bottom:12px">
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Sale items</div>
+<div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:12px">Sale items</div>
 
     {{-- Column headers --}}
-    <div style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 1fr 28px;gap:5px;font-size:10px;color:#4a5568;margin-bottom:5px;padding:0 2px">
+    <div style="display:grid;grid-template-columns:2.5fr 1fr 1fr 1fr 1fr 28px;gap:5px;font-size:10px;color:var(--text-4);margin-bottom:5px;padding:0 2px">
         <span>Product</span><span>Qty</span><span>Unit price</span><span>Disc. %</span><span>Subtotal</span><span></span>
     </div>
 
@@ -34,78 +34,78 @@
             <div style="position:relative">
                 <input type="text" name="items[0][product_search]" placeholder="Search product..." autocomplete="off"
                     oninput="searchProduct(this,0)"
-                    style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
+                    style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none">
                 <input type="hidden" name="items[0][product_id]">
-                <div class="product-dropdown" id="drop-0" style="display:none;position:absolute;top:28px;left:0;right:0;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;z-index:20;max-height:140px;overflow-y:auto"></div>
+                <div class="product-dropdown" id="drop-0" style="display:none;position:absolute;top:28px;left:0;right:0;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;z-index:20;max-height:140px;overflow-y:auto"></div>
             </div>
-            <input type="number" name="items[0][quantity]" value="1" min="0.001" step="0.001" oninput="calcSaleRow(this)" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
-            <input type="number" name="items[0][unit_price]" placeholder="0.00" min="0" step="0.01" oninput="calcSaleRow(this)" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
-            <input type="number" name="items[0][discount_pct]" value="0" min="0" max="100" step="0.01" oninput="calcSaleRow(this)" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
-            <input type="number" name="items[0][subtotal]" placeholder="0.00" readonly style="background:#0f1117;border:.5px solid #1a1d2a;border-radius:5px;color:#a5b4fc;font-size:11px;padding:5px 8px;outline:none">
-            <div style="width:26px;height:26px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#f87171;font-size:13px" onclick="removeSaleRow(this)"><i class="ti ti-x"></i></div>
+            <input type="number" name="items[0][quantity]" value="1" min="0.001" step="0.001" oninput="calcSaleRow(this)" style="background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none">
+            <input type="number" name="items[0][unit_price]" placeholder="0.00" min="0" step="0.01" oninput="calcSaleRow(this)" style="background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none">
+            <input type="number" name="items[0][discount_pct]" value="0" min="0" max="100" step="0.01" oninput="calcSaleRow(this)" style="background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none">
+            <input type="number" name="items[0][subtotal]" placeholder="0.00" readonly style="background:var(--bg);border:.5px solid var(--surface-3);border-radius:5px;color:var(--primary-text);font-size:11px;padding:5px 8px;outline:none">
+            <div style="width:26px;height:26px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--danger);font-size:13px" onclick="removeSaleRow(this)"><i class="ti ti-x"></i></div>
         </div>
     </div>
 
-    <button type="button" onclick="addSaleRow()" style="height:28px;padding:0 10px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;color:#94a3b8;font-size:11px;cursor:pointer;margin-top:4px">
+    <button type="button" onclick="addSaleRow()" style="height:28px;padding:0 10px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;color:var(--text-2);font-size:11px;cursor:pointer;margin-top:4px">
         <i class="ti ti-plus" style="font-size:11px"></i> Add item
     </button>
 </div>
 
 {{-- Remark --}}
-<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:12px">
-    <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Remarks (optional)</label>
+<div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:12px">
+    <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Remarks (optional)</label>
     <input type="text" id="sale-note" name="note" placeholder="Internal note..."
-        style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+        style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:7px 10px;outline:none">
 </div>
 </div>
 
 {{-- Right — Summary + submit --}}
 <div>
-<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px;margin-bottom:10px">
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:12px">Sale summary</div>
+<div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px">
+    <div style="font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:12px">Sale summary</div>
 
     <div style="margin-bottom:10px">
-        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Customer</label>
-        <select name="customer_id" style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+        <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Customer</label>
+        <select name="customer_id" style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:7px 10px;outline:none">
             <option value="">Walk-in customer</option>
             @foreach($customers as $c)<option value="{{ $c->id }}">{{ $c->name }} ({{ $c->phone }})</option>@endforeach
         </select>
     </div>
 
     <div style="margin-bottom:10px">
-        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Coupon code</label>
+        <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Coupon code</label>
         <div style="display:flex;gap:6px">
-            <input type="text" name="coupon_code" id="coupon-code" placeholder="Enter code" style="flex:1;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
-            <button type="button" onclick="applyCoupon()" style="height:34px;padding:0 10px;background:#312e81;color:#a5b4fc;border:.5px solid #534AB7;border-radius:6px;font-size:11px;cursor:pointer">Apply</button>
+            <input type="text" name="coupon_code" id="coupon-code" placeholder="Enter code" style="flex:1;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:7px 10px;outline:none">
+            <button type="button" onclick="applyCoupon()" style="height:34px;padding:0 10px;background:var(--primary-soft);color:var(--primary-text);border:.5px solid var(--primary-border);border-radius:6px;font-size:11px;cursor:pointer">Apply</button>
         </div>
         <div id="coupon-msg" style="font-size:10px;margin-top:3px"></div>
     </div>
 
-    <div style="border-top:.5px solid #2a2d3a;padding-top:10px;margin-top:6px">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-bottom:4px">
+    <div style="border-top:.5px solid var(--border);padding-top:10px;margin-top:6px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);margin-bottom:4px">
             <span>Subtotal</span><span id="sum-subtotal">Rs. 0.00</span>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:#4ade80;margin-bottom:4px" id="discount-row" style="display:none">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--success);margin-bottom:4px" id="discount-row" style="display:none">
             <span>Discount</span><span id="sum-discount">Rs. 0.00</span>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-bottom:4px" id="tax-row">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);margin-bottom:4px" id="tax-row">
             <span>Tax</span><span id="sum-tax">Rs. 0.00</span>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:500;color:#e2e8f0;padding-top:6px;border-top:.5px solid #2a2d3a">
+        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:500;color:var(--text);padding-top:6px;border-top:.5px solid var(--border)">
             <span>Total</span><span id="sum-total">Rs. 0.00</span>
         </div>
     </div>
 </div>
 
-<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px;margin-bottom:10px">
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:10px">Payment</div>
+<div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px">
+    <div style="font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:10px">Payment</div>
 
     <div style="margin-bottom:10px">
-        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:6px">Method</label>
+        <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:6px">Method</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px" id="pay-methods">
             @foreach([['cash','Cash','ti-cash'],['card','Card','ti-credit-card'],['bank_transfer','Bank','ti-building-bank'],['credit','Credit','ti-calendar-due']] as [$val,$lbl,$ico])
-            <label style="display:flex;align-items:center;gap:6px;padding:7px 9px;background:#0f1117;border:.5px solid {{ $val==='cash'?'#534AB7':'#2a2d3a' }};border-radius:6px;cursor:pointer;font-size:11px;color:#e2e8f0" id="pm-{{ $val }}">
-                <input type="radio" name="payment_method" value="{{ $val }}" {{ $val==='cash'?'checked':'' }} style="accent-color:#818cf8" onchange="selectPM('{{ $val }}')">
+            <label style="display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--bg);border:.5px solid {{ $val==='cash'?'var(--primary-border)':'var(--border)' }};border-radius:6px;cursor:pointer;font-size:11px;color:var(--text)" id="pm-{{ $val }}">
+                <input type="radio" name="payment_method" value="{{ $val }}" {{ $val==='cash'?'checked':'' }} style="accent-color:var(--primary)" onchange="selectPM('{{ $val }}')">
                 <i class="ti {{ $ico }}" style="font-size:13px"></i>{{ $lbl }}
             </label>
             @endforeach
@@ -113,22 +113,22 @@
     </div>
 
     <div style="margin-bottom:10px">
-        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Account</label>
-        <select name="account_id" style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+        <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Account</label>
+        <select name="account_id" style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:7px 10px;outline:none">
             @foreach($accounts as $a)<option value="{{ $a->id }}">{{ $a->name }} (Rs. {{ number_format($a->balance) }})</option>@endforeach
         </select>
     </div>
 
     <div style="margin-bottom:10px">
-        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Amount paid (Rs.)</label>
+        <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Amount paid (Rs.)</label>
         <input type="number" name="paid_amount" id="paid-amount" min="0" step="0.01"
-            style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:14px;font-weight:500;padding:8px 10px;outline:none"
+            style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-weight:500;padding:8px 10px;outline:none"
             oninput="calcChange()">
     </div>
 
-    <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-top:.5px solid #2a2d3a">
-        <span style="color:#64748b">Change</span>
-        <span style="color:#4ade80;font-weight:500" id="change-amount">Rs. 0.00</span>
+    <div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-top:.5px solid var(--border)">
+        <span style="color:var(--text-3)">Change</span>
+        <span style="color:var(--success);font-weight:500" id="change-amount">Rs. 0.00</span>
     </div>
 </div>
 
@@ -141,11 +141,11 @@
 <input type="hidden" name="change_amount" id="h-change">
 <input type="hidden" name="note" id="h-note">
 
-<button type="submit" onclick="submitSale(event)" style="width:100%;height:42px;background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer">
+<button type="submit" onclick="submitSale(event)" style="width:100%;height:42px;background:var(--success-soft);color:var(--success);border:.5px solid var(--success-border);border-radius:7px;font-size:13px;font-weight:500;cursor:pointer">
     <i class="ti ti-check" style="font-size:15px;margin-right:5px"></i>Save Sale
 </button>
 
-<a href="{{ route('pos') }}" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:7px;height:34px;background:#312e81;color:#a5b4fc;border:.5px solid #534AB7;border-radius:6px;font-size:12px;text-decoration:none">
+<a href="{{ route('pos') }}" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:7px;height:34px;background:var(--primary-soft);color:var(--primary-text);border:.5px solid var(--primary-border);border-radius:6px;font-size:12px;text-decoration:none">
     <i class="ti ti-scan" style="font-size:13px"></i>Use Full POS instead
 </a>
 </div>
@@ -168,9 +168,9 @@ function searchProduct(el, idx) {
     const matches = products.filter(p => p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q))).slice(0, 8);
     if (!matches.length) { drop.style.display = 'none'; return; }
     drop.innerHTML = matches.map(p =>
-        `<div onclick="selectProduct(${idx},${p.id},'${p.name.replace(/'/g,"\\'")}',${p.price})" style="padding:6px 10px;cursor:pointer;font-size:11px;color:#e2e8f0;border-bottom:.5px solid #2a2d3a;display:flex;justify-content:space-between"
-            onmouseover="this.style.background='#312e81'" onmouseout="this.style.background=''">
-            <span>${p.name}</span><span style="color:#a5b4fc">Rs. ${Number(p.price).toLocaleString()}</span>
+        `<div onclick="selectProduct(${idx},${p.id},'${p.name.replace(/'/g,"\\'")}',${p.price})" style="padding:6px 10px;cursor:pointer;font-size:11px;color:var(--text);border-bottom:.5px solid var(--border);display:flex;justify-content:space-between"
+            onmouseover="this.style.background='var(--primary-soft)'" onmouseout="this.style.background=''">
+            <span>${p.name}</span><span style="color:var(--primary-text)">Rs. ${Number(p.price).toLocaleString()}</span>
         </div>`
     ).join('');
     drop.style.display = 'block';
@@ -238,15 +238,15 @@ function addSaleRow() {
         <div style="position:relative">
             <input type="text" name="items[${rowIdx}][product_search]" placeholder="Search product..." autocomplete="off"
                 oninput="searchProduct(this,${rowIdx})"
-                style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
+                style="width:100%;background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none">
             <input type="hidden" name="items[${rowIdx}][product_id]">
-            <div class="product-dropdown" id="drop-${rowIdx}" style="display:none;position:absolute;top:28px;left:0;right:0;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;z-index:20;max-height:140px;overflow-y:auto"></div>
+            <div class="product-dropdown" id="drop-${rowIdx}" style="display:none;position:absolute;top:28px;left:0;right:0;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;z-index:20;max-height:140px;overflow-y:auto"></div>
         </div>
-        <input type="number" name="items[${rowIdx}][quantity]" value="1" min="0.001" step="0.001" oninput="calcSaleRow(this)" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
-        <input type="number" name="items[${rowIdx}][unit_price]" placeholder="0.00" min="0" step="0.01" oninput="calcSaleRow(this)" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
-        <input type="number" name="items[${rowIdx}][discount_pct]" value="0" min="0" max="100" step="0.01" oninput="calcSaleRow(this)" style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:5px;color:#e2e8f0;font-size:11px;padding:5px 8px;outline:none">
-        <input type="number" name="items[${rowIdx}][subtotal]" placeholder="0.00" readonly style="background:#0f1117;border:.5px solid #1a1d2a;border-radius:5px;color:#a5b4fc;font-size:11px;padding:5px 8px;outline:none">
-        <div style="width:26px;height:26px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#f87171;font-size:13px" onclick="removeSaleRow(this)"><i class="ti ti-x"></i></div>`;
+        <input type="number" name="items[${rowIdx}][quantity]" value="1" min="0.001" step="0.001" oninput="calcSaleRow(this)" style="background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none">
+        <input type="number" name="items[${rowIdx}][unit_price]" placeholder="0.00" min="0" step="0.01" oninput="calcSaleRow(this)" style="background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none">
+        <input type="number" name="items[${rowIdx}][discount_pct]" value="0" min="0" max="100" step="0.01" oninput="calcSaleRow(this)" style="background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none">
+        <input type="number" name="items[${rowIdx}][subtotal]" placeholder="0.00" readonly style="background:var(--bg);border:.5px solid var(--surface-3);border-radius:5px;color:var(--primary-text);font-size:11px;padding:5px 8px;outline:none">
+        <div style="width:26px;height:26px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--danger);font-size:13px" onclick="removeSaleRow(this)"><i class="ti ti-x"></i></div>`;
     container.appendChild(div);
     rowIdx++;
 }
@@ -259,9 +259,9 @@ function removeSaleRow(el) {
 // ── Payment method selector ───────────────────────────
 function selectPM(val) {
     document.querySelectorAll('[id^="pm-"]').forEach(l => {
-        l.style.border = '.5px solid #2a2d3a';
+        l.style.border = '.5px solid var(--border)';
     });
-    document.getElementById('pm-' + val).style.border = '.5px solid #534AB7';
+    document.getElementById('pm-' + val).style.border = '.5px solid var(--primary-border)';
     calcTotals();
 }
 
@@ -271,7 +271,7 @@ function applyCoupon() {
     const msg  = document.getElementById('coupon-msg');
     if (!code) { msg.textContent = ''; return; }
     // Server validation on submit; just show pending
-    msg.style.color = '#fb923c';
+    msg.style.color = 'var(--warning)';
     msg.textContent = 'Coupon "' + code + '" will be applied on save.';
 }
 

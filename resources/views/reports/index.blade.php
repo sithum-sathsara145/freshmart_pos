@@ -20,22 +20,22 @@
     </div>
 
     {{-- Report cards --}}
-    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:8px">All reports</div>
+    <div style="font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:8px">All reports</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
         @foreach($cards as $c)
             @php $soon = empty($c['url']); @endphp
             <a @if(!$soon) href="{{ $c['url'] }}" @endif
-               style="display:flex;gap:11px;align-items:flex-start;background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:13px 14px;text-decoration:none;{{ $soon ? 'opacity:.55;cursor:default' : 'cursor:pointer' }}"
-               @if(!$soon) onmouseover="this.style.borderColor='#534AB7'" onmouseout="this.style.borderColor='#2a2d3a'" @endif>
+               style="display:flex;gap:11px;align-items:flex-start;background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:13px 14px;text-decoration:none;{{ $soon ? 'opacity:.55;cursor:default' : 'cursor:pointer' }}"
+               @if(!$soon) onmouseover="this.style.borderColor='var(--primary-border)'" onmouseout="this.style.borderColor='var(--border)'" @endif>
                 <div style="width:34px;height:34px;flex-shrink:0;border-radius:8px;background:{{ $c['color'] }}22;display:flex;align-items:center;justify-content:center">
                     <i class="ti {{ $c['icon'] }}" style="font-size:17px;color:{{ $c['color'] }}"></i>
                 </div>
                 <div style="min-width:0">
-                    <div style="font-size:13px;font-weight:500;color:#e2e8f0;display:flex;align-items:center;gap:6px">
+                    <div style="font-size:13px;font-weight:500;color:var(--text);display:flex;align-items:center;gap:6px">
                         {{ $c['title'] }}
-                        @if($soon)<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:#1e2130;color:#64748b;font-weight:400">soon</span>@endif
+                        @if($soon)<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surface-2);color:var(--text-3);font-weight:400">soon</span>@endif
                     </div>
-                    <div style="font-size:11px;color:#64748b;margin-top:2px;line-height:1.3">{{ $c['desc'] }}</div>
+                    <div style="font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.3">{{ $c['desc'] }}</div>
                 </div>
             </a>
         @endforeach

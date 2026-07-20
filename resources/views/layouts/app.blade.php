@@ -7,6 +7,10 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'FreshMart POS')</title>
 
+    {{-- Theme tokens. Included first so the saved theme is applied before the
+         browser paints anything. --}}
+    @include('partials.theme')
+
     {{-- Tailwind CSS --}}
     <script src="https://cdn.tailwindcss.com"></script>
     {{-- Alpine.js --}}
@@ -20,10 +24,10 @@
             theme: {
                 extend: {
                     colors: {
-                        bg: '#0f1117',
-                        surface: '#161821',
-                        border: '#2a2d3a',
-                        primary: '#818cf8',
+                        bg: 'var(--bg)',
+                        surface: 'var(--surface)',
+                        border: 'var(--border)',
+                        primary: 'var(--primary)',
                     }
                 }
             }
@@ -32,16 +36,16 @@
 
     <style>
         * { box-sizing: border-box; }
-        body { background: #0f1117; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; margin: 0; }
+        body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; margin: 0; }
         ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: #0f1117; }
-        ::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 3px; }
-        .sidebar-link { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: #94a3b8; cursor: pointer; border-left: 2px solid transparent; transition: all .12s; text-decoration: none; }
-        .sidebar-link:hover { background: #1e2130; color: #e2e8f0; }
-        .sidebar-link.active { background: #1e2130; color: #a5b4fc; border-left-color: #818cf8; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .sidebar-link { display: flex; align-items: center; gap: 9px; padding: 8px 14px; font-size: 13px; color: var(--text-2); cursor: pointer; border-left: 2px solid transparent; transition: all .12s; text-decoration: none; }
+        .sidebar-link:hover { background: var(--surface-2); color: var(--text); }
+        .sidebar-link.active { background: var(--surface-2); color: var(--primary-text); border-left-color: var(--primary); }
         .sidebar-link i { font-size: 16px; width: 20px; }
-        .sidebar-section { font-size: 10px; color: #4a5568; padding: 10px 14px 3px; letter-spacing: .7px; text-transform: uppercase; }
-        .main-topbar { height: 50px; background: #161821; border-bottom: .5px solid #2a2d3a; display: flex; align-items: center; padding: 0 16px; gap: 10px; }
+        .sidebar-section { font-size: 10px; color: var(--text-4); padding: 10px 14px 3px; letter-spacing: .7px; text-transform: uppercase; }
+        .main-topbar { height: 50px; background: var(--surface); border-bottom: .5px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 10px; }
     </style>
     @stack('styles')
 </head>
@@ -49,19 +53,19 @@
 
 <div style="display:flex;height:100vh;overflow:hidden">
     {{-- Sidebar --}}
-    <div class="app-sidebar" style="width:210px;background:#161821;border-right:.5px solid #2a2d3a;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto">
+    <div class="app-sidebar" style="width:210px;background:var(--surface);border-right:.5px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto">
         {{-- Logo --}}
-        <div style="padding:14px 14px 12px;border-bottom:.5px solid #2a2d3a">
-            <div style="font-size:15px;font-weight:500;color:#e2e8f0">
-                <i class="ti ti-shopping-cart" style="color:#818cf8;margin-right:6px"></i>FreshMart
+        <div style="padding:14px 14px 12px;border-bottom:.5px solid var(--border)">
+            <div style="font-size:15px;font-weight:500;color:var(--text)">
+                <i class="ti ti-shopping-cart" style="color:var(--primary);margin-right:6px"></i>FreshMart
             </div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px">POS System</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:2px">POS System</div>
         </div>
 
         {{-- Quick POS button --}}
         @can('pos.access')
-        <div style="padding:10px 12px;border-bottom:.5px solid #2a2d3a">
-            <a href="{{ route('pos') }}" style="display:flex;align-items:center;justify-content:center;gap:6px;background:#312e81;color:#a5b4fc;border-radius:7px;padding:8px;font-size:13px;font-weight:500;text-decoration:none;border:.5px solid #534AB7">
+        <div style="padding:10px 12px;border-bottom:.5px solid var(--border)">
+            <a href="{{ route('pos') }}" style="display:flex;align-items:center;justify-content:center;gap:6px;background:var(--primary-soft);color:var(--primary-text);border-radius:7px;padding:8px;font-size:13px;font-weight:500;text-decoration:none;border:.5px solid var(--primary-border)">
                 <i class="ti ti-scan"></i> Open POS
             </a>
         </div>
@@ -252,18 +256,18 @@
         </nav>
 
         {{-- User info --}}
-        <div style="padding:10px 12px;border-top:.5px solid #2a2d3a">
+        <div style="padding:10px 12px;border-top:.5px solid var(--border)">
             <div style="display:flex;align-items:center;gap:8px">
-                <div style="width:28px;height:28px;background:#1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#60a5fa;font-weight:500">
+                <div style="width:28px;height:28px;background:var(--info-soft);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--info);font-weight:500">
                     {{ strtoupper(substr(auth()->user()->name, 0, 2)) }}
                 </div>
                 <div>
-                    <div style="font-size:12px;font-weight:500;color:#e2e8f0">{{ auth()->user()->name }}</div>
-                    <div style="font-size:10px;color:#64748b">{{ auth()->user()->getRoleNames()->first() ?? 'Staff' }}</div>
+                    <div style="font-size:12px;font-weight:500;color:var(--text)">{{ auth()->user()->name }}</div>
+                    <div style="font-size:10px;color:var(--text-3)">{{ auth()->user()->getRoleNames()->first() ?? 'Staff' }}</div>
                 </div>
                 <form method="POST" action="{{ route('logout') }}" style="margin-left:auto">
                     @csrf
-                    <button type="submit" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:14px" title="Logout">
+                    <button type="submit" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px" title="Logout">
                         <i class="ti ti-logout"></i>
                     </button>
                 </form>
@@ -275,9 +279,9 @@
     <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
         {{-- Top bar --}}
         <div class="main-topbar">
-            <div style="font-size:14px;font-weight:500;color:#e2e8f0;flex:1">@yield('page-title', 'Dashboard')</div>
+            <div style="font-size:14px;font-weight:500;color:var(--text);flex:1">@yield('page-title', 'Dashboard')</div>
             {{-- Cashier --}}
-            <div style="font-size:11px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;padding:4px 10px;color:#94a3b8">
+            <div style="font-size:11px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--text-2)">
                 <i class="ti ti-user" style="font-size:12px;margin-right:3px"></i>
                 {{ auth()->user()->name }}
             </div>
@@ -286,62 +290,66 @@
             @php($branchOptions = \App\Support\CurrentBranch::options())
             <div x-data="{ open:false }" style="position:relative">
                 <button type="button" @click="open = !open" @click.outside="open = false"
-                    style="font-size:11px;background:{{ \App\Support\CurrentBranch::isAll() ? '#422006' : '#1e2130' }};border:.5px solid {{ \App\Support\CurrentBranch::isAll() ? '#854d0e' : '#2a2d3a' }};border-radius:6px;padding:4px 10px;color:{{ \App\Support\CurrentBranch::isAll() ? '#fbbf24' : '#94a3b8' }};cursor:pointer;display:flex;align-items:center;gap:4px">
+                    style="font-size:11px;background:{{ \App\Support\CurrentBranch::isAll() ? 'var(--warning-soft-2)' : 'var(--surface-2)' }};border:.5px solid {{ \App\Support\CurrentBranch::isAll() ? 'var(--warning-border)' : 'var(--border)' }};border-radius:6px;padding:4px 10px;color:{{ \App\Support\CurrentBranch::isAll() ? 'var(--warning-2)' : 'var(--text-2)' }};cursor:pointer;display:flex;align-items:center;gap:4px">
                     <i class="ti ti-map-pin" style="font-size:12px"></i>
                     {{ \App\Support\CurrentBranch::name() }}
                     <i class="ti ti-chevron-down" style="font-size:11px"></i>
                 </button>
                 <div x-show="open" x-cloak x-transition.opacity
-                    style="position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:8px;padding:5px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.45)">
+                    style="position:absolute;top:calc(100% + 6px);right:0;min-width:190px;background:var(--surface-2);border:.5px solid var(--border);border-radius:8px;padding:5px;z-index:60;box-shadow:0 8px 24px var(--shadow)">
                     <form method="POST" action="{{ route('branch.switch') }}">
                         @csrf
                         <button type="submit" name="branch_id" value=""
-                            style="width:100%;text-align:left;background:{{ \App\Support\CurrentBranch::isAll() ? '#2a2d3a' : 'transparent' }};border:0;border-radius:6px;padding:7px 9px;color:#fbbf24;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">
+                            style="width:100%;text-align:left;background:{{ \App\Support\CurrentBranch::isAll() ? 'var(--border)' : 'transparent' }};border:0;border-radius:6px;padding:7px 9px;color:var(--warning-2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">
                             <i class="ti ti-building-store" style="font-size:13px"></i> All branches
-                            <span style="margin-left:auto;font-size:10px;color:#64748b">view only</span>
+                            <span style="margin-left:auto;font-size:10px;color:var(--text-3)">view only</span>
                         </button>
-                        <div style="height:.5px;background:#2a2d3a;margin:4px 2px"></div>
+                        <div style="height:.5px;background:var(--border);margin:4px 2px"></div>
                         @foreach($branchOptions as $b)
                         <button type="submit" name="branch_id" value="{{ $b->id }}"
-                            style="width:100%;text-align:left;background:{{ \App\Support\CurrentBranch::id() === (int) $b->id ? '#2a2d3a' : 'transparent' }};border:0;border-radius:6px;padding:7px 9px;color:#e2e8f0;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">
-                            <i class="ti ti-map-pin" style="font-size:13px;color:#64748b"></i> {{ $b->name }}
+                            style="width:100%;text-align:left;background:{{ \App\Support\CurrentBranch::id() === (int) $b->id ? 'var(--border)' : 'transparent' }};border:0;border-radius:6px;padding:7px 9px;color:var(--text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">
+                            <i class="ti ti-map-pin" style="font-size:13px;color:var(--text-3)"></i> {{ $b->name }}
                         </button>
                         @endforeach
                     </form>
                 </div>
             </div>
             @else
-            <div style="font-size:11px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;padding:4px 10px;color:#94a3b8">
+            <div style="font-size:11px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--text-2)">
                 <i class="ti ti-map-pin" style="font-size:12px;margin-right:3px"></i>
                 {{ auth()->user()->branch?->name ?? 'No branch' }}
             </div>
             @endif
             {{-- Date & time (live) --}}
-            <div style="font-size:11px;color:#64748b;display:flex;align-items:center;gap:5px">
+            <div style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px">
                 <i class="ti ti-clock" style="font-size:12px"></i>
                 <span id="live-datetime">{{ now()->format('D, d M Y · h:i:s A') }}</span>
             </div>
+            {{-- Light / dark --}}
+            <button type="button" class="theme-toggle" onclick="toggleTheme()" title="Switch theme">
+                <i class="ti ti-moon"></i><i class="ti ti-sun"></i>
+            </button>
         </div>
 
         {{-- Page content --}}
         <div style="flex:1;overflow-y:auto">
             {{-- Flash messages --}}
             @if(session('success'))
-            <div style="background:#14532d;color:#4ade80;border:.5px solid #166534;border-radius:7px;padding:10px 14px;margin:12px 16px;font-size:13px;display:flex;align-items:center;gap:8px">
+            <div style="background:var(--success-soft);color:var(--success);border:.5px solid var(--success-border);border-radius:7px;padding:10px 14px;margin:12px 16px;font-size:13px;display:flex;align-items:center;gap:8px">
                 <i class="ti ti-check-circle" style="font-size:16px"></i>
                 {{ session('success') }}
             </div>
             @endif
 
             @if(session('error'))
-            <div style="background:#7f1d1d;color:#fca5a5;border:.5px solid #991b1b;border-radius:7px;padding:10px 14px;margin:12px 16px;font-size:13px;display:flex;align-items:center;gap:8px">
+            <div style="background:var(--danger-soft);color:var(--danger-text);border:.5px solid var(--danger-border);border-radius:7px;padding:10px 14px;margin:12px 16px;font-size:13px;display:flex;align-items:center;gap:8px">
                 <i class="ti ti-alert-circle" style="font-size:16px"></i>
                 {{ session('error') }}
             </div>
             @endif
 
             @if($errors->any())
-            <div style="background:#7f1d1d;color:#fca5a5;border:.5px solid #991b1b;border-radius:7px;padding:10px 14px;margin:12px 16px;font-size:13px">
+            <div style="background:var(--danger-soft);color:var(--danger-text);border:.5px solid var(--danger-border);border-radius:7px;padding:10px 14px;margin:12px 16px;font-size:13px">
                 <div style="display:flex;align-items:center;gap:8px;font-weight:500;margin-bottom:4px">
                     <i class="ti ti-alert-triangle" style="font-size:16px"></i> Please fix the following:
                 </div>

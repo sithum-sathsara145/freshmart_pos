@@ -4,49 +4,49 @@
 
 <template x-teleport="body">
 <div x-show="evOpen" x-cloak @keydown.escape.window="evClose()"
-     style="position:fixed;inset:0;background:rgba(8,9,13,.72);display:flex;align-items:center;justify-content:center;z-index:80">
-    <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:18px;width:400px;max-height:94vh;overflow-y:auto">
+     style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:80">
+    <div style="background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:18px;width:400px;max-height:94vh;overflow-y:auto">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <div style="font-size:14px;font-weight:600;color:#e2e8f0;display:flex;align-items:center;gap:6px"><i class="ti ti-signature" style="color:#818cf8"></i> Signed copy</div>
-            <i class="ti ti-x" @click="evClose()" style="font-size:16px;color:#64748b;cursor:pointer"></i>
+            <div style="font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px"><i class="ti ti-signature" style="color:var(--primary)"></i> Signed copy</div>
+            <i class="ti ti-x" @click="evClose()" style="font-size:16px;color:var(--text-3);cursor:pointer"></i>
         </div>
-        <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="evInvoice ? 'Invoice ' + evInvoice + ' · photograph the signed bill' : ''"></div>
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:12px" x-text="evInvoice ? 'Invoice ' + evInvoice + ' · photograph the signed bill' : ''"></div>
 
         <template x-if="evDone">
             <div style="text-align:center;padding:18px 0">
-                <div style="width:52px;height:52px;border-radius:50%;background:#14532d;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="ti ti-check" style="font-size:28px;color:#4ade80"></i></div>
-                <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:4px">Signed copy attached</div>
-                <div style="font-size:12px;color:#64748b;margin-bottom:16px">Saved as evidence for this credit sale.</div>
-                <button @click="evClose()" style="width:100%;height:38px;background:#312e81;border:.5px solid #534AB7;border-radius:7px;color:#a5b4fc;font-size:13px;font-weight:600;cursor:pointer">Done</button>
+                <div style="width:52px;height:52px;border-radius:50%;background:var(--success-soft);display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="ti ti-check" style="font-size:28px;color:var(--success)"></i></div>
+                <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">Signed copy attached</div>
+                <div style="font-size:12px;color:var(--text-3);margin-bottom:16px">Saved as evidence for this credit sale.</div>
+                <button @click="evClose()" style="width:100%;height:38px;background:var(--primary-soft);border:.5px solid var(--primary-border);border-radius:7px;color:var(--primary-text);font-size:13px;font-weight:600;cursor:pointer">Done</button>
             </div>
         </template>
 
         <template x-if="!evDone">
           <div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
-                <button @click="evTabTo('webcam')" :style="evTab==='webcam' ? 'background:#312e81;color:#a5b4fc;border-color:#534AB7' : 'background:#1e2130;color:#94a3b8;border-color:#2a2d3a'" style="height:34px;border:.5px solid;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-camera" style="font-size:13px"></i> Webcam</button>
-                <button @click="evTabTo('phone')" :style="evTab==='phone' ? 'background:#312e81;color:#a5b4fc;border-color:#534AB7' : 'background:#1e2130;color:#94a3b8;border-color:#2a2d3a'" style="height:34px;border:.5px solid;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-device-mobile" style="font-size:13px"></i> Use my phone</button>
+                <button @click="evTabTo('webcam')" :style="evTab==='webcam' ? 'background:var(--primary-soft);color:var(--primary-text);border-color:var(--primary-border)' : 'background:var(--surface-2);color:var(--text-2);border-color:var(--border)'" style="height:34px;border:.5px solid;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-camera" style="font-size:13px"></i> Webcam</button>
+                <button @click="evTabTo('phone')" :style="evTab==='phone' ? 'background:var(--primary-soft);color:var(--primary-text);border-color:var(--primary-border)' : 'background:var(--surface-2);color:var(--text-2);border-color:var(--border)'" style="height:34px;border:.5px solid;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-device-mobile" style="font-size:13px"></i> Use my phone</button>
             </div>
 
             <div x-show="evTab==='webcam'">
-                <video x-ref="evVideo" autoplay playsinline muted style="width:100%;border-radius:8px;background:#0f1117;aspect-ratio:4/3;object-fit:cover"></video>
-                <button @click="evCapture()" :disabled="evBusy" style="width:100%;height:40px;margin-top:10px;background:#14532d;border:.5px solid #166534;border-radius:7px;color:#4ade80;font-size:13px;font-weight:600;cursor:pointer"><i class="ti ti-camera" style="font-size:14px"></i> <span x-text="evBusy ? 'Uploading…' : 'Capture & upload'"></span></button>
+                <video x-ref="evVideo" autoplay playsinline muted style="width:100%;border-radius:8px;background:var(--bg);aspect-ratio:4/3;object-fit:cover"></video>
+                <button @click="evCapture()" :disabled="evBusy" style="width:100%;height:40px;margin-top:10px;background:var(--success-soft);border:.5px solid var(--success-border);border-radius:7px;color:var(--success);font-size:13px;font-weight:600;cursor:pointer"><i class="ti ti-camera" style="font-size:14px"></i> <span x-text="evBusy ? 'Uploading…' : 'Capture & upload'"></span></button>
             </div>
 
             <div x-show="evTab==='phone'" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:10px">Scan with your phone, then enter the code on the phone.</div>
+                <div style="font-size:12px;color:var(--text-2);margin-bottom:10px">Scan with your phone, then enter the code on the phone.</div>
                 <div style="background:#fff;border-radius:8px;padding:10px;display:inline-block;min-width:180px;min-height:180px" x-html="evQr"></div>
-                <div x-show="evQrLoading" x-cloak style="font-size:11px;color:#64748b;margin-top:8px">Creating link…</div>
+                <div x-show="evQrLoading" x-cloak style="font-size:11px;color:var(--text-3);margin-top:8px">Creating link…</div>
                 <div x-show="evCode" x-cloak style="margin-top:12px">
-                    <div style="font-size:11px;color:#64748b">Security code</div>
-                    <div style="font-size:26px;font-weight:700;letter-spacing:6px;color:#e2e8f0" x-text="evCode"></div>
-                    <div style="font-size:10px;color:#475569;margin-top:2px">Or enter your own login password on the phone.</div>
+                    <div style="font-size:11px;color:var(--text-3)">Security code</div>
+                    <div style="font-size:26px;font-weight:700;letter-spacing:6px;color:var(--text)" x-text="evCode"></div>
+                    <div style="font-size:10px;color:var(--text-5);margin-top:2px">Or enter your own login password on the phone.</div>
                 </div>
-                <div style="font-size:11px;color:#a5b4fc;margin-top:12px"><i class="ti ti-loader-2" style="font-size:12px"></i> Waiting for the phone upload…</div>
+                <div style="font-size:11px;color:var(--primary-text);margin-top:12px"><i class="ti ti-loader-2" style="font-size:12px"></i> Waiting for the phone upload…</div>
             </div>
 
-            <div x-show="evMsg" x-cloak style="font-size:11px;color:#f87171;margin-top:10px;text-align:center" x-text="evMsg"></div>
-            <button @click="evClose()" style="width:100%;height:34px;margin-top:12px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Cancel</button>
+            <div x-show="evMsg" x-cloak style="font-size:11px;color:var(--danger);margin-top:10px;text-align:center" x-text="evMsg"></div>
+            <button @click="evClose()" style="width:100%;height:34px;margin-top:12px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
           </div>
         </template>
     </div>
