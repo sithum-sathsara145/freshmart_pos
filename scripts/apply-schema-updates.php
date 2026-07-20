@@ -94,13 +94,19 @@ if (! Schema::hasTable('account_transactions')) {
 // table => [column => the DDL fragment used to add it]
 $columns = [
     // 2026-07-20 — end-of-day cash: keep a float in the till, bank the rest.
+    // float_amount is the minimum that must stay with the cashier; retain_coins
+    // and retain_notes say which physical money makes that float up.
     'counters' => [
-        'float_amount' => 'DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER cash_balance',
+        'float_amount'    => 'DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER cash_balance',
+        'retain_coins'    => 'TINYINT(1) NOT NULL DEFAULT 1 AFTER float_amount',
+        'retain_notes'    => 'TEXT NULL AFTER retain_coins',
+        'cashier_book_id' => 'BIGINT UNSIGNED NULL AFTER retain_notes',
     ],
     'counter_sessions' => [
         'float_retained'     => 'DECIMAL(15,2) NULL AFTER variance',
         'deposit_amount'     => 'DECIMAL(15,2) NULL AFTER float_retained',
         'deposit_account_id' => 'BIGINT UNSIGNED NULL AFTER deposit_amount',
+        'retained_denoms'    => 'TEXT NULL AFTER deposit_account_id',
     ],
 
     // 2026-07-20 — proper cash books and bank accounts.

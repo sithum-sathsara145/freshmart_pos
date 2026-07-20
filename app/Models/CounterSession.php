@@ -11,13 +11,14 @@ class CounterSession extends Model
         'counter_id', 'branch_id', 'opened_by', 'closed_by',
         'opening_balance', 'opening_denoms',
         'cash_sales', 'expected_closing', 'closing_balance', 'closing_denoms',
-        'variance', 'float_retained', 'deposit_amount', 'deposit_account_id',
+        'variance', 'float_retained', 'retained_denoms', 'deposit_amount', 'deposit_account_id',
         'status', 'opened_at', 'closed_at',
     ];
 
     protected $casts = [
         'opening_denoms'   => 'array',
         'closing_denoms'   => 'array',
+        'retained_denoms'  => 'array',
         'opening_balance'  => 'decimal:2',
         'cash_sales'       => 'decimal:2',
         'expected_closing' => 'decimal:2',

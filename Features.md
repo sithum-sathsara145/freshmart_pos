@@ -95,6 +95,8 @@ Written for everyone (no technical knowledge needed).
 _Newest first. New ideas and improvements are added here as they come up._
 
 <!-- NEW-FEATURES -->
+- **2026-07-20 — Cashier keeps coins, change notes and a minimum float** — Set per counter how much stays in the drawer: all the coins, a number of Rs 20/50/100 notes for change, and a minimum amount. Everything above that is handed into the cash book when the counter closes.
+- **2026-07-20 — Cash stays with the cashier until the counter closes** — Money from cash sales is no longer counted into a cash book the moment it is rung up — it sits with the cashier, as it does in real life, and reaches the cash book when the drawer is counted at close. Card payments still go to the bank straight away.
 - **2026-07-20 — Deposits, withdrawals and transfers** — Record money put in or taken out by hand, and move money between any two accounts. Transfers are refused if the account doesn't hold enough.
 - **2026-07-20 — Account statements that show everything** — Every account now has a statement like a bank's — opening balance, each movement in and out, and a running balance. Expenses and money transferred IN used to be missing from it entirely.
 - **2026-07-20 — Proper cash books and bank accounts** — Keep as many cash books and bank accounts as you need, each with its bank name, branch, account number and whether it is savings or current. An account can belong to one shop or to the whole business.

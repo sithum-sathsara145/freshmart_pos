@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\AttendanceRecorder;
+use App\Support\CashRetention;
 use App\Support\CurrentBranch;
 use App\Support\DocumentNumber;
 use App\Support\Inventory;
@@ -51,20 +52,20 @@ class PosController extends Controller
             }
         }
 
-        // Where the day's takings can be banked. The branch cash account is left
-        // out: it is the one POS sales already pay into, so "moving" cash there
-        // would not represent anything.
-        $cashAccountId = $counter
-            ? Account::whereBranch($counter->branch_id)->where('type', 'cash')->value('id')
-            : null;
-
+        // Cash books the cashier can hand the drawer into at the end of a shift.
+        // Bank accounts are not offered: this is physical cash changing hands,
+        // and it has not been to a bank.
         $depositAccounts = $counter
-            ? Account::whereBranch($counter->branch_id)
-                ->when($cashAccountId, fn ($q) => $q->where('id', '!=', $cashAccountId))
-                ->orderBy('type')->orderBy('name')->get(['id', 'name', 'type'])
+            ? Account::where('type', 'cash')->where('status', 'active')
+                ->where(fn ($q) => $q->whereBranch($counter->branch_id)->orWhereNull('branch_id'))
+                ->orderByDesc('is_cashier_book')->orderBy('name')
+                ->get(['id', 'name', 'type', 'is_cashier_book'])
             : collect();
 
-        return view('pos.index', compact('categories', 'branch', 'counter', 'openSession', 'lastClose', 'depositAccounts')
+        $retention = $counter ? $this->retentionRule($counter) : null;
+        $defaultBook = $counter ? $this->cashierBookFor($counter, null) : null;
+
+        return view('pos.index', compact('categories', 'branch', 'counter', 'openSession', 'lastClose', 'depositAccounts', 'retention', 'defaultBook')
             + ['denominations' => self::DENOMINATIONS]);
     }
 
@@ -110,6 +111,34 @@ class PosController extends Controller
         return response()->json(['success' => true, 'opening' => $opening, 'message' => 'Counter opened.']);
     }
 
+    /** How much of the drawer this counter's cashier keeps back. */
+    private function retentionRule(Counter $counter): array
+    {
+        return [
+            'coins'   => (bool) $counter->retain_coins,
+            'notes'   => $counter->retain_notes ?: [],
+            'minimum' => (float) $counter->float_amount,
+        ];
+    }
+
+    /**
+     * The cash book the takings go into: the one picked at close, else the
+     * counter's own, else the branch's designated cashier book.
+     */
+    private function cashierBookFor(Counter $counter, $chosenId): ?Account
+    {
+        $branchBooks = Account::where('type', 'cash')->where('status', 'active')
+            ->where(fn ($q) => $q->whereBranch($counter->branch_id)->orWhereNull('branch_id'));
+
+        if ($chosenId && $book = (clone $branchBooks)->find($chosenId)) {
+            return $book;
+        }
+
+        return (clone $branchBooks)->whereKey($counter->cashier_book_id)->first()
+            ?? (clone $branchBooks)->where('is_cashier_book', 1)->orderBy('id')->first()
+            ?? (clone $branchBooks)->orderBy('id')->first();
+    }
+
     // Close the counter: reconcile counted cash against opening + cash sales
     public function closeCounter(Request $request)
     {
@@ -128,31 +157,29 @@ class PosController extends Controller
         $expected  = (float) $session->opening_balance + $cashSales;
         $variance  = round($counted - $expected, 2);
 
-        // Keep tomorrow's float in the drawer and bank the rest. You cannot leave
-        // behind more than was actually counted, however the float is configured.
-        $float   = min((float) $counter->float_amount, $counted);
-        $deposit = round($counted - $float, 2);
+        // What the cashier keeps: every coin, the notes the admin set aside, and
+        // more notes on top if that does not reach the minimum float.
+        $split    = CashRetention::split($denoms, $this->retentionRule($counter));
+        $retained = $split['keepTotal'];
+        $handIn   = $split['moveTotal'];
 
-        // POS sales already credit the branch cash account as they happen, so
-        // banking the takings is a transfer OUT of that account — crediting the
-        // destination without debiting it would count the same money twice.
-        $cashAccount = Account::whereBranch($counter->branch_id)->where('type', 'cash')->first();
-        $destination = $request->filled('deposit_account_id')
-            ? Account::whereBranch($counter->branch_id)->find($request->deposit_account_id)
-            : null;
+        // Cash sales never touched a cash book — the money has been sitting with
+        // the cashier all shift. Handing it in is the moment it arrives, so it is
+        // a credit to the book, not a transfer out of somewhere.
+        $book = $this->cashierBookFor($counter, $request->input('deposit_account_id'));
 
-        if ($deposit > 0 && $destination && $cashAccount && $destination->id === $cashAccount->id) {
+        if ($handIn > 0 && ! $book) {
             return response()->json([
                 'success' => false,
-                'message' => 'That is the account the till already pays into — pick a different one to bank into.',
+                'message' => 'There is Rs. ' . number_format($handIn, 2) . ' to hand in but no cash book to put it in. Set one under Cash & Bank first.',
             ], 422);
         }
 
-        $banked = ($deposit > 0 && $destination && $cashAccount) ? $deposit : 0.0;
+        $banked = $handIn > 0 ? $handIn : 0.0;
 
         DB::transaction(function () use (
             $session, $counter, $denoms, $counted, $cashSales, $expected,
-            $variance, $float, $banked, $cashAccount, $destination
+            $variance, $retained, $banked, $split, $book
         ) {
             $session->update([
                 'closed_by'          => auth()->id(),
@@ -161,35 +188,35 @@ class PosController extends Controller
                 'cash_sales'         => $cashSales,
                 'expected_closing'   => $expected,
                 'variance'           => $variance,
-                'float_retained'     => $float,
+                'float_retained'     => $retained,
+                'retained_denoms'    => $split['keep'],
                 'deposit_amount'     => $banked,
-                'deposit_account_id' => $banked > 0 ? $destination->id : null,
+                'deposit_account_id' => $banked > 0 ? $book->id : null,
                 'status'             => 'closed',
                 'closed_at'          => now(),
             ]);
 
             // cash_balance is what is physically left in the drawer.
-            $counter->update(['status' => 'closed', 'cash_balance' => $float]);
+            $counter->update(['status' => 'closed', 'cash_balance' => $retained]);
 
             if ($banked > 0) {
                 $reference = 'DEP-' . strtoupper(Str::random(8));
 
-                Ledger::transfer($cashAccount, $destination, $banked, [
+                Ledger::credit($book, $banked, [
                     'reference'   => $reference,
-                    'description' => "End-of-day banking — {$counter->name}",
+                    'description' => "Cash handed in — {$counter->name}",
                     'source_type' => 'counter_close',
                     'source_id'   => $session->id,
                 ]);
 
                 Payment::create([
-                    'reference_no'  => $reference,
-                    'type'          => 'transfer',
-                    'account_id'    => $cashAccount->id,
-                    'to_account_id' => $destination->id,
-                    'amount'        => $banked,
-                    'method'        => 'cash',
-                    'notes'         => "End-of-day banking — {$counter->name}",
-                    'created_by'    => auth()->id(),
+                    'reference_no' => $reference,
+                    'type'         => 'payment_in',
+                    'account_id'   => $book->id,
+                    'amount'       => $banked,
+                    'method'       => 'cash',
+                    'notes'        => "Cash handed in — {$counter->name}",
+                    'created_by'   => auth()->id(),
                 ]);
             }
         });
@@ -203,9 +230,10 @@ class PosController extends Controller
             'expected'   => $expected,
             'counted'    => $counted,
             'variance'   => $variance,
-            'float'      => $float,
+            'float'      => $retained,
+            'kept'       => $split['keep'],
             'deposit'    => $banked,
-            'deposit_to' => $banked > 0 ? $destination->name : null,
+            'deposit_to' => $banked > 0 ? $book->name : null,
             'message'    => 'Counter closed.',
         ]);
     }
@@ -623,12 +651,19 @@ class PosController extends Controller
                         'created_by'   => $userId,
                     ]);
 
-                    Ledger::credit($account, $t['amount'], [
-                        'reference'   => $reference,
-                        'description' => "Sale {$sale->invoice_no}",
-                        'source_type' => 'sale',
-                        'source_id'   => $sale->id,
-                    ]);
+                    // Cash stays with the cashier until the counter is closed and
+                    // the drawer is counted, so it is not in any cash book yet —
+                    // it is tracked on the counter and handed in at close.
+                    // Card and bank money really has left for the bank, so that
+                    // lands in the account straight away.
+                    if ($t['method'] !== 'cash') {
+                        Ledger::credit($account, $t['amount'], [
+                            'reference'   => $reference,
+                            'description' => "Sale {$sale->invoice_no}",
+                            'source_type' => 'sale',
+                            'source_id'   => $sale->id,
+                        ]);
+                    }
                 }
             }
 

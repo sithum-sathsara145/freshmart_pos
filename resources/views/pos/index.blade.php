@@ -706,33 +706,37 @@ input[type=number]{-moz-appearance:textfield}
                     <span x-text="closeVariance===0 ? 'Balanced' : (closeVariance>0 ? 'Over by' : 'Short by')"></span>
                     <span x-text="'Rs. ' + Math.abs(closeVariance).toLocaleString()"></span>
                 </div>
-                {{-- Float stays in the drawer for tomorrow; the rest gets banked. --}}
+                {{-- Coins and the set notes stay with the cashier; the rest is handed in. --}}
                 <div x-show="closeTotal > 0" x-cloak
                      style="background:var(--bg);border:.5px solid var(--border);border-radius:8px;padding:10px;margin-top:10px;font-size:12px">
                     <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px">
-                        <span>Leave in till</span>
+                        <span>You keep</span>
                         <span x-text="'Rs. ' + closeFloat.toLocaleString()"></span>
                     </div>
-                    <div style="display:flex;justify-content:space-between;color:var(--text);font-weight:600">
-                        <span>Bank</span>
+                    <div style="font-size:10px;color:var(--text-3);margin-bottom:6px" x-show="closeKeptNotes.length">
+                        <template x-for="([d, n], i) in closeKeptNotes" :key="d">
+                            <span><span x-text="n"></span>×<span x-text="d.toLocaleString()"></span><span x-text="i < closeKeptNotes.length - 1 ? ' · ' : ''"></span></span>
+                        </template>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;color:var(--text);font-weight:600;padding-top:5px;border-top:.5px solid var(--border)">
+                        <span>Hand in</span>
                         <span x-text="'Rs. ' + closeDeposit.toLocaleString()"></span>
                     </div>
                     <template x-if="closeDeposit > 0 && depositAccounts.length">
                         <select x-model="depositAccountId"
                                 style="width:100%;height:32px;margin-top:8px;background:var(--surface);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:0 8px;outline:none">
-                            <option value="">Leave it in the till</option>
                             <template x-for="a in depositAccounts" :key="a.id">
-                                <option :value="a.id" x-text="a.name + ' (' + a.type + ')'"></option>
+                                <option :value="a.id" x-text="a.name"></option>
                             </template>
                         </select>
                     </template>
                     <div x-show="closeDeposit > 0 && !depositAccounts.length" x-cloak
-                         style="font-size:10px;color:var(--text-3);margin-top:6px">
-                        No account to bank into — add one under Cash &amp; Bank first.
+                         style="font-size:10px;color:var(--danger);margin-top:6px">
+                        No cash book to hand this into — add one under Cash &amp; Bank first.
                     </div>
-                    <div x-show="floatAmount > closeTotal" x-cloak
-                         style="font-size:10px;color:var(--warning);margin-top:6px">
-                        Counted less than the Rs. <span x-text="floatAmount.toLocaleString()"></span> float — everything stays in the till.
+                    <div x-show="closeDeposit === 0 && closeTotal > 0" x-cloak
+                         style="font-size:10px;color:var(--text-3);margin-top:6px">
+                        Under the Rs. <span x-text="(retention ? retention.minimum : floatAmount).toLocaleString()"></span> minimum — it all stays with you.
                     </div>
                 </div>
                 <div x-show="closeError" x-cloak x-text="closeError" style="color:var(--danger);font-size:11px;margin-top:8px"></div>
@@ -760,11 +764,11 @@ input[type=number]{-moz-appearance:textfield}
                     </div>
                     <div style="margin-top:8px;padding-top:8px;border-top:.5px solid var(--border)">
                         <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px">
-                            <span>Left in till</span>
+                            <span>Kept by you</span>
                             <span x-text="closeResult ? 'Rs. ' + (closeResult.float || 0).toLocaleString() : ''"></span>
                         </div>
                         <div style="display:flex;justify-content:space-between;color:var(--text-2)">
-                            <span x-text="closeResult && closeResult.deposit_to ? 'Banked to ' + closeResult.deposit_to : 'Banked'"></span>
+                            <span x-text="closeResult && closeResult.deposit_to ? 'Handed in to ' + closeResult.deposit_to : 'Handed in'"></span>
                             <span x-text="closeResult ? 'Rs. ' + (closeResult.deposit || 0).toLocaleString() : ''"></span>
                         </div>
                     </div>
@@ -857,6 +861,8 @@ window.__POS = {
     prevClose: @json($lastClose ? ['balance' => (float) $lastClose->closing_balance, 'denoms' => ($lastClose->closing_denoms ?? [])] : null),
     floatAmount: {{ $counter ? (float) $counter->float_amount : 0 }},
     depositAccounts: @json($depositAccounts),
+    retention: @json($retention),
+    defaultBookId: {{ $defaultBook?->id ?? 'null' }},
 };
 </script>
 <script>
@@ -1033,7 +1039,8 @@ function posScreen() {
         prevClose: (window.__POS && window.__POS.prevClose) || null,
         floatAmount: (window.__POS && window.__POS.floatAmount) || 0,
         depositAccounts: (window.__POS && window.__POS.depositAccounts) || [],
-        depositAccountId: '',
+        retention: (window.__POS && window.__POS.retention) || null,
+        depositAccountId: (window.__POS && window.__POS.defaultBookId) || '',
         showOpenModal: false,
         showCloseModal: false,
         openDenoms: {},
@@ -1618,9 +1625,53 @@ function posScreen() {
         get closeTotal() { return this.denomsTotal(this.closeDenoms); },
         get closeExpected() { return this.openingBalance + this.cashSalesSoFar; },
         get closeVariance() { return Math.round((this.closeTotal - this.closeExpected) * 100) / 100; },
-        // You can only leave behind what you actually counted.
-        get closeFloat() { return Math.min(this.floatAmount, this.closeTotal); },
-        get closeDeposit() { return Math.round((this.closeTotal - this.closeFloat) * 100) / 100; },
+
+        // Mirrors App\Support\CashRetention so the cashier sees the split before
+        // committing to it; the server works it out again and has the last word.
+        get closeSplit() {
+            const rule = this.retention || { coins: true, notes: {}, minimum: this.floatAmount };
+            const counted = {};
+            for (const d of this.denoms) {
+                const n = parseInt(this.closeDenoms[d]) || 0;
+                if (n > 0) counted[d] = n;
+            }
+            const keep = {};
+            const value = m => Object.entries(m).reduce((t, [d, n]) => t + d * n, 0);
+            const spare = () => {
+                const s = {};
+                for (const [d, n] of Object.entries(counted)) {
+                    const left = n - (keep[d] || 0);
+                    if (left > 0) s[d] = left;
+                }
+                return s;
+            };
+
+            if (rule.coins !== false) {
+                for (const [d, n] of Object.entries(counted)) if (+d <= 10) keep[d] = n;
+            }
+            for (const [d, want] of Object.entries(rule.notes || {})) {
+                if (+d <= 10 || !want) continue;
+                const avail = (counted[d] || 0) - (keep[d] || 0);
+                if (avail > 0) keep[d] = (keep[d] || 0) + Math.min(want, avail);
+            }
+            while (value(keep) + 0.0001 < (rule.minimum || 0)) {
+                const short = (rule.minimum || 0) - value(keep);
+                const left = spare();
+                const denoms = Object.keys(left).map(Number);
+                if (!denoms.length) break;
+                const fits = denoms.filter(d => d <= short);
+                const pick = fits.length ? Math.max(...fits) : Math.min(...denoms);
+                keep[pick] = (keep[pick] || 0) + 1;
+            }
+            return { keep, keepTotal: Math.round(value(keep) * 100) / 100,
+                     moveTotal: Math.round(value(spare()) * 100) / 100 };
+        },
+        get closeFloat() { return this.closeSplit.keepTotal; },
+        get closeDeposit() { return this.closeSplit.moveTotal; },
+        get closeKeptNotes() {
+            return Object.entries(this.closeSplit.keep)
+                .map(([d, n]) => [Number(d), n]).sort((a, b) => b[0] - a[0]);
+        },
 
         openCounterPrompt() {
             this.openError = '';

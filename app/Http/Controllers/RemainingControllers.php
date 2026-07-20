@@ -812,6 +812,7 @@ class SettingController extends Controller
         $settings  = Setting::pluck('value', 'key_name');
         $branches  = \App\Models\Branch::with('counters')->get();
         $counters  = \App\Models\Counter::with('branch')->get();
+        $cashBooks = Account::where('type', 'cash')->where('status', 'active')->orderBy('name')->get();
 
         // Users tab — super_admin accounts are invisible to everyone else, and
         // people who can't see all branches only see their own branch's staff.
@@ -840,16 +841,27 @@ class SettingController extends Controller
         }
 
         return view('settings.index', compact(
-            'settings', 'branches', 'users', 'counters', 'assignableRoles', 'apiCredentials', 'apiKeyState'
+            'settings', 'branches', 'users', 'counters', 'cashBooks', 'assignableRoles', 'apiCredentials', 'apiKeyState'
         ));
     }
 
     public function save(Request $request)
     {
-        // Per-counter floats live on the counters table, not in settings.
+        // Per-counter cash rules live on the counters table, not in settings.
         foreach ($request->input('counter_float', []) as $counterId => $amount) {
-            \App\Models\Counter::where('id', $counterId)
-                ->update(['float_amount' => max(0, (float) $amount)]);
+            $notes = collect($request->input("counter_notes.$counterId", []))
+                ->map(fn ($n) => max(0, (int) $n))
+                ->filter()
+                ->all();
+
+            // Through the model, so the retain_notes array cast does the encoding
+            // once — a query-builder update would store whatever it was handed.
+            \App\Models\Counter::find($counterId)?->update([
+                'float_amount'    => max(0, (float) $amount),
+                'retain_coins'    => (bool) $request->input("counter_coins.$counterId", 0),
+                'retain_notes'    => $notes ?: null,
+                'cashier_book_id' => $request->input("counter_book.$counterId") ?: null,
+            ]);
         }
 
         // Only the keys this screen owns. Walking the whole request instead

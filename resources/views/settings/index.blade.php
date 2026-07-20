@@ -415,34 +415,56 @@
 
 <div id="sec-counters" class="settings-section" style="display:none">
 <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:14px">
+    @php $cin = 'width:70px;height:28px;background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;padding:0 8px;outline:none'; @endphp
     <div style="font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:4px">POS Counters</div>
-    <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">
-        The <b style="color:var(--text-2)">float</b> is the cash left in the drawer when the counter is closed, ready for the next day.
-        Everything above it gets banked into the account the cashier picks at close.
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:12px;line-height:1.7">
+        Cash sits with the cashier all shift — it only reaches a cash book when the counter is closed.
+        At that point the cashier keeps <b style="color:var(--text-2)">all the coins</b> (unless you turn that off) plus the
+        note counts you set here, and hands the rest into the cash book. If that comes to less than the
+        <b style="color:var(--text-2)">minimum</b>, more notes are kept back until it does.
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:760px">
         <thead><tr style="border-bottom:.5px solid var(--border)">
-            <th style="padding:7px;text-align:left;color:var(--text-3);font-weight:500;font-size:11px">Counter</th>
-            <th style="padding:7px;color:var(--text-3);font-weight:500;font-size:11px">Branch</th>
-            <th style="padding:7px;color:var(--text-3);font-weight:500;font-size:11px">Cash balance</th>
-            <th style="padding:7px;color:var(--text-3);font-weight:500;font-size:11px">Float kept at close</th>
-            <th style="padding:7px;color:var(--text-3);font-weight:500;font-size:11px">Status</th>
+            @foreach(['Counter','Branch','In drawer','Coins','20s','50s','100s','Minimum','Hands into','Status'] as $h)
+            <th style="padding:7px;text-align:left;color:var(--text-3);font-weight:500;font-size:11px;white-space:nowrap">{{ $h }}</th>
+            @endforeach
         </tr></thead>
         <tbody>
         @foreach($counters as $c)
+        @php $notes = $c->retain_notes ?: []; @endphp
         <tr style="border-bottom:.5px solid var(--surface-3)">
-            <td style="padding:7px;color:var(--text);font-weight:500">{{ $c->name }}</td>
-            <td style="padding:7px;color:var(--text-2)">{{ $c->branch?->name }}</td>
-            <td style="padding:7px;color:var(--success)">Rs. {{ number_format($c->cash_balance) }}</td>
+            <td style="padding:7px;color:var(--text);font-weight:500;white-space:nowrap">{{ $c->name }}</td>
+            <td style="padding:7px;color:var(--text-2);white-space:nowrap">{{ $c->branch?->name }}</td>
+            <td style="padding:7px;color:var(--success);white-space:nowrap">Rs. {{ number_format($c->cash_balance) }}</td>
+            <td style="padding:7px;text-align:center">
+                <input type="hidden" name="counter_coins[{{ $c->id }}]" value="0">
+                <input type="checkbox" name="counter_coins[{{ $c->id }}]" value="1" @checked($c->retain_coins)
+                       style="accent-color:var(--primary);width:15px;height:15px" title="Keep all coins">
+            </td>
+            @foreach([20, 50, 100] as $d)
+            <td style="padding:7px">
+                <input type="number" name="counter_notes[{{ $c->id }}][{{ $d }}]" value="{{ $notes[$d] ?? 0 }}" min="0" step="1" style="{{ $cin }}">
+            </td>
+            @endforeach
             <td style="padding:7px">
                 <input type="number" name="counter_float[{{ $c->id }}]" value="{{ (float) $c->float_amount }}" min="0" step="0.01"
-                    style="width:110px;height:28px;background:var(--bg);border:.5px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;padding:0 8px;outline:none">
+                       style="{{ $cin }};width:100px">
+            </td>
+            <td style="padding:7px">
+                <select name="counter_book[{{ $c->id }}]" style="{{ $cin }};width:150px">
+                    <option value="">First cashier book</option>
+                    @foreach($cashBooks as $b)
+                    <option value="{{ $b->id }}" @selected($c->cashier_book_id == $b->id)>{{ $b->name }}</option>
+                    @endforeach
+                </select>
             </td>
             <td style="padding:7px"><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ $c->status==='open'?'var(--success-soft)':'var(--surface-2)' }};color:{{ $c->status==='open'?'var(--success)':'var(--text-2)' }}">{{ ucfirst($c->status) }}</span></td>
         </tr>
         @endforeach
         </tbody>
     </table>
+    </div>
 </div>
 </div>
 
