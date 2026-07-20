@@ -215,23 +215,12 @@ class PosController extends Controller
         $retained = $split['keepTotal'];
         $handIn   = $split['moveTotal'];
 
-        // Cash sales never touched a cash book — the money has been sitting with
-        // the cashier all shift. Handing it in is the moment it arrives, so it is
-        // a credit to the book, not a transfer out of somewhere.
-        $book = $this->cashierBookFor($counter, $request->input('deposit_account_id'));
-
-        if ($handIn > 0 && ! $book) {
-            return response()->json([
-                'success' => false,
-                'message' => 'There is Rs. ' . number_format($handIn, 2) . ' to hand in but no cash book to put it in. Set one under Cash & Bank first.',
-            ], 422);
-        }
-
-        $banked = $handIn > 0 ? $handIn : 0.0;
-
+        // Closing only counts and sets the money aside. It is not in a cash book
+        // until somebody physically takes it there and records that — see
+        // CounterSessionController::deposit().
         DB::transaction(function () use (
             $session, $counter, $denoms, $counted, $cashSales, $expected,
-            $variance, $retained, $banked, $split, $book
+            $variance, $retained, $handIn, $split
         ) {
             $session->update([
                 'closed_by'          => auth()->id(),
@@ -242,35 +231,15 @@ class PosController extends Controller
                 'variance'           => $variance,
                 'float_retained'     => $retained,
                 'retained_denoms'    => $split['keep'],
-                'deposit_amount'     => $banked,
-                'deposit_account_id' => $banked > 0 ? $book->id : null,
+                'deposit_amount'     => $handIn,
+                'deposit_account_id' => null,   // set when it is actually handed in
+                'deposited_at'       => null,
                 'status'             => 'closed',
                 'closed_at'          => now(),
             ]);
 
-            // cash_balance is what is physically left in the drawer.
+            // cash_balance is the float the cashier carries to the next shift.
             $counter->update(['status' => 'closed', 'cash_balance' => $retained]);
-
-            if ($banked > 0) {
-                $reference = 'DEP-' . strtoupper(Str::random(8));
-
-                Ledger::credit($book, $banked, [
-                    'reference'   => $reference,
-                    'description' => "Cash handed in — {$counter->name}",
-                    'source_type' => 'counter_close',
-                    'source_id'   => $session->id,
-                ]);
-
-                Payment::create([
-                    'reference_no' => $reference,
-                    'type'         => 'payment_in',
-                    'account_id'   => $book->id,
-                    'amount'       => $banked,
-                    'method'       => 'cash',
-                    'notes'        => "Cash handed in — {$counter->name}",
-                    'created_by'   => auth()->id(),
-                ]);
-            }
         });
 
         $this->recordAttendance('out');
@@ -288,8 +257,7 @@ class PosController extends Controller
             'variance'   => $variance,
             'float'      => $retained,
             'kept'       => $split['keep'],
-            'deposit'    => $banked,
-            'deposit_to' => $banked > 0 ? $book->name : null,
+            'deposit'    => $handIn,
             'message'    => 'Counter closed.',
         ]);
     }

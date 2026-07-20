@@ -163,6 +163,7 @@ return [
             'accounts.manage'   => 'Create / edit / delete accounts',
             'accounts.transfer' => 'Transfer money between accounts',
             'accounts.entry'    => 'Record a deposit or withdrawal by hand',
+            'accounts.handin'   => 'Record cash handed in from a counter',
         ],
     ],
 

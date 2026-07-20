@@ -95,6 +95,8 @@ Written for everyone (no technical knowledge needed).
 _Newest first. New ideas and improvements are added here as they come up._
 
 <!-- NEW-FEATURES -->
+- **2026-07-20 — Opening count checks against what you were left with** — When opening a counter, the drawer is now compared against the float the last close left with the cashier, and shows straight away if it is short. It used to compare against the whole drawer before the surplus was handed in.
+- **2026-07-20 — Cash is handed in by hand, not automatically** — Closing a counter now only counts the drawer and sets the surplus aside — the money reaches a cash book when someone records that they have actually taken it there. Counter Sessions shows what is still waiting to be handed in.
 - **2026-07-20 — Cover a till without being assigned to it** — An owner or manager whose account isn't tied to a counter can now pick a free one when they open it, instead of being told they can't sell. The counter is theirs until they close it, and counters someone else is on aren't offered.
 - **2026-07-20 — Selling needs an open counter** — The till used to let anyone whose account had no counter bill without opening one at all — and the cash from those sales was tracked nowhere. A sale now needs a counter with an open session, and the POS asks for the opening float as soon as you arrive instead of waiting for a sale to fail.
 - **2026-07-20 — Cashier keeps coins, change notes and a minimum float** — Set per counter how much stays in the drawer: all the coins, a number of Rs 20/50/100 notes for change, and a minimum amount. Everything above that is handed into the cash book when the counter closes.

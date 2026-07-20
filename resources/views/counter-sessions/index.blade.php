@@ -5,6 +5,23 @@
 @section('content')
 <div style="padding:14px 16px">
 
+{{-- Cash counted out of a drawer that nobody has taken to a cash book yet --}}
+@if($totals['awaiting_count'] > 0)
+<a href="{{ route('counter-sessions.index', ['status' => 'awaiting']) }}"
+   style="display:flex;align-items:center;gap:10px;background:var(--warning-soft);border:.5px solid var(--warning-border);border-radius:8px;padding:11px 14px;margin-bottom:12px;text-decoration:none">
+    <i class="ti ti-cash-off" style="font-size:18px;color:var(--warning)"></i>
+    <div style="flex:1">
+        <div style="font-size:12px;font-weight:600;color:var(--warning)">
+            Rs. {{ number_format($totals['awaiting_amount'], 2) }} counted out but not handed in
+        </div>
+        <div style="font-size:11px;color:var(--text-3)">
+            {{ $totals['awaiting_count'] }} closed {{ Str::plural('session', $totals['awaiting_count']) }} still holding cash — record it once it reaches the safe.
+        </div>
+    </div>
+    <i class="ti ti-chevron-right" style="font-size:15px;color:var(--text-3)"></i>
+</a>
+@endif
+
 {{-- Summary --}}
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
     <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:12px 14px">

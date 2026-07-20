@@ -682,8 +682,17 @@ input[type=number]{-moz-appearance:textfield}
                 </div>
             </template>
             <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Count the cash float — type a count, press <b style="color:var(--text-2)">Tab</b> for the next.</div>
-            <div x-show="prevClose" x-cloak style="font-size:11px;color:var(--warning-2);background:var(--warning-soft-3);border:.5px solid var(--warning-border-2);border-radius:6px;padding:6px 9px;margin-bottom:10px">
-                Last close was <b x-text="'Rs. ' + (prevClose ? prevClose.balance.toLocaleString() : '')"></b> — the drawer should match this.
+            {{-- Tally against what was left with the cashier last time, so a
+                 shortfall shows up before the shift starts. --}}
+            <div x-show="prevClose" x-cloak style="font-size:11px;background:var(--warning-soft-3);border:.5px solid var(--warning-border-2);border-radius:6px;padding:7px 9px;margin-bottom:10px">
+                <div style="color:var(--warning-2)">
+                    You were left with <b x-text="'Rs. ' + (prevClose ? prevClose.balance.toLocaleString() : '')"></b> at the last close — the drawer should still hold it.
+                </div>
+                <div x-show="openTotal > 0 && openVariance !== 0" x-cloak style="margin-top:4px;font-weight:600"
+                     :style="openVariance > 0 ? 'color:var(--success)' : 'color:var(--danger)'">
+                    <span x-text="openVariance > 0 ? 'Over by' : 'Short by'"></span>
+                    <span x-text="'Rs. ' + Math.abs(openVariance).toLocaleString()"></span>
+                </div>
             </div>
             <template x-for="d in denoms" :key="d">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
@@ -754,20 +763,11 @@ input[type=number]{-moz-appearance:textfield}
                         </template>
                     </div>
                     <div style="display:flex;justify-content:space-between;color:var(--text);font-weight:600;padding-top:5px;border-top:.5px solid var(--border)">
-                        <span>Hand in</span>
+                        <span>To hand in</span>
                         <span x-text="'Rs. ' + closeDeposit.toLocaleString()"></span>
                     </div>
-                    <template x-if="closeDeposit > 0 && depositAccounts.length">
-                        <select x-model="depositAccountId"
-                                style="width:100%;height:32px;margin-top:8px;background:var(--surface);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:0 8px;outline:none">
-                            <template x-for="a in depositAccounts" :key="a.id">
-                                <option :value="a.id" x-text="a.name"></option>
-                            </template>
-                        </select>
-                    </template>
-                    <div x-show="closeDeposit > 0 && !depositAccounts.length" x-cloak
-                         style="font-size:10px;color:var(--danger);margin-top:6px">
-                        No cash book to hand this into — add one under Cash &amp; Bank first.
+                    <div x-show="closeDeposit > 0" x-cloak style="font-size:10px;color:var(--text-3);margin-top:6px">
+                        Set this aside for whoever takes it to the safe. It only reaches a cash book once they record it.
                     </div>
                     <div x-show="closeDeposit === 0 && closeTotal > 0" x-cloak
                          style="font-size:10px;color:var(--text-3);margin-top:6px">
@@ -803,7 +803,7 @@ input[type=number]{-moz-appearance:textfield}
                             <span x-text="closeResult ? 'Rs. ' + (closeResult.float || 0).toLocaleString() : ''"></span>
                         </div>
                         <div style="display:flex;justify-content:space-between;color:var(--text-2)">
-                            <span x-text="closeResult && closeResult.deposit_to ? 'Handed in to ' + closeResult.deposit_to : 'Handed in'"></span>
+                            <span>Set aside to hand in</span>
                             <span x-text="closeResult ? 'Rs. ' + (closeResult.deposit || 0).toLocaleString() : ''"></span>
                         </div>
                     </div>
@@ -893,7 +893,9 @@ window.__POS = {
     counterOpen: {{ $openSession ? 'true' : 'false' }},
     openingBalance: {{ $openSession ? (float) $openSession->opening_balance : 0 }},
     cashSalesSoFar: {{ $openSession ? (float) ($openSession->cash_sales_so_far ?? 0) : 0 }},
-    prevClose: @json($lastClose ? ['balance' => (float) $lastClose->closing_balance, 'denoms' => ($lastClose->closing_denoms ?? [])] : null),
+    {{-- What the cashier was left with at the last close — NOT the whole drawer
+         that was counted, since the surplus is handed in. --}}
+    prevClose: @json($lastClose ? ['balance' => (float) $lastClose->float_retained, 'denoms' => ($lastClose->retained_denoms ?? [])] : null),
     floatAmount: {{ $counter ? (float) $counter->float_amount : 0 }},
     depositAccounts: @json($depositAccounts),
     retention: @json($retention),
@@ -1662,6 +1664,12 @@ function posScreen() {
             return this.denoms.reduce((s, d) => s + d * (parseInt(obj[d]) || 0), 0);
         },
         get openTotal() { return this.denomsTotal(this.openDenoms); },
+        // Against what the last close left with this cashier, so a drawer that
+        // lost money overnight is caught before the shift rather than at the end.
+        get openVariance() {
+            if (!this.prevClose) return 0;
+            return Math.round((this.openTotal - this.prevClose.balance) * 100) / 100;
+        },
         get closeTotal() { return this.denomsTotal(this.closeDenoms); },
         get closeExpected() { return this.openingBalance + this.cashSalesSoFar; },
         get closeVariance() { return Math.round((this.closeTotal - this.closeExpected) * 100) / 100; },
@@ -1770,12 +1778,13 @@ function posScreen() {
                 const res = await fetch('/pos/counter/close', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
-                    body: JSON.stringify({ denoms: this.closeDenoms, deposit_account_id: this.depositAccountId || null }),
+                    body: JSON.stringify({ denoms: this.closeDenoms }),
                 });
                 const data = await res.json();
                 if (data.success) {
                     this.counterOpen = false;
-                    this.prevClose = { balance: data.counted, denoms: { ...this.closeDenoms } };
+                    // Next open tallies against what was kept back, not the count.
+                    this.prevClose = { balance: data.float, denoms: { ...(data.kept || {}) } };
                     this.closeResult = data;   // show the result view; "Done" returns to dashboard
                 } else { this.closeError = data.message || 'Could not close counter.'; }
             } catch (e) { this.closeError = 'Could not close counter. Try again.'; }

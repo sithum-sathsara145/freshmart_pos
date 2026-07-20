@@ -12,7 +12,7 @@ class CounterSession extends Model
         'opening_balance', 'opening_denoms',
         'cash_sales', 'expected_closing', 'closing_balance', 'closing_denoms',
         'variance', 'float_retained', 'retained_denoms', 'deposit_amount', 'deposit_account_id',
-        'status', 'opened_at', 'closed_at',
+        'deposited_at', 'deposited_by', 'status', 'opened_at', 'closed_at',
     ];
 
     protected $casts = [
@@ -28,7 +28,16 @@ class CounterSession extends Model
         'deposit_amount'   => 'decimal:2',
         'opened_at'        => 'datetime',
         'closed_at'        => 'datetime',
+        'deposited_at'     => 'datetime',
     ];
+
+    /** Closed with cash set aside, but nobody has taken it in yet. */
+    public function awaitingHandIn(): bool
+    {
+        return $this->status === 'closed'
+            && (float) $this->deposit_amount > 0
+            && $this->deposited_at === null;
+    }
 
     public function counter(): BelongsTo
     {

@@ -111,6 +111,8 @@ CREATE TABLE counter_sessions (
     deposit_amount DECIMAL(15,2) NULL,
     deposit_account_id BIGINT UNSIGNED NULL,
     retained_denoms TEXT NULL,
+    deposited_at TIMESTAMP NULL,
+    deposited_by BIGINT UNSIGNED NULL,
     status ENUM('open','closed') NOT NULL DEFAULT 'open',
     opened_at TIMESTAMP NULL,
     closed_at TIMESTAMP NULL,

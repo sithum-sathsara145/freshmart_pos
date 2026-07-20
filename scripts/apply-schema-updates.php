@@ -107,6 +107,8 @@ $columns = [
         'deposit_amount'     => 'DECIMAL(15,2) NULL AFTER float_retained',
         'deposit_account_id' => 'BIGINT UNSIGNED NULL AFTER deposit_amount',
         'retained_denoms'    => 'TEXT NULL AFTER deposit_account_id',
+        'deposited_at'       => 'TIMESTAMP NULL AFTER retained_denoms',
+        'deposited_by'       => 'BIGINT UNSIGNED NULL AFTER deposited_at',
     ],
 
     // 2026-07-20 — proper cash books and bank accounts.

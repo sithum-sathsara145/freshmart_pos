@@ -212,6 +212,8 @@ Route::middleware(['auth'])->group(function () {
 
     // Counter cash sessions (open/close history)
     Route::resource('counter-sessions', CounterSessionController::class)->only(['index', 'show'])->middleware('permission:counter_sessions.view');
+    Route::post('/counter-sessions/{counterSession}/hand-in', [CounterSessionController::class, 'deposit'])
+        ->middleware('permission:accounts.handin')->name('counter-sessions.hand-in');
 
     // Reports  (profit/cost figures are gated separately from plain reports)
     Route::prefix('reports')->name('reports.')->middleware('permission:reports.view')->group(function () {

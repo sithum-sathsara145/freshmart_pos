@@ -43,20 +43,71 @@
     @if($s->float_retained !== null)
     <div style="margin-top:10px;padding-top:8px;border-top:.5px solid var(--border)">
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px">
-            <span>Left in till</span>
+            <span>Kept by the cashier</span>
             <span style="color:var(--text)">Rs. {{ number_format($s->float_retained, 2) }}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2)">
-            <span>Banked{{ $s->depositAccount ? ' to ' . $s->depositAccount->name : '' }}</span>
-            <span style="color:{{ $s->deposit_amount > 0 ? 'var(--success)' : 'var(--text-3)' }}">Rs. {{ number_format($s->deposit_amount ?? 0, 2) }}</span>
+            <span>
+                @if($s->deposited_at)
+                    Handed in{{ $s->depositAccount ? ' to ' . $s->depositAccount->name : '' }}
+                @elseif($s->deposit_amount > 0)
+                    Set aside to hand in
+                @else
+                    Nothing to hand in
+                @endif
+            </span>
+            <span style="color:{{ $s->deposited_at ? 'var(--success)' : ($s->deposit_amount > 0 ? 'var(--warning)' : 'var(--text-3)') }}">Rs. {{ number_format($s->deposit_amount ?? 0, 2) }}</span>
         </div>
     </div>
     @endif
 </div>
 
+{{-- Cash set aside at close, still to reach a cash book --}}
+@if($s->awaitingHandIn())
+<div style="background:var(--warning-soft);border:.5px solid var(--warning-border);border-radius:8px;padding:14px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:600;color:var(--warning);margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <i class="ti ti-cash-off" style="font-size:15px"></i>
+        Rs. {{ number_format((float) $s->deposit_amount, 2) }} still to be handed in
+    </div>
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">
+        Counted out of the drawer when the counter closed. Record it here once it has actually reached the cash book —
+        that is when the money lands in the books.
+    </div>
+    @can('accounts.handin')
+    <form method="POST" action="{{ route('counter-sessions.hand-in', $s) }}" style="display:flex;gap:8px;flex-wrap:wrap">
+        @csrf
+        <select name="account_id" required
+                style="flex:1;min-width:180px;height:34px;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:0 9px;outline:none">
+            @foreach($cashBooks as $b)
+            <option value="{{ $b->id }}">{{ $b->name }}{{ $b->is_cashier_book ? ' — hand-in book' : '' }}</option>
+            @endforeach
+        </select>
+        <button type="submit" onclick="return confirm('Record Rs. {{ number_format((float) $s->deposit_amount, 2) }} as handed in?')"
+                style="height:34px;padding:0 16px;background:var(--success-solid);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">
+            Record hand-in
+        </button>
+    </form>
+    @else
+    <div style="font-size:11px;color:var(--text-3)">You don't have permission to record this.</div>
+    @endcan
+</div>
+@elseif($s->deposited_at)
+<div style="background:var(--success-soft);border:.5px solid var(--success-border);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:var(--success)">
+    <i class="ti ti-check" style="font-size:14px;vertical-align:-2px"></i>
+    Rs. {{ number_format((float) $s->deposit_amount, 2) }} handed in to
+    <b>{{ $s->depositAccount?->name ?? 'a cash book' }}</b> on {{ $s->deposited_at->format('d M Y, h:i A') }}.
+</div>
+@endif
+
 {{-- Denomination breakdowns --}}
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    @foreach([['Opening count', $s->opening_denoms], ['Closing count', $s->closing_denoms]] as [$label, $denoms])
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px">
+    @foreach([
+        ['Opening count', $s->opening_denoms],
+        ['Closing count', $s->closing_denoms],
+        // What the cashier was left holding — this is what the next opening
+        // count is checked against, so it belongs on the record.
+        ['Kept by the cashier', $s->retained_denoms],
+    ] as [$label, $denoms])
     <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:14px">
         <div style="font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:10px">{{ $label }}</div>
         @if(empty($denoms))
