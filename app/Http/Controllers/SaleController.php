@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
 use App\Support\DocumentNumber;
+use App\Support\Inventory;
 use App\Support\TenderAccount;
 
 use App\Models\Sale;
@@ -116,8 +117,21 @@ class SaleController extends Controller
             return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
         }
 
+        // Total requested per product, across however many lines it appears on.
+        $needByProduct = [];
+        foreach ($request->items as $item) {
+            $needByProduct[$item['product_id']] = ($needByProduct[$item['product_id']] ?? 0) + (float) $item['quantity'];
+        }
+
         DB::beginTransaction();
         try {
+            // This form had no stock check at all and would happily sell into a
+            // negative balance. Guarded inside the transaction, as at the till.
+            if ($shortage = Inventory::guard($needByProduct, $branchId)) {
+                DB::rollBack();
+                return back()->withInput()->with('error', $shortage);
+            }
+
             $subtotal = collect($request->items)->sum($lineSub);
             $tax      = collect($request->items)->sum(fn($i) => $i['quantity'] * $i['unit_price'] * ($i['tax_percent'] ?? 0) / 100);
             $discount = (float) ($request->discount_amount ?? 0);
@@ -171,7 +185,7 @@ class SaleController extends Controller
             foreach ($request->items as $item) {
                 $product = Product::find($item['product_id']);
                 $cogs    = $product
-                    ? \App\Support\Inventory::consume($product, $branchId, (float) $item['quantity'], (float) $item['unit_price'])
+                    ? Inventory::consume($product, $branchId, (float) $item['quantity'], (float) $item['unit_price'])
                     : 0;
 
                 SaleItem::create([
@@ -267,7 +281,7 @@ class SaleController extends Controller
                 $perUnitCost = ($item->cost !== null && $qty > 0)
                     ? (float) $item->cost / $qty
                     : (float) ($item->product?->purchase_price ?? 0);
-                \App\Support\Inventory::addLayer(
+                Inventory::addLayer(
                     $item->product_id, $branchId, $qty,
                     $perUnitCost, (float) $item->unit_price,
                     'VOID', now()->toDateString()

@@ -95,6 +95,7 @@ Written for everyone (no technical knowledge needed).
 _Newest first. New ideas and improvements are added here as they come up._
 
 <!-- NEW-FEATURES -->
+- **2026-07-20 — Stock can't go negative from a sale** — Two counters selling the last unit at the same time both used to go through, leaving stock below zero. The second sale is now refused. The back-office sale form, which had no stock check at all, is now checked too.
 - **2026-07-20 — Two tills can bill at the same time** — Invoice, bill, quotation and note numbers are now handed out one at a time, so two counters finishing a sale together can no longer be given the same number (which used to make one of the sales fail).
 - **2026-07-20 — Card payments reach the bank account** — Card money used to be added to the cash account along with the cash, so the cash figure read high and the bank never saw it. Each part of a payment now goes to the account it belongs in.
 - **2026-07-20 — End-of-day cash float & banking** — Set a float per counter that stays in the drawer overnight. When the counter is closed, the rest is banked into the cash or bank account the cashier picks.

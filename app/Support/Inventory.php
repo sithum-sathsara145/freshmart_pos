@@ -12,9 +12,43 @@ use App\Models\StockLayer;
  *
  *  - addLayer(): receiving stock (purchase, opening stock, adjustment "add", transfer in)
  *  - consume():  issuing stock (sale, adjustment "remove", transfer out) — returns COGS
+ *  - guard():    refuse to issue more than is on hand, safely under concurrency
  */
 class Inventory
 {
+    /**
+     * Check that every product has enough on hand, holding a lock on each row
+     * until the caller's transaction ends.
+     *
+     * Must be called INSIDE a transaction. Checking before opening one lets two
+     * tills selling the last unit both pass and then both consume it, which is
+     * how stock went negative; the lock makes concurrent sales of the same
+     * product queue up instead.
+     *
+     * @param  array<int, float>  $needByProduct  product id => total quantity wanted
+     * @return string|null  an explanation if short, null when everything fits
+     */
+    public static function guard(array $needByProduct, int $branchId): ?string
+    {
+        // Lowest id first: two sales covering the same products take their locks
+        // in the same order and so cannot deadlock against each other.
+        ksort($needByProduct);
+
+        foreach ($needByProduct as $productId => $needed) {
+            $onHand = (float) (Stock::where('product_id', $productId)
+                ->where('branch_id', $branchId)
+                ->lockForUpdate()
+                ->value('quantity') ?? 0);
+
+            if ($needed - $onHand > 0.0001) {
+                $name = Product::where('id', $productId)->value('name') ?? "product #{$productId}";
+
+                return "Not enough stock for \"{$name}\" — available {$onHand}, requested {$needed}.";
+            }
+        }
+
+        return null;
+    }
     /** Add a cost/price layer and bump the aggregate on-hand. */
     public static function addLayer(
         int $productId,

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Support\AttendanceRecorder;
 use App\Support\CurrentBranch;
 use App\Support\DocumentNumber;
+use App\Support\Inventory;
 use App\Support\TenderAccount;
 
 use App\Models\Product;
@@ -397,27 +398,25 @@ class PosController extends Controller
             return response()->json(['success' => false, 'message' => 'Open the counter before making sales.'], 422);
         }
 
-        // Block overselling — total requested per product (across lines) must fit branch stock.
+        // Total requested per product, across however many lines it appears on.
         $needByProduct = [];
         foreach ($request->items as $item) {
             if (! empty($item['id'])) {
                 $needByProduct[$item['id']] = ($needByProduct[$item['id']] ?? 0) + (float) $item['qty'];
             }
         }
-        foreach ($needByProduct as $pid => $needed) {
-            $onHand = (float) (Stock::where('product_id', $pid)->whereBranch($branchId)->value('quantity') ?? 0);
-            if ($needed - $onHand > 0.0001) {
-                $name = Product::where('id', $pid)->value('name');
-                return response()->json([
-                    'success' => false,
-                    'message' => "Not enough stock for \"{$name}\" — available {$onHand}, requested {$needed}.",
-                ], 422);
-            }
-        }
 
         DB::beginTransaction();
 
         try {
+            // Inside the transaction, and holding a lock on each product's row:
+            // checking beforehand let two tills selling the last unit both pass
+            // and then both consume it.
+            if ($shortage = Inventory::guard($needByProduct, $branchId)) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => $shortage], 422);
+            }
+
             $branchId  = CurrentBranch::id();
             $counterId = auth()->user()->counter_id;
             $userId    = auth()->id();
@@ -555,7 +554,7 @@ class PosController extends Controller
 
                 $product = Product::find($item['id']);
                 $cogs    = $product
-                    ? \App\Support\Inventory::consume($product, $branchId, $qty, isset($item['price']) ? (float) $item['price'] : null)
+                    ? Inventory::consume($product, $branchId, $qty, isset($item['price']) ? (float) $item['price'] : null)
                     : 0;
 
                 SaleItem::create([
