@@ -25,6 +25,11 @@ class Counter extends Model
         return $this->belongsTo(Account::class, 'cashier_book_id');
     }
 
+    public function sessions(): HasMany
+    {
+        return $this->hasMany(CounterSession::class);
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);

@@ -22,6 +22,7 @@ use App\Models\Coupon;
 use App\Models\Counter;
 use App\Models\CounterSession;
 use App\Models\HeldBill;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -35,7 +36,7 @@ class PosController extends Controller
     {
         $categories = \App\Models\Category::orderBy('name')->get();
         $branch = auth()->user()->branch;
-        $counter = auth()->user()->counter;
+        $counter = $this->currentCounter();
 
         $openSession = null;
         $lastClose   = null;
@@ -65,7 +66,10 @@ class PosController extends Controller
         $retention = $counter ? $this->retentionRule($counter) : null;
         $defaultBook = $counter ? $this->cashierBookFor($counter, null) : null;
 
-        return view('pos.index', compact('categories', 'branch', 'counter', 'openSession', 'lastClose', 'depositAccounts', 'retention', 'defaultBook')
+        // Nothing on the account: offer the free counters instead of a dead end.
+        $freeCounters = $counter ? collect() : $this->availableCounters();
+
+        return view('pos.index', compact('categories', 'branch', 'counter', 'openSession', 'lastClose', 'depositAccounts', 'retention', 'defaultBook', 'freeCounters')
             + ['denominations' => self::DENOMINATIONS]);
     }
 
@@ -81,9 +85,26 @@ class PosController extends Controller
     // Open the counter for the current session with a counted opening float
     public function openCounter(Request $request)
     {
-        $counter = auth()->user()->counter;
+        $counter = $this->currentCounter();
+
+        // Someone with no counter of their own may step up to a free one.
+        if (! $counter && $request->filled('counter_id')) {
+            $counter = $this->availableCounters()->contains('id', (int) $request->counter_id)
+                ? Counter::find($request->counter_id)
+                : null;
+
+            if (! $counter) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'That counter is not free — someone else is on it.',
+                ], 422);
+            }
+
+            session(['pos_counter_id' => $counter->id]);
+        }
+
         if (! $counter) {
-            return response()->json(['success' => false, 'message' => 'No counter assigned to your account.'], 422);
+            return response()->json(['success' => false, 'message' => 'Pick a counter to work at first.'], 422);
         }
 
         if (CounterSession::where('counter_id', $counter->id)->where('status', 'open')->exists()) {
@@ -109,6 +130,37 @@ class PosController extends Controller
         $this->recordAttendance('in');
 
         return response()->json(['success' => true, 'opening' => $opening, 'message' => 'Counter opened.']);
+    }
+
+    /**
+     * The counter this person is working at.
+     *
+     * Usually the one on their account. Someone with none — an owner or manager
+     * covering a till — picks one when they open it, and that choice lives in
+     * their login session rather than on the user record, so it lapses when the
+     * counter is closed instead of quietly making them a cashier for good.
+     */
+    private function currentCounter(): ?Counter
+    {
+        if ($assigned = auth()->user()->counter) {
+            return $assigned;
+        }
+
+        $picked = session('pos_counter_id');
+
+        return $picked ? Counter::find($picked) : null;
+    }
+
+    /** Counters someone with no counter of their own could step up to. */
+    private function availableCounters(): \Illuminate\Support\Collection
+    {
+        $branchId = auth()->user()->branch_id;
+
+        return Counter::whereBranch($branchId)
+            ->whereDoesntHave('sessions', fn ($q) => $q->where('status', 'open'))
+            ->whereNotIn('id', User::whereNotNull('counter_id')->pluck('counter_id'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     /** How much of the drawer this counter's cashier keeps back. */
@@ -142,7 +194,7 @@ class PosController extends Controller
     // Close the counter: reconcile counted cash against opening + cash sales
     public function closeCounter(Request $request)
     {
-        $counter = auth()->user()->counter;
+        $counter = $this->currentCounter();
         $session = $counter
             ? CounterSession::where('counter_id', $counter->id)->where('status', 'open')->latest('opened_at')->first()
             : null;
@@ -222,6 +274,10 @@ class PosController extends Controller
         });
 
         $this->recordAttendance('out');
+
+        // A counter that was stepped up to is handed back, so the next shift
+        // picks again rather than inheriting it.
+        session()->forget('pos_counter_id');
 
         return response()->json([
             'success'    => true,
@@ -431,7 +487,7 @@ class PosController extends Controller
         // for anyone without a counter, so they could bill with no session at all
         // — and the cash portion of those sales was tracked nowhere, since it
         // stays with the counter until close and never touches a cash book.
-        $counterId = auth()->user()->counter_id;
+        $counterId = $this->currentCounter()?->id;
 
         if (! $counterId) {
             return response()->json([
@@ -464,7 +520,7 @@ class PosController extends Controller
             }
 
             $branchId  = CurrentBranch::id();
-            $counterId = auth()->user()->counter_id;
+            $counterId = $this->currentCounter()?->id;
             $userId    = auth()->id();
 
             // Validate coupon if provided

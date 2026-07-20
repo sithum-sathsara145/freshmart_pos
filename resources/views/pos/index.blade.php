@@ -666,6 +666,21 @@ input[type=number]{-moz-appearance:textfield}
             <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px">
                 <i class="ti ti-cash" style="color:var(--success)"></i> Open counter
             </div>
+            {{-- No counter of your own: pick a free one to work at. --}}
+            <template x-if="!hasCounter">
+                <div style="margin-bottom:12px">
+                    <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:5px">Which counter are you at?</label>
+                    <select x-model="pickedCounter"
+                            style="width:100%;height:34px;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:0 9px;outline:none">
+                        <template x-for="c in freeCounters" :key="c.id">
+                            <option :value="c.id" x-text="c.name"></option>
+                        </template>
+                    </select>
+                    <div style="font-size:10px;color:var(--text-3);margin-top:5px">
+                        Yours until you close it. Counters someone else is on aren't listed.
+                    </div>
+                </div>
+            </template>
             <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Count the cash float — type a count, press <b style="color:var(--text-2)">Tab</b> for the next.</div>
             <div x-show="prevClose" x-cloak style="font-size:11px;color:var(--warning-2);background:var(--warning-soft-3);border:.5px solid var(--warning-border-2);border-radius:6px;padding:6px 9px;margin-bottom:10px">
                 Last close was <b x-text="'Rs. ' + (prevClose ? prevClose.balance.toLocaleString() : '')"></b> — the drawer should match this.
@@ -882,6 +897,7 @@ window.__POS = {
     floatAmount: {{ $counter ? (float) $counter->float_amount : 0 }},
     depositAccounts: @json($depositAccounts),
     retention: @json($retention),
+    freeCounters: @json($freeCounters),
     defaultBookId: {{ $defaultBook?->id ?? 'null' }},
 };
 </script>
@@ -1061,6 +1077,8 @@ function posScreen() {
         floatAmount: (window.__POS && window.__POS.floatAmount) || 0,
         depositAccounts: (window.__POS && window.__POS.depositAccounts) || [],
         retention: (window.__POS && window.__POS.retention) || null,
+        freeCounters: (window.__POS && window.__POS.freeCounters) || [],
+        pickedCounter: (window.__POS && window.__POS.freeCounters && window.__POS.freeCounters[0]) ? window.__POS.freeCounters[0].id : '',
         depositAccountId: (window.__POS && window.__POS.defaultBookId) || '',
         showOpenModal: false,
         showNoCounter: false,
@@ -1700,9 +1718,13 @@ function posScreen() {
         // closed, so a sale without one has nowhere to put the money.
         get canSell() { return this.hasCounter && this.counterOpen; },
 
-        /** Ask for whatever is missing: a counter to work at, or an open session. */
+        /**
+         * Ask for whatever is missing: an open session, or — for someone with no
+         * counter of their own — a free counter to work at. The dead end is only
+         * for when there is genuinely nothing to step up to.
+         */
         requireCounter() {
-            if (!this.hasCounter) { this.showNoCounter = true; return; }
+            if (!this.hasCounter && this.freeCounters.length === 0) { this.showNoCounter = true; return; }
             this.openCounterPrompt();
         },
 
@@ -1727,10 +1749,13 @@ function posScreen() {
                 const res = await fetch('/pos/counter/open', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
-                    body: JSON.stringify({ denoms: this.openDenoms }),
+                    body: JSON.stringify({ denoms: this.openDenoms, counter_id: this.pickedCounter || null }),
                 });
                 const data = await res.json();
                 if (data.success) {
+                    // Stepping up to a free counter makes it yours for this shift,
+                    // so selling is unblocked the same as for an assigned cashier.
+                    this.hasCounter = true;
                     this.counterOpen = true;
                     this.openingBalance = data.opening;
                     this.cashSalesSoFar = 0;
