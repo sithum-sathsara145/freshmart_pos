@@ -95,6 +95,9 @@ Written for everyone (no technical knowledge needed).
 _Newest first. New ideas and improvements are added here as they come up._
 
 <!-- NEW-FEATURES -->
+- **2026-07-20 — Deposits, withdrawals and transfers** — Record money put in or taken out by hand, and move money between any two accounts. Transfers are refused if the account doesn't hold enough.
+- **2026-07-20 — Account statements that show everything** — Every account now has a statement like a bank's — opening balance, each movement in and out, and a running balance. Expenses and money transferred IN used to be missing from it entirely.
+- **2026-07-20 — Proper cash books and bank accounts** — Keep as many cash books and bank accounts as you need, each with its bank name, branch, account number and whether it is savings or current. An account can belong to one shop or to the whole business.
 - **2026-07-20 — Receipt and hardware toggles turn off properly** — Switching a setting off on the Settings page had no effect — it stayed on. Toggles now save correctly both ways.
 - **2026-07-20 — Buttons match what you're allowed to do** — Add, Import, Export, Edit and Delete buttons no longer appear on pages for staff who don't have permission for them — they used to show and then refuse the click.
 - **2026-07-20 — Stock can't go negative from a sale** — Two counters selling the last unit at the same time both used to go through, leaving stock below zero. The second sale is now refused. The back-office sale form, which had no stock check at all, is now checked too.

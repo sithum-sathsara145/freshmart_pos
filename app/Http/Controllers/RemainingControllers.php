@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
 use App\Support\DocumentNumber;
+use App\Support\Ledger;
 use App\Support\Spreadsheet;
 
 
 use App\Models\Customer;
 use App\Models\Supplier;
 use App\Models\Account;
+use App\Models\Branch;
+use App\Models\AccountTransaction;
 use App\Models\Payment;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
@@ -311,41 +314,192 @@ class AccountController extends Controller
 {
     public function index()
     {
-        $accounts = Account::whereBranch(CurrentBranch::id())->get();
-        $totalBalance = $accounts->sum('balance');
-        return view('accounts.index', compact('accounts', 'totalBalance'));
+        // Accounts with no branch belong to the business rather than one shop,
+        // so they show wherever you are working.
+        $accounts = Account::with('branch')
+            ->where(fn ($q) => $q->whereBranch(CurrentBranch::id())->orWhereNull('branch_id'))
+            ->orderBy('type')->orderBy('name')
+            ->get();
+
+        return view('accounts.index', [
+            'cashBooks'    => $accounts->where('type', 'cash'),
+            'bankAccounts' => $accounts->where('type', 'bank'),
+            'cashTotal'    => $accounts->where('type', 'cash')->sum('balance'),
+            'bankTotal'    => $accounts->where('type', 'bank')->sum('balance'),
+            'totalBalance' => $accounts->sum('balance'),
+            'transferable' => $accounts->where('status', 'active'),
+        ]);
     }
 
-    public function create() { return view('accounts.create'); }
+    public function create()
+    {
+        return view('accounts.form', ['account' => new Account(['type' => 'cash', 'status' => 'active']), 'branches' => Branch::orderBy('name')->get()]);
+    }
+
+    public function edit(Account $account)
+    {
+        return view('accounts.form', ['account' => $account, 'branches' => Branch::orderBy('name')->get()]);
+    }
+
+    /** Bank details only make sense on a bank account; a cash book has none. */
+    private function accountRules(): array
+    {
+        return [
+            'name'            => 'required|string|max:150',
+            'type'            => 'required|in:cash,bank',
+            'branch_id'       => 'nullable|exists:branches,id',
+            'subtype'         => 'nullable|required_if:type,bank|in:savings,current',
+            'bank_name'       => 'nullable|required_if:type,bank|string|max:150',
+            'bank_branch'     => 'nullable|string|max:150',
+            'account_number'  => 'nullable|string|max:100',
+            'opening_balance' => 'nullable|numeric',
+            'is_cashier_book' => 'nullable|boolean',
+            'notes'           => 'nullable|string|max:255',
+            'status'          => 'nullable|in:active,inactive',
+        ];
+    }
+
+    private function accountFields(Request $request): array
+    {
+        $fields = $request->only([
+            'name', 'type', 'branch_id', 'subtype', 'bank_name', 'bank_branch',
+            'account_number', 'notes', 'status',
+        ]);
+
+        $fields['branch_id']       = $request->branch_id ?: null;   // blank = not tied to a branch
+        $fields['status']          = $request->status ?: 'active';
+        $fields['is_cashier_book'] = $request->boolean('is_cashier_book');
+
+        // A cash book carries no bank details, whatever was left in the form.
+        if ($fields['type'] === 'cash') {
+            $fields['subtype'] = $fields['bank_name'] = $fields['bank_branch'] = null;
+        }
+
+        return $fields;
+    }
 
     public function store(Request $request)
     {
-        $request->validate(['name' => 'required', 'type' => 'required|in:cash,bank']);
-        if (! $branchId = CurrentBranch::requireId()) {
-            return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
+        $request->validate($this->accountRules());
+
+        $opening = round((float) ($request->opening_balance ?? 0), 2);
+
+        $account = Account::create($this->accountFields($request) + [
+            'opening_balance' => $opening,
+            'balance'         => 0,
+        ]);
+
+        // The opening balance is money the account starts with, so it belongs on
+        // the statement as its first line rather than appearing from nowhere.
+        if (abs($opening) > 0.004) {
+            $opening > 0
+                ? Ledger::credit($account, $opening, ['description' => 'Opening balance', 'source_type' => 'opening'])
+                : Ledger::debit($account, -$opening, ['description' => 'Opening balance', 'source_type' => 'opening']);
         }
-        Account::create([...$request->only(['name', 'type', 'account_number']), 'branch_id' => $branchId, 'balance' => 0]);
+
         return redirect()->route('accounts.index')->with('success', 'Account added.');
+    }
+
+    public function update(Request $request, Account $account)
+    {
+        $request->validate($this->accountRules());
+
+        // Opening balance is deliberately not editable: it is already a ledger
+        // entry, and changing it here would put the statement out of step.
+        $account->update($this->accountFields($request));
+
+        return redirect()->route('accounts.index')->with('success', 'Account updated.');
     }
 
     public function destroy(Account $account)
     {
-        if (Payment::where('account_id', $account->id)->orWhere('to_account_id', $account->id)->exists()
-            || Expense::where('account_id', $account->id)->exists()) {
-            return back()->with('error', 'Cannot delete — this account has payments or expenses on record.');
+        if (AccountTransaction::where('account_id', $account->id)
+                ->where('source_type', '!=', 'opening')->exists()) {
+            return back()->with('error', 'Cannot delete — this account has movements on record. Mark it inactive instead.');
         }
         if (abs((float) $account->balance) > 0.004) {
             return back()->with('error', 'Cannot delete — the account still holds a balance. Transfer it out first.');
         }
+
+        AccountTransaction::where('account_id', $account->id)->delete();
         $account->delete();
+
         return redirect()->route('accounts.index')->with('success', 'Deleted.');
     }
 
-    public function transactions(int $id)
+    /** A deposit or withdrawal entered by hand — a correction, or cash put in from outside. */
+    public function entry(Request $request, Account $account)
     {
-        $account  = Account::findOrFail($id);
-        $payments = Payment::where('account_id', $id)->latest()->paginate(20);
-        return view('accounts.transactions', compact('account', 'payments'));
+        $request->validate([
+            'direction'   => 'required|in:credit,debit',
+            'amount'      => 'required|numeric|min:0.01',
+            'occurred_at' => 'nullable|date',
+            'description' => 'required|string|max:255',
+        ]);
+
+        $amount = round((float) $request->amount, 2);
+
+        if ($request->direction === 'debit' && (float) $account->balance + 0.0001 < $amount) {
+            return back()->withInput()->with('error',
+                'Not enough in this account — it holds Rs. ' . number_format((float) $account->balance, 2) . '.');
+        }
+
+        $meta = [
+            'description' => $request->description,
+            'source_type' => 'manual',
+            'occurred_at' => $request->occurred_at ?: now(),
+        ];
+
+        $request->direction === 'credit'
+            ? Ledger::credit($account, $amount, $meta)
+            : Ledger::debit($account, $amount, $meta);
+
+        return back()->with('success', $request->direction === 'credit' ? 'Deposit recorded.' : 'Withdrawal recorded.');
+    }
+
+    /** A bank-style statement: opening balance, every movement, closing balance. */
+    public function transactions(Request $request, int $id)
+    {
+        $account = Account::with('branch')->findOrFail($id);
+
+        $from = $request->from_date ?: null;
+        $to   = $request->to_date ?: null;
+
+        $inPeriod = fn ($q) => $q->where('account_id', $account->id)
+            ->when($from, fn ($q) => $q->whereDate('occurred_at', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('occurred_at', '<=', $to));
+
+        // What the account held before the window opened.
+        $opening = $from
+            ? (float) AccountTransaction::where('account_id', $account->id)
+                ->whereDate('occurred_at', '<', $from)
+                ->selectRaw("COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE -amount END), 0) AS t")
+                ->value('t')
+            : 0.0;
+
+        $entries = AccountTransaction::with('counterparty')
+            ->where($inPeriod)
+            ->orderBy('occurred_at')->orderBy('id')
+            ->paginate(50)->withQueryString();
+
+        $totals = AccountTransaction::where($inPeriod)
+            ->selectRaw("
+                COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE 0 END), 0) AS money_in,
+                COALESCE(SUM(CASE WHEN direction = 'debit'  THEN amount ELSE 0 END), 0) AS money_out
+            ")->first();
+
+        return view('accounts.transactions', [
+            'account'  => $account,
+            'entries'  => $entries,
+            'opening'  => $opening,
+            'moneyIn'  => (float) $totals->money_in,
+            'moneyOut' => (float) $totals->money_out,
+            'from'     => $from,
+            'to'       => $to,
+            // The stored balance should equal what the entries add up to; if it
+            // ever doesn't, the statement says so rather than quietly disagreeing.
+            'derived'  => Ledger::derivedBalance($account),
+        ]);
     }
 
     public function transfer(Request $request)
@@ -356,18 +510,22 @@ class AccountController extends Controller
             'amount'          => 'required|numeric|min:1',
         ]);
 
-        $from = Account::findOrFail($request->from_account_id);
-        if ($from->balance < $request->amount) {
-            return back()->with('error', 'Insufficient balance.');
+        $refNo = 'TRF-' . strtoupper(Str::random(8));
+
+        // Ledger::transfer locks both accounts before reading the balance, so two
+        // transfers emptying the same account can't both see enough in it.
+        $error = Ledger::transfer(
+            (int) $request->from_account_id,
+            (int) $request->to_account_id,
+            (float) $request->amount,
+            ['reference' => $refNo, 'description' => $request->notes ?: null]
+        );
+
+        if ($error) {
+            return back()->withInput()->with('error', $error);
         }
 
-        DB::transaction(function () use ($request, $from) {
-            $refNo = 'TRF-' . strtoupper(Str::random(8));
-            $from->decrement('balance', $request->amount);
-            Account::find($request->to_account_id)->increment('balance', $request->amount);
-
-            Payment::create(['reference_no' => $refNo, 'type' => 'transfer', 'account_id' => $request->from_account_id, 'to_account_id' => $request->to_account_id, 'amount' => $request->amount, 'method' => 'bank', 'notes' => $request->notes, 'created_by' => auth()->id()]);
-        });
+        Payment::create(['reference_no' => $refNo, 'type' => 'transfer', 'account_id' => $request->from_account_id, 'to_account_id' => $request->to_account_id, 'amount' => $request->amount, 'method' => 'bank', 'notes' => $request->notes, 'created_by' => auth()->id()]);
 
         return back()->with('success', 'Transfer completed.');
     }
@@ -428,7 +586,12 @@ class PaymentController extends Controller
                 'notes'        => $request->notes,
                 'created_by'   => auth()->id(),
             ]);
-            $account->increment('balance', $amount);
+            Ledger::credit($account, $amount, [
+                'reference'   => $refNo,
+                'description' => "Payment for {$sale->invoice_no}",
+                'source_type' => 'sale',
+                'source_id'   => $sale->id,
+            ]);
             $newPaid = (float) $sale->paid_amount + $amount;
             $sale->update(['paid_amount' => $newPaid, 'status' => $newPaid >= $sale->total ? 'paid' : 'partial']);
         });
@@ -476,7 +639,12 @@ class PaymentController extends Controller
                 'notes'        => $request->notes,
                 'created_by'   => auth()->id(),
             ]);
-            $account->decrement('balance', $amount);
+            Ledger::debit($account, $amount, [
+                'reference'   => $refNo,
+                'description' => "Payment for {$purchase->bill_no}",
+                'source_type' => 'purchase',
+                'source_id'   => $purchase->id,
+            ]);
             $newPaid = (float) $purchase->paid_amount + $amount;
             $purchase->update([
                 'paid_amount'    => $newPaid,
@@ -517,7 +685,13 @@ class ExpenseController extends Controller
             return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
         }
         Expense::create([...$request->only(['expense_category_id','account_id','description','amount','expense_date']), 'branch_id' => $branchId, 'created_by' => auth()->id()]);
-        if ($request->account_id) Account::find($request->account_id)->decrement('balance', $request->amount);
+        if ($request->account_id) {
+            Ledger::debit((int) $request->account_id, (float) $request->amount, [
+                'description' => $request->description,
+                'source_type' => 'expense',
+                'occurred_at' => $request->expense_date,
+            ]);
+        }
         return redirect()->route('expenses.index')->with('success', 'Expense recorded.');
     }
 
@@ -539,7 +713,9 @@ class ExpenseController extends Controller
             // Keep the paying account in step when the amount changes.
             $delta = (float) $r->amount - (float) $e->amount;
             if ($e->account_id && abs($delta) > 0.004) {
-                Account::where('id', $e->account_id)->decrement('balance', $delta);
+                $delta > 0
+                    ? Ledger::debit($e->account_id, $delta, ['description' => "{$r->description} (amount raised)", 'source_type' => 'expense', 'source_id' => $e->id])
+                    : Ledger::credit($e->account_id, -$delta, ['description' => "{$r->description} (amount lowered)", 'source_type' => 'expense', 'source_id' => $e->id]);
             }
             $e->update($r->only(['description', 'amount', 'expense_date', 'expense_category_id']));
         });
@@ -554,7 +730,11 @@ class ExpenseController extends Controller
         DB::transaction(function () use ($expense) {
             // Put the money back in the account it was paid from.
             if ($expense->account_id) {
-                Account::where('id', $expense->account_id)->increment('balance', $expense->amount);
+                Ledger::credit($expense->account_id, (float) $expense->amount, [
+                    'description' => "Reversed — expense deleted ({$expense->description})",
+                    'source_type' => 'expense',
+                    'source_id'   => $expense->id,
+                ]);
             }
             $expense->delete();
         });
@@ -920,7 +1100,11 @@ class PurchaseReturnController extends Controller
                         'notes'        => "Refund for {$return->dr_note_no}",
                         'created_by'   => auth()->id(),
                     ]);
-                    $account->increment('balance', $returnAmount);
+                    Ledger::credit($account, $returnAmount, [
+                        'description' => "Refund for {$return->dr_note_no}",
+                        'source_type' => 'purchase_return',
+                        'source_id'   => $return->id,
+                    ]);
                 }
             }
             // 'replacement': goods returned, a fresh GRN brings the replacement — no money movement.
@@ -973,7 +1157,11 @@ class PurchaseReturnController extends Controller
                 $pays = Payment::where('purchase_id', $purchase->id)->where('type', 'payment_in')
                     ->where('notes', 'like', '%' . $purchaseReturn->dr_note_no . '%')->get();
                 foreach ($pays as $p) {
-                    Account::where('id', $p->account_id)->decrement('balance', $p->amount);
+                    Ledger::debit($p->account_id, (float) $p->amount, [
+                        'description' => "Reversed — {$purchaseReturn->dr_note_no} deleted",
+                        'source_type' => 'purchase_return',
+                        'source_id'   => $purchaseReturn->id,
+                    ]);
                     $p->delete();
                 }
             }

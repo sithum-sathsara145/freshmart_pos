@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
 use App\Support\DocumentNumber;
+use App\Support\Ledger;
 use App\Support\Spreadsheet;
 
 use App\Models\Purchase;
@@ -130,7 +131,11 @@ class PurchaseController extends Controller
                         'method'       => $methodMap[$request->payment_method] ?? 'cash',
                         'created_by'   => auth()->id(),
                     ]);
-                    $account->decrement('balance', $paid);
+                    Ledger::debit($account, $paid, [
+                        'description' => "Purchase {$purchase->bill_no}",
+                        'source_type' => 'purchase',
+                        'source_id'   => $purchase->id,
+                    ]);
                 }
             }
 
@@ -278,7 +283,11 @@ class PurchaseController extends Controller
             }
 
             foreach ($purchase->payments as $payment) {
-                Account::where('id', $payment->account_id)->increment('balance', $payment->amount);
+                Ledger::credit($payment->account_id, (float) $payment->amount, [
+                    'description' => "Reversed — purchase {$purchase->bill_no} deleted",
+                    'source_type' => 'purchase',
+                    'source_id'   => $purchase->id,
+                ]);
                 $payment->delete();
             }
 

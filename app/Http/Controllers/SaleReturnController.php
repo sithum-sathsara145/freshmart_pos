@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
+use App\Support\Ledger;
 use App\Support\DocumentNumber;
 
 use App\Models\Sale;
@@ -192,7 +193,11 @@ class SaleReturnController extends Controller
                         'notes'        => "Refund for {$saleReturn->credit_note_no}",
                         'created_by'   => auth()->id(),
                     ]);
-                    $account->decrement('balance', $returnAmount);
+                    Ledger::debit($account, $returnAmount, [
+                        'description' => "Refund for {$saleReturn->credit_note_no}",
+                        'source_type' => 'sale_return',
+                        'source_id'   => $saleReturn->id,
+                    ]);
                 }
             }
 
@@ -261,7 +266,11 @@ class SaleReturnController extends Controller
                     ->where('notes', 'like', '%' . $saleReturn->credit_note_no . '%')
                     ->get();
                 foreach ($payments as $p) {
-                    Account::where('id', $p->account_id)->increment('balance', $p->amount);
+                    Ledger::credit($p->account_id, (float) $p->amount, [
+                        'description' => "Reversed — {$saleReturn->credit_note_no} deleted",
+                        'source_type' => 'sale_return',
+                        'source_id'   => $saleReturn->id,
+                    ]);
                     $p->delete();
                 }
             }

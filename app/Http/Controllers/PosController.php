@@ -6,6 +6,7 @@ use App\Support\AttendanceRecorder;
 use App\Support\CurrentBranch;
 use App\Support\DocumentNumber;
 use App\Support\Inventory;
+use App\Support\Ledger;
 use App\Support\TenderAccount;
 
 use App\Models\Product;
@@ -171,11 +172,17 @@ class PosController extends Controller
             $counter->update(['status' => 'closed', 'cash_balance' => $float]);
 
             if ($banked > 0) {
-                $cashAccount->decrement('balance', $banked);
-                $destination->increment('balance', $banked);
+                $reference = 'DEP-' . strtoupper(Str::random(8));
+
+                Ledger::transfer($cashAccount, $destination, $banked, [
+                    'reference'   => $reference,
+                    'description' => "End-of-day banking — {$counter->name}",
+                    'source_type' => 'counter_close',
+                    'source_id'   => $session->id,
+                ]);
 
                 Payment::create([
-                    'reference_no'  => 'DEP-' . strtoupper(Str::random(8)),
+                    'reference_no'  => $reference,
                     'type'          => 'transfer',
                     'account_id'    => $cashAccount->id,
                     'to_account_id' => $destination->id,
@@ -616,7 +623,12 @@ class PosController extends Controller
                         'created_by'   => $userId,
                     ]);
 
-                    $account->increment('balance', $t['amount']);
+                    Ledger::credit($account, $t['amount'], [
+                        'reference'   => $reference,
+                        'description' => "Sale {$sale->invoice_no}",
+                        'source_type' => 'sale',
+                        'source_id'   => $sale->id,
+                    ]);
                 }
             }
 

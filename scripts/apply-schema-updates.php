@@ -59,6 +59,36 @@ if (! $dry && Schema::hasTable('document_sequences')) {
     }
 }
 
+// 2026-07-20 — the cash book / bank account ledger.
+if (! Schema::hasTable('account_transactions')) {
+    if ($dry) {
+        echo "  account_transactions TABLE               WOULD CREATE\n";
+    } else {
+        DB::statement('
+            CREATE TABLE account_transactions (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                account_id BIGINT UNSIGNED NOT NULL,
+                occurred_at TIMESTAMP NOT NULL,
+                direction ENUM("credit","debit") NOT NULL,
+                amount DECIMAL(15,2) NOT NULL,
+                balance_after DECIMAL(15,2) NOT NULL,
+                reference VARCHAR(60) NULL,
+                description VARCHAR(255) NULL,
+                source_type VARCHAR(40) NULL,
+                source_id BIGINT UNSIGNED NULL,
+                counterparty_account_id BIGINT UNSIGNED NULL,
+                created_by BIGINT UNSIGNED NULL,
+                created_at TIMESTAMP NULL,
+                updated_at TIMESTAMP NULL,
+                INDEX idx_account_time (account_id, occurred_at, id),
+                INDEX idx_source (source_type, source_id),
+                FOREIGN KEY (account_id) REFERENCES accounts(id)
+            )
+        ');
+        echo "  account_transactions TABLE               CREATED\n";
+    }
+}
+
 /* ----------------------------------------------------------------- columns -- */
 
 // table => [column => the DDL fragment used to add it]
@@ -71,6 +101,16 @@ $columns = [
         'float_retained'     => 'DECIMAL(15,2) NULL AFTER variance',
         'deposit_amount'     => 'DECIMAL(15,2) NULL AFTER float_retained',
         'deposit_account_id' => 'BIGINT UNSIGNED NULL AFTER deposit_amount',
+    ],
+
+    // 2026-07-20 — proper cash books and bank accounts.
+    'accounts' => [
+        'bank_name'       => 'VARCHAR(150) NULL AFTER account_number',
+        'bank_branch'     => 'VARCHAR(150) NULL AFTER bank_name',
+        'subtype'         => "ENUM('savings','current') NULL AFTER bank_branch",
+        'opening_balance' => 'DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER subtype',
+        'is_cashier_book' => 'TINYINT(1) NOT NULL DEFAULT 0 AFTER opening_balance',
+        'notes'           => 'VARCHAR(255) NULL AFTER is_cashier_book',
     ],
 ];
 

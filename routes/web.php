@@ -194,11 +194,13 @@ Route::middleware(['auth'])->group(function () {
         ->middlewareFor('destroy', 'permission:suppliers.delete');
 
     // Cash & Bank (no per-account show/edit page — manage from the index)
-    Route::resource('accounts', AccountController::class)->only(['index', 'create', 'store', 'destroy'])
-        ->middlewareFor('index', 'permission:accounts.view')
-        ->middlewareFor(['create', 'store', 'destroy'], 'permission:accounts.manage');
-    Route::get('/accounts/{id}/transactions', [AccountController::class, 'transactions'])->middleware('permission:accounts.view')->name('accounts.transactions');
+    // Must be declared before the resource so they aren't captured by /accounts/{account}.
     Route::post('/accounts/transfer', [AccountController::class, 'transfer'])->middleware('permission:accounts.transfer')->name('accounts.transfer');
+    Route::get('/accounts/{id}/transactions', [AccountController::class, 'transactions'])->middleware('permission:accounts.view')->name('accounts.transactions');
+    Route::post('/accounts/{account}/entry', [AccountController::class, 'entry'])->middleware('permission:accounts.entry')->name('accounts.entry');
+    Route::resource('accounts', AccountController::class)->only(['index', 'create', 'store', 'edit', 'update', 'destroy'])
+        ->middlewareFor('index', 'permission:accounts.view')
+        ->middlewareFor(['create', 'store', 'edit', 'update', 'destroy'], 'permission:accounts.manage');
 
     // Expenses
     Route::resource('expense-categories', ExpenseCategoryController::class)->only(['index', 'store', 'edit', 'update', 'destroy'])->middleware('permission:expenses.categories');

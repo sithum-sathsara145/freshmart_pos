@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
+use App\Support\Ledger;
 use App\Support\DocumentNumber;
 use App\Support\Inventory;
 use App\Support\TenderAccount;
@@ -217,8 +218,10 @@ class SaleController extends Controller
                 $account = ($request->account_id ? Account::whereBranch($branchId)->find($request->account_id) : null)
                         ?? TenderAccount::for($branchId, $tender);
                 if ($account) {
+                    $reference = 'PAY-' . strtoupper(Str::random(8));
+
                     Payment::create([
-                        'reference_no' => 'PAY-' . strtoupper(Str::random(8)),
+                        'reference_no' => $reference,
                         'type'         => 'payment_in',
                         'account_id'   => $account->id,
                         'party_type'   => 'customer',
@@ -228,7 +231,12 @@ class SaleController extends Controller
                         'method'       => $tender,
                         'created_by'   => auth()->id(),
                     ]);
-                    $account->increment('balance', $paid);
+                    Ledger::credit($account, $paid, [
+                        'reference'   => $reference,
+                        'description' => "Sale {$sale->invoice_no}",
+                        'source_type' => 'sale',
+                        'source_id'   => $sale->id,
+                    ]);
                 }
             }
 
@@ -290,7 +298,11 @@ class SaleController extends Controller
 
             // Refund every recorded payment back to its account, then drop it.
             foreach ($sale->payments as $payment) {
-                Account::where('id', $payment->account_id)->decrement('balance', $payment->amount);
+                Ledger::debit($payment->account_id, (float) $payment->amount, [
+                    'description' => "Reversed — sale {$sale->invoice_no} deleted",
+                    'source_type' => 'sale',
+                    'source_id'   => $sale->id,
+                ]);
                 $payment->delete();
             }
 

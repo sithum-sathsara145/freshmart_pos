@@ -561,11 +561,40 @@ CREATE TABLE accounts (
     type ENUM('cash','bank') DEFAULT 'cash',
     branch_id BIGINT UNSIGNED,
     account_number VARCHAR(100),
+    bank_name VARCHAR(150) NULL,
+    bank_branch VARCHAR(150) NULL,
+    subtype ENUM('savings','current') NULL,
+    opening_balance DECIMAL(15,2) NOT NULL DEFAULT 0,
+    is_cashier_book TINYINT(1) NOT NULL DEFAULT 0,
+    notes VARCHAR(255) NULL,
     balance DECIMAL(15,2) DEFAULT 0,
     status ENUM('active','inactive') DEFAULT 'active',
     created_at TIMESTAMP NULL,
     updated_at TIMESTAMP NULL,
     FOREIGN KEY (branch_id) REFERENCES branches(id)
+);
+
+-- Every movement in or out of a cash book or bank account, in order.
+-- balance_after is the account's balance once the entry is applied, so a
+-- statement reads like a bank's without recomputing the running total.
+CREATE TABLE account_transactions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    account_id BIGINT UNSIGNED NOT NULL,
+    occurred_at TIMESTAMP NOT NULL,
+    direction ENUM('credit','debit') NOT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    balance_after DECIMAL(15,2) NOT NULL,
+    reference VARCHAR(60) NULL,
+    description VARCHAR(255) NULL,
+    source_type VARCHAR(40) NULL,
+    source_id BIGINT UNSIGNED NULL,
+    counterparty_account_id BIGINT UNSIGNED NULL,
+    created_by BIGINT UNSIGNED NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    INDEX idx_account_time (account_id, occurred_at, id),
+    INDEX idx_source (source_type, source_id),
+    FOREIGN KEY (account_id) REFERENCES accounts(id)
 );
 
 CREATE TABLE payments (

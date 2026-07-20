@@ -159,9 +159,10 @@ return [
     'accounts' => [
         'label'       => 'Cash &amp; bank accounts',
         'permissions' => [
-            'accounts.view'     => 'View accounts &amp; balances',
-            'accounts.manage'   => 'Create / delete accounts',
+            'accounts.view'     => 'View accounts, statements &amp; balances',
+            'accounts.manage'   => 'Create / edit / delete accounts',
             'accounts.transfer' => 'Transfer money between accounts',
+            'accounts.entry'    => 'Record a deposit or withdrawal by hand',
         ],
     ],
 
