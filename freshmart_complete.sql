@@ -50,6 +50,16 @@ CREATE TABLE settings (
     updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- Atomic counters for invoice / bill / quote / note numbers.
+-- Bumped in one statement so two tills can never be handed the same number.
+-- See App\Support\DocumentNumber.
+CREATE TABLE document_sequences (
+    key_name VARCHAR(50) NOT NULL PRIMARY KEY,
+    next_number BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 -- ============================================================
 -- 3. BRANCHES
 -- ============================================================

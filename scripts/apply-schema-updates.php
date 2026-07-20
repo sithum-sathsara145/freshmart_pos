@@ -17,10 +17,49 @@ require __DIR__ . '/../vendor/autoload.php';
 $app = require __DIR__ . '/../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
+use App\Support\DocumentNumber;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 $dry = in_array('--dry', $argv, true);
+
+/* ------------------------------------------------------------------ tables -- */
+
+// 2026-07-20 — atomic document numbering.
+if (! Schema::hasTable('document_sequences')) {
+    if ($dry) {
+        echo "  document_sequences  TABLE                WOULD CREATE\n";
+    } else {
+        DB::statement('
+            CREATE TABLE document_sequences (
+                key_name VARCHAR(50) NOT NULL PRIMARY KEY,
+                next_number BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL,
+                updated_at TIMESTAMP NULL
+            )
+        ');
+        echo "  document_sequences  TABLE                CREATED\n";
+    }
+}
+
+// Seed each counter at the highest number already used, so numbering carries on
+// from the existing records instead of restarting and colliding with them.
+if (! $dry && Schema::hasTable('document_sequences')) {
+    foreach (array_keys(DocumentNumber::DOCUMENTS) as $key) {
+        $before = DB::table('document_sequences')->where('key_name', $key)->value('next_number');
+        DocumentNumber::seed($key);
+        $after = DB::table('document_sequences')->where('key_name', $key)->value('next_number');
+
+        printf(
+            "  %-18s %-20s %s\n",
+            'document_sequences',
+            $key,
+            $before === null ? "seeded at {$after}" : "already at {$after}"
+        );
+    }
+}
+
+/* ----------------------------------------------------------------- columns -- */
 
 // table => [column => the DDL fragment used to add it]
 $columns = [

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
+use App\Support\DocumentNumber;
 use App\Support\Spreadsheet;
 
 use App\Models\Purchase;
@@ -86,7 +87,7 @@ class PurchaseController extends Controller
             $paid     = (float) ($request->paid_amount ?? 0);
 
             $purchase = Purchase::create([
-                'bill_no'         => $this->nextBillNo(),
+                'bill_no'         => DocumentNumber::next('purchase'),
                 'supplier_id'     => $request->supplier_id,
                 'branch_id'       => $branchId,
                 'user_id'         => auth()->id(),
@@ -309,12 +310,35 @@ class PurchaseController extends Controller
         return $pdf->download("Bill-{$purchase->bill_no}.pdf");
     }
 
-    private function nextBillNo(): string
+    // ── Goods-received import ────────────────────────────────────────────────
+    //
+    // Takes a supplier's invoice as a spreadsheet and turns it into a real
+    // purchase, so received stock arrives at its actual cost with the supplier
+    // and the amount owed recorded — unlike the product importer, which only
+    // trues up quantities.
+
+    private const IMPORT_COLUMNS = ['barcode', 'sku', 'name', 'quantity', 'unit_price', 'batch_no', 'mrp', 'sale_price'];
+
+    public function importForm()
     {
-        $last = Purchase::latest('id')->value('bill_no');
-        $num  = $last ? ((int) preg_replace('/\D/', '', $last)) + 1 : 1;
-        return 'PO-' . str_pad($num, 5, '0', STR_PAD_LEFT);
+        return view('purchases.import', [
+            'suppliers' => Supplier::orderBy('name')->get(),
+            'result'    => null,
+        ]);
     }
+
+    public function importSample(Request $request)
+    {
+        $format  = $request->get('format') === 'xlsx' ? 'xlsx' : 'csv';
+        $samples = [
+            ['4791234567890', '',       '',                 '24', '220', 'B-2291', '300', '280'],
+            ['',              '100042', '',                 '10', '850', '',       '',    ''],
+            ['',              '',       'Sugar (loose)',    '50', '230', '',       '',    '260'],
+        ];
+
+        return Spreadsheet::download(self::IMPORT_COLUMNS, $samples, $format, 'goods_received_sample');
+    }
+
     public function import(Request $request)
     {
         $request->validate([
@@ -410,7 +434,7 @@ class PurchaseController extends Controller
             // Received now, paid later: the whole amount lands on the supplier's
             // balance, and payment goes through Payment Out as usual.
             $purchase = Purchase::create([
-                'bill_no'         => $this->nextBillNo(),
+                'bill_no'         => DocumentNumber::next('purchase'),
                 'supplier_id'     => $request->supplier_id,
                 'branch_id'       => $branchId,
                 'user_id'         => auth()->id(),
@@ -451,7 +475,6 @@ class PurchaseController extends Controller
             ],
         ]);
     }
-
 
 
     /**

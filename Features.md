@@ -95,6 +95,8 @@ Written for everyone (no technical knowledge needed).
 _Newest first. New ideas and improvements are added here as they come up._
 
 <!-- NEW-FEATURES -->
+- **2026-07-20 — Two tills can bill at the same time** — Invoice, bill, quotation and note numbers are now handed out one at a time, so two counters finishing a sale together can no longer be given the same number (which used to make one of the sales fail).
+- **2026-07-20 — Card payments reach the bank account** — Card money used to be added to the cash account along with the cash, so the cash figure read high and the bank never saw it. Each part of a payment now goes to the account it belongs in.
 - **2026-07-20 — End-of-day cash float & banking** — Set a float per counter that stays in the drawer overnight. When the counter is closed, the rest is banked into the cash or bank account the cashier picks.
 - **2026-07-20 — Import received goods** — Upload a supplier's invoice as a spreadsheet to add stock for many products at once. It creates a real purchase at the cost you were charged and puts the amount on the supplier's balance.
 - **2026-07-20 — Supplier list import & export** — Download the supplier list as CSV/Excel, edit it, and upload it back — matching rows update instead of duplicating.

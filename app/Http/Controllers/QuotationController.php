@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
+use App\Support\DocumentNumber;
 
 use App\Models\Quotation;
 use App\Models\QuotationItem;
@@ -63,7 +64,7 @@ class QuotationController extends Controller
             $total    = $subtotal - $discount + $tax;
 
             $quote = Quotation::create([
-                'quote_no'        => $this->nextQuoteNo(),
+                'quote_no'        => DocumentNumber::next('quotation'),
                 'customer_id'     => $request->customer_id,
                 'branch_id'       => $branchId,
                 'user_id'         => auth()->id(),
@@ -140,10 +141,4 @@ class QuotationController extends Controller
         return $pdf->download("Quote-{$quotation->quote_no}.pdf");
     }
 
-    private function nextQuoteNo(): string
-    {
-        $last = Quotation::latest('id')->value('quote_no');
-        $num  = $last ? ((int) preg_replace('/\D/', '', $last)) + 1 : 1;
-        return 'QT-' . str_pad($num, 4, '0', STR_PAD_LEFT);
-    }
 }

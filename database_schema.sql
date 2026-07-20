@@ -38,6 +38,16 @@ CREATE TABLE settings (
     updated_at TIMESTAMP NULL
 );
 
+-- Atomic counters for invoice / bill / quote / note numbers.
+-- Bumped in one statement so two tills can never be handed the same number.
+-- See App\Support\DocumentNumber.
+CREATE TABLE document_sequences (
+    key_name VARCHAR(50) NOT NULL PRIMARY KEY,
+    next_number BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+
 CREATE TABLE branches (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(150) NOT NULL,

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
+use App\Support\DocumentNumber;
+use App\Support\TenderAccount;
 
 use App\Models\Sale;
 use App\Models\SaleItem;
@@ -148,7 +150,7 @@ class SaleController extends Controller
             }
 
             $sale = Sale::create([
-                'invoice_no'      => $this->nextInvoiceNo(),
+                'invoice_no'      => DocumentNumber::next('invoice'),
                 'customer_id'     => $request->customer_id,
                 'branch_id'       => $branchId,
                 'counter_id'      => auth()->user()->counter_id,
@@ -193,10 +195,14 @@ class SaleController extends Controller
             // Payment record — honour the chosen account, and map the sale's payment
             // method to a valid payments.method ENUM value ('cash','card','bank','cheque').
             if ($paid > 0) {
+                $methodMap = ['cash' => 'cash', 'card' => 'card', 'bank_transfer' => 'bank', 'credit' => 'cash'];
+                $tender    = $methodMap[$request->payment_method] ?? 'cash';
+
+                // An explicitly chosen account wins; otherwise fall to whichever
+                // account that tender belongs in rather than always the cash one.
                 $account = ($request->account_id ? Account::whereBranch($branchId)->find($request->account_id) : null)
-                        ?? Account::whereBranch($branchId)->where('type', 'cash')->first();
+                        ?? TenderAccount::for($branchId, $tender);
                 if ($account) {
-                    $methodMap = ['cash' => 'cash', 'card' => 'card', 'bank_transfer' => 'bank', 'credit' => 'cash'];
                     Payment::create([
                         'reference_no' => 'PAY-' . strtoupper(Str::random(8)),
                         'type'         => 'payment_in',
@@ -205,7 +211,7 @@ class SaleController extends Controller
                         'party_id'     => $request->customer_id,
                         'sale_id'      => $sale->id,
                         'amount'       => $paid,
-                        'method'       => $methodMap[$request->payment_method] ?? 'cash',
+                        'method'       => $tender,
                         'created_by'   => auth()->id(),
                     ]);
                     $account->increment('balance', $paid);
@@ -319,10 +325,4 @@ class SaleController extends Controller
         return view('sales.receipt', compact('sale', 'settings'));
     }
 
-    private function nextInvoiceNo(): string
-    {
-        $last = Sale::latest('id')->value('invoice_no');
-        $num  = $last ? ((int) preg_replace('/\D/', '', $last)) + 1 : 1;
-        return 'INV-' . str_pad($num, 6, '0', STR_PAD_LEFT);
-    }
 }

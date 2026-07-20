@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
+use App\Support\DocumentNumber;
 use App\Support\Spreadsheet;
 
 
@@ -864,7 +865,7 @@ class PurchaseReturnController extends Controller
             $returnAmount = round(collect($lines)->sum(fn($l) => $l['qty'] * (float) $l['pi']->unit_price), 2);
 
             $return = PurchaseReturn::create([
-                'dr_note_no'    => $this->nextDrNoteNo(),
+                'dr_note_no'    => DocumentNumber::next('debit_note'),
                 'purchase_id'   => $purchase->id,
                 'supplier_id'   => $purchase->supplier_id,
                 'reason'        => $request->reason,
@@ -988,12 +989,6 @@ class PurchaseReturnController extends Controller
         return redirect()->route('purchase-returns.index')->with('success', 'Purchase return reversed.');
     }
 
-    private function nextDrNoteNo(): string
-    {
-        $last = PurchaseReturn::latest('id')->value('dr_note_no');
-        $num  = $last ? ((int) preg_replace('/\D/', '', $last)) + 1 : 1;
-        return 'DR-' . str_pad($num, 4, '0', STR_PAD_LEFT);
-    }
 }
 
 // =========================================================

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
+use App\Support\DocumentNumber;
 
 use App\Models\Sale;
 use App\Models\SaleItem;
@@ -134,7 +135,7 @@ class SaleReturnController extends Controller
             $returnAmount = round(collect($lines)->sum(fn($l) => $l['qty'] * (float) $l['si']->unit_price), 2);
 
             $saleReturn = SaleReturn::create([
-                'credit_note_no' => $this->nextCreditNoteNo(),
+                'credit_note_no' => DocumentNumber::next('credit_note'),
                 'sale_id'        => $sale->id,
                 'customer_id'    => $sale->customer_id,
                 'reason'         => $request->reason,
@@ -311,10 +312,4 @@ class SaleReturnController extends Controller
         return true;
     }
 
-    private function nextCreditNoteNo(): string
-    {
-        $last = SaleReturn::latest('id')->value('credit_note_no');
-        $num  = $last ? ((int) preg_replace('/\D/', '', $last)) + 1 : 1;
-        return 'CR-' . str_pad($num, 4, '0', STR_PAD_LEFT);
-    }
 }

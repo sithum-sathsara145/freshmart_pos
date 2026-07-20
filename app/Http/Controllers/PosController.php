@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Support\AttendanceRecorder;
 use App\Support\CurrentBranch;
+use App\Support\DocumentNumber;
+use App\Support\TenderAccount;
 
 use App\Models\Product;
 use App\Models\Sale;
@@ -509,7 +511,7 @@ class PosController extends Controller
 
             // Create sale
             $sale = Sale::create([
-                'invoice_no'     => $this->generateInvoiceNo(),
+                'invoice_no'     => DocumentNumber::next('invoice'),
                 'customer_id'    => $request->customer_id,
                 'branch_id'      => $branchId,
                 'counter_id'     => $counterId,
@@ -580,39 +582,42 @@ class PosController extends Controller
             }
 
             // Payment record(s) — one per tender (split sales create a cash and a card record).
+            // Each tender is banked where it actually goes: cash to the till's cash
+            // account, card to the bank. Posting the lot to the cash account made it
+            // read high by every card sale and left the bank never seeing the money.
             if ($paidAmount > 0) {
-                $account = Account::whereBranch($branchId)
-                                  ->where('type', 'cash')
-                                  ->first();
-                if ($account) {
-                    $tenders = [];
-                    if ($method === 'mixed') {
-                        if ($cashInDrawer > 0) $tenders[] = ['method' => 'cash', 'amount' => $cashInDrawer];
-                        if ($cardPortion > 0)  $tenders[] = ['method' => 'card', 'amount' => $cardPortion];
-                    } else {
-                        $m = in_array($method, ['cash', 'card', 'bank', 'cheque'], true) ? $method : 'cash';
-                        $tenders[] = ['method' => $m, 'amount' => $paidAmount];
+                $tenders = [];
+                if ($method === 'mixed') {
+                    if ($cashInDrawer > 0) $tenders[] = ['method' => 'cash', 'amount' => $cashInDrawer];
+                    if ($cardPortion > 0)  $tenders[] = ['method' => 'card', 'amount' => $cardPortion];
+                } else {
+                    $m = in_array($method, ['cash', 'card', 'bank', 'cheque'], true) ? $method : 'cash';
+                    $tenders[] = ['method' => $m, 'amount' => $paidAmount];
+                }
+
+                foreach ($tenders as $t) {
+                    $account = TenderAccount::for($branchId, $t['method']);
+                    if (! $account) {
+                        continue;
                     }
 
-                    foreach ($tenders as $t) {
-                        $reference = ($t['method'] === 'card' && $request->filled('card_last4'))
-                            ? 'CARD-' . $request->card_last4 . '-' . $sale->id
-                            : 'PAY-' . strtoupper(Str::random(8));
+                    $reference = ($t['method'] === 'card' && $request->filled('card_last4'))
+                        ? 'CARD-' . $request->card_last4 . '-' . $sale->id
+                        : 'PAY-' . strtoupper(Str::random(8));
 
-                        Payment::create([
-                            'reference_no' => $reference,
-                            'type'         => 'payment_in',
-                            'account_id'   => $account->id,
-                            'party_type'   => 'customer',
-                            'party_id'     => $request->customer_id,
-                            'sale_id'      => $sale->id,
-                            'amount'       => $t['amount'],
-                            'method'       => $t['method'],
-                            'created_by'   => $userId,
-                        ]);
-                    }
+                    Payment::create([
+                        'reference_no' => $reference,
+                        'type'         => 'payment_in',
+                        'account_id'   => $account->id,
+                        'party_type'   => 'customer',
+                        'party_id'     => $request->customer_id,
+                        'sale_id'      => $sale->id,
+                        'amount'       => $t['amount'],
+                        'method'       => $t['method'],
+                        'created_by'   => $userId,
+                    ]);
 
-                    $account->increment('balance', $paidAmount);
+                    $account->increment('balance', $t['amount']);
                 }
             }
 
@@ -704,11 +709,5 @@ class PosController extends Controller
         return response()->json(['success' => true]);
     }
 
-    private function generateInvoiceNo(): string
-    {
-        $last = Sale::latest()->value('invoice_no');
-        $num  = $last ? ((int) substr($last, 4)) + 1 : 1;
-        return 'INV-' . str_pad($num, 6, '0', STR_PAD_LEFT);
-    }
 
 }
