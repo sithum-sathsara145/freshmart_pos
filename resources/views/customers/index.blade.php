@@ -12,9 +12,11 @@
         </div>
         <button type="submit" style="height:34px;padding:0 12px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Search</button>
     </form>
+    @can('customers.create')
     <a href="{{ route('customers.create') }}" style="height:34px;padding:0 14px;background:var(--primary-soft);color:var(--primary-text);border:.5px solid var(--primary-border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
         <i class="ti ti-plus" style="font-size:13px"></i>Add Customer
     </a>
+    @endcan
 </div>
 <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;overflow:hidden">
 <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -43,7 +45,9 @@
         <td style="padding:9px 12px">
             <div style="display:flex;gap:3px">
                 <a href="{{ route('customers.show',$c) }}" style="width:26px;height:26px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-2);text-decoration:none"><i class="ti ti-eye" style="font-size:12px"></i></a>
+                @can('customers.edit')
                 <a href="{{ route('customers.edit',$c) }}" style="width:26px;height:26px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-2);text-decoration:none"><i class="ti ti-edit" style="font-size:12px"></i></a>
+                @endcan
             </div>
         </td>
     </tr>

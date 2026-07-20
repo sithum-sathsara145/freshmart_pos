@@ -11,9 +11,15 @@
     <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--text-3);margin-bottom:3px">Out of stock</div><div style="font-size:18px;font-weight:500;color:var(--danger)">{{ $totals['out'] }}</div></div>
 </div>
 <div style="display:flex;gap:8px;margin-bottom:12px">
+    @can('stock.adjust')
     <a href="{{ route('stock.adjustments') }}" style="height:32px;padding:0 12px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;display:flex;align-items:center;gap:4px;text-decoration:none"><i class="ti ti-adjustments" style="font-size:13px"></i>Adjustments</a>
+    @endcan
+    @can('stock.transfer')
     <a href="{{ route('stock.transfers') }}" style="height:32px;padding:0 12px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;display:flex;align-items:center;gap:4px;text-decoration:none"><i class="ti ti-arrows-exchange" style="font-size:13px"></i>Transfers</a>
+    @endcan
+    @can('reports.view')
     <a href="{{ route('reports.stock_alert') }}" style="height:32px;padding:0 12px;background:var(--danger-soft);color:var(--danger-text);border:.5px solid var(--danger-border);border-radius:6px;font-size:12px;display:flex;align-items:center;gap:4px;text-decoration:none"><i class="ti ti-alert-triangle" style="font-size:13px"></i>Alerts</a>
+    @endcan
 </div>
 <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;overflow:hidden">
 <table style="width:100%;border-collapse:collapse;font-size:12px">

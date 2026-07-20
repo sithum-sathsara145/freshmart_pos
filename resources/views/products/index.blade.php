@@ -36,6 +36,7 @@
         <button type="submit" style="height:34px;padding:0 12px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Filter</button>
     </form>
     @php $exportFilters = request()->only('search','category_id','brand_id','status'); @endphp
+    @can('products.export')
     <details style="position:relative">
         <summary style="height:34px;padding:0 12px;background:var(--surface-2);color:var(--text-2);border:.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;cursor:pointer;list-style:none">
             <i class="ti ti-file-export" style="font-size:13px"></i>Export
@@ -47,18 +48,26 @@
                 <i class="ti ti-file-spreadsheet" style="font-size:13px"></i>Export as Excel</a>
         </div>
     </details>
+    @endcan
+    @can('products.import')
     <a href="{{ route('products.import') }}" style="height:34px;padding:0 12px;background:var(--surface-2);color:var(--text-2);border:.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
         <i class="ti ti-file-import" style="font-size:13px"></i>Import
     </a>
+    @endcan
+    @can('barcodes.print')
     <a href="{{ route('barcodes.labels') }}" style="height:34px;padding:0 12px;background:var(--surface-2);color:var(--text-2);border:.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
         <i class="ti ti-barcode" style="font-size:13px"></i>Print labels
     </a>
+    @endcan
+    @can('products.create')
     <a href="{{ route('products.create') }}" style="height:34px;padding:0 12px;background:var(--primary-soft);color:var(--primary-text);border:.5px solid var(--primary-border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
         <i class="ti ti-plus" style="font-size:13px"></i>Add Product
     </a>
+    @endcan
 </div>
 
 {{-- Bulk actions --}}
+@can('products.delete')
 <div x-show="selected.length" x-cloak style="display:flex;align-items:center;gap:10px;margin-bottom:10px;background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:8px 12px">
     <span style="font-size:12px;color:var(--text)"><span x-text="selected.length"></span> selected</span>
     <button type="button" @click="if (confirm('Delete ' + selected.length + ' selected product(s)? Products with sales history are skipped.')) $refs.bulkForm.submit()"
@@ -71,6 +80,7 @@
         <template x-for="id in selected" :key="id"><input type="hidden" name="product_ids[]" :value="id"></template>
     </form>
 </div>
+@endcan
 
 {{-- Table --}}
 <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;overflow:hidden">
@@ -123,13 +133,19 @@
             </td>
             <td style="padding:10px 12px;text-align:center">
                 <div style="display:flex;gap:4px;justify-content:center">
+                    @can('products.edit')
                     <a href="{{ route('products.edit',$p) }}" style="width:27px;height:27px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-2);text-decoration:none" title="Edit"><i class="ti ti-edit" style="font-size:12px"></i></a>
+                    @endcan
+                    @can('barcodes.print')
                     <a href="{{ route('products.barcode',$p) }}" style="width:27px;height:27px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--info);text-decoration:none" title="Print barcode"><i class="ti ti-barcode" style="font-size:12px"></i></a>
+                    @endcan
                     <a href="{{ route('products.show',$p) }}" style="width:27px;height:27px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-2);text-decoration:none" title="View"><i class="ti ti-eye" style="font-size:12px"></i></a>
+                    @can('products.delete')
                     <form method="POST" action="{{ route('products.destroy',$p) }}" onsubmit="return confirm('Delete this product?')">
                         @csrf @method('DELETE')
                         <button type="submit" style="width:27px;height:27px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--danger);cursor:pointer" title="Delete"><i class="ti ti-trash" style="font-size:12px"></i></button>
                     </form>
+                    @endcan
                 </div>
             </td>
         </tr>

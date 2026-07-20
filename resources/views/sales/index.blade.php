@@ -46,12 +46,16 @@
         <input type="date" name="to_date" value="{{ request('to_date') }}" style="height:34px;background:var(--surface);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;padding:0 8px;outline:none">
         <button type="submit" style="height:34px;padding:0 12px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Filter</button>
     </form>
+    @can('pos.access')
     <a href="{{ route('pos') }}" style="height:34px;padding:0 14px;background:var(--success-soft);color:var(--success);border:.5px solid var(--success-border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
         <i class="ti ti-scan" style="font-size:13px"></i>Open POS
     </a>
+    @endcan
+    @can('sales.create')
     <a href="{{ route('sales.create') }}" style="height:34px;padding:0 14px;background:var(--primary-soft);color:var(--primary-text);border:.5px solid var(--primary-border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
         <i class="ti ti-plus" style="font-size:13px"></i>New Sale
     </a>
+    @endcan
 </div>
 
 <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;overflow:hidden">
@@ -86,7 +90,9 @@
                     <a href="{{ route('sales.receipt',$sale->id) }}" target="_blank" style="width:26px;height:26px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-2);text-decoration:none"><i class="ti ti-printer" style="font-size:12px"></i></a>
                     <a href="{{ route('sales.invoice',$sale->id) }}" style="width:26px;height:26px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--info);text-decoration:none"><i class="ti ti-file-invoice" style="font-size:12px"></i></a>
                     @if($sale->status !== 'returned')
+                    @can('sale_returns.create')
                     <a href="{{ route('sale-returns.create') }}?sale_id={{ $sale->id }}" style="width:26px;height:26px;background:var(--surface-2);border:.5px solid var(--border);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--danger);text-decoration:none"><i class="ti ti-arrow-back-up" style="font-size:12px"></i></a>
+                    @endcan
                     @endif
                 </div>
             </td>

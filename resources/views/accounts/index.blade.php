@@ -7,8 +7,12 @@
 <div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
     <div style="font-size:14px;font-weight:500;color:var(--success)">Total balance: Rs. {{ number_format($totalBalance) }}</div>
     <div style="display:flex;gap:8px">
+        @can('accounts.transfer')
         <a href="{{ route('accounts.transfer') }}" onclick="event.preventDefault();document.getElementById('transfer-modal').style.display='flex'" style="height:32px;padding:0 12px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;display:flex;align-items:center;gap:4px;text-decoration:none"><i class="ti ti-arrows-exchange" style="font-size:12px"></i>Transfer</a>
+        @endcan
+        @can('accounts.manage')
         <a href="{{ route('accounts.create') }}" style="height:32px;padding:0 12px;background:var(--primary-soft);color:var(--primary-text);border:.5px solid var(--primary-border);border-radius:6px;font-size:12px;display:flex;align-items:center;gap:4px;text-decoration:none"><i class="ti ti-plus" style="font-size:12px"></i>Add account</a>
+        @endcan
     </div>
 </div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px">
