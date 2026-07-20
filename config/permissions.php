@@ -74,6 +74,7 @@ return [
             'purchases.create' => 'Create purchases',
             'purchases.edit'   => 'Edit purchases',
             'purchases.delete' => 'Delete purchases',
+            'purchases.import' => 'Import received goods from CSV / Excel',
         ],
     ],
 
@@ -150,6 +151,8 @@ return [
             'suppliers.create' => 'Create suppliers',
             'suppliers.edit'   => 'Edit suppliers',
             'suppliers.delete' => 'Delete suppliers',
+            'suppliers.import' => 'Import suppliers from CSV / Excel',
+            'suppliers.export' => 'Export the supplier list',
         ],
     ],
 

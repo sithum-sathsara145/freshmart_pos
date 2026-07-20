@@ -95,6 +95,9 @@ Written for everyone (no technical knowledge needed).
 _Newest first. New ideas and improvements are added here as they come up._
 
 <!-- NEW-FEATURES -->
+- **2026-07-20 — Import received goods** — Upload a supplier's invoice as a spreadsheet to add stock for many products at once. It creates a real purchase at the cost you were charged and puts the amount on the supplier's balance.
+- **2026-07-20 — Supplier list import & export** — Download the supplier list as CSV/Excel, edit it, and upload it back — matching rows update instead of duplicating.
+- **2026-07-19 — Light & dark mode** — The whole system now comes in a light theme as well as the original dark one. Use the sun/moon button in the top bar to switch; your choice is remembered on that device.
 - **2026-07-19 — CSV import updates existing products** — Re-importing a product (matched by SKU/barcode/name) now updates its prices and stock in place instead of skipping or duplicating it.
 - **2026-07-19 — Product bulk delete** — Select multiple products on the Products page and delete them at once (products with sales history are skipped).
 - **2026-07-19 — Credit sales** — Sell to approved customers on credit — cash/card/credit split tender, a signed credit bill showing NIC/address and a signature line, and a photo of the signed copy uploaded by webcam or the cashier's phone via QR (code- or password-gated).

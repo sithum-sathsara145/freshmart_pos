@@ -155,6 +155,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/quotations/{id}/pdf', [QuotationController::class, 'pdf'])->middleware('permission:quotations.view')->name('quotations.pdf');
 
     // Purchases
+    // Must be declared before the resource so they aren't captured by /purchases/{purchase}.
+    Route::get('/purchases/import', [PurchaseController::class, 'importForm'])->middleware('permission:purchases.import')->name('purchases.import');
+    Route::get('/purchases/import/sample', [PurchaseController::class, 'importSample'])->middleware('permission:purchases.import')->name('purchases.import.sample');
+    Route::post('/purchases/import', [PurchaseController::class, 'import'])->middleware('permission:purchases.import')->name('purchases.import.store');
     Route::resource('purchases', PurchaseController::class)
         ->middlewareFor(['index', 'show'], 'permission:purchases.view')
         ->middlewareFor(['create', 'store'], 'permission:purchases.create')
@@ -178,6 +182,11 @@ Route::middleware(['auth'])->group(function () {
         ->middlewareFor(['create', 'store'], 'permission:customers.create')
         ->middlewareFor(['edit', 'update'], 'permission:customers.edit')
         ->middlewareFor('destroy', 'permission:customers.delete');
+    // Must be declared before the resource so they aren't captured by /suppliers/{supplier}.
+    Route::get('/suppliers/import', [SupplierController::class, 'importForm'])->middleware('permission:suppliers.import')->name('suppliers.import');
+    Route::get('/suppliers/import/sample', [SupplierController::class, 'importSample'])->middleware('permission:suppliers.import')->name('suppliers.import.sample');
+    Route::post('/suppliers/import', [SupplierController::class, 'import'])->middleware('permission:suppliers.import')->name('suppliers.import.store');
+    Route::get('/suppliers/export', [SupplierController::class, 'export'])->middleware('permission:suppliers.export')->name('suppliers.export');
     Route::resource('suppliers', SupplierController::class)
         ->middlewareFor(['index', 'show'], 'permission:suppliers.view')
         ->middlewareFor(['create', 'store'], 'permission:suppliers.create')

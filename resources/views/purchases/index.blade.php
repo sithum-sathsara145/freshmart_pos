@@ -31,9 +31,16 @@
         </select>
         <button type="submit" style="height:34px;padding:0 12px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Filter</button>
     </form>
-    <a href="{{ route('purchases.create') }}" style="height:34px;padding:0 14px;background:#312e81;color:#a5b4fc;border:.5px solid #534AB7;border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
+    @can('purchases.import')
+    <a href="{{ route('purchases.import') }}" style="height:34px;padding:0 12px;background:var(--surface-2);color:var(--text-2);border:.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
+        <i class="ti ti-file-import" style="font-size:13px"></i>Import goods
+    </a>
+    @endcan
+    @can('purchases.create')
+    <a href="{{ route('purchases.create') }}" style="height:34px;padding:0 14px;background:var(--primary-soft);color:var(--primary-text);border:.5px solid var(--primary-border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
         <i class="ti ti-plus" style="font-size:13px"></i>New Purchase
     </a>
+    @endcan
 </div>
 <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;overflow:hidden">
 <table style="width:100%;border-collapse:collapse;font-size:12px">

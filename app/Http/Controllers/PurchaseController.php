@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
+use App\Support\Spreadsheet;
 
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
@@ -314,6 +315,144 @@ class PurchaseController extends Controller
         $num  = $last ? ((int) preg_replace('/\D/', '', $last)) + 1 : 1;
         return 'PO-' . str_pad($num, 5, '0', STR_PAD_LEFT);
     }
+    public function import(Request $request)
+    {
+        $request->validate([
+            'supplier_id'   => 'required|exists:suppliers,id',
+            'purchase_date' => 'required|date',
+            'file'          => 'required|file|max:10240',
+            'notes'         => 'nullable|string|max:500',
+        ]);
+
+        if (! $branchId = CurrentBranch::requireId()) {
+            return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
+        }
+
+        $file = $request->file('file');
+        $type = Spreadsheet::typeFor($file->getClientOriginalExtension());
+        if (! $type) {
+            return back()->withInput()->with('error', 'Unsupported file. Please upload a .csv or .xlsx file.');
+        }
+
+        try {
+            $rows = Spreadsheet::read($file->getRealPath(), $type);
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', 'Could not read the file: ' . $e->getMessage());
+        }
+
+        // Resolve every line before writing anything. A goods-received note has to
+        // total the same as the supplier's invoice, so a file with an unknown
+        // product is rejected outright rather than posted short.
+        $items  = [];
+        $errors = [];
+
+        foreach ($rows as $n => $r) {
+            $line    = $n + 2;                   // +1 header row, +1 to make it 1-based
+            $barcode = trim((string) ($r['barcode'] ?? ''));
+            $sku     = trim((string) ($r['sku'] ?? ''));
+            $name    = trim((string) ($r['name'] ?? ''));
+
+            if ($barcode !== '') {
+                $product = Product::where('barcode', $barcode)->first();
+                $label   = "barcode {$barcode}";
+            } elseif ($sku !== '') {
+                $product = Product::where('sku', $sku)->first();
+                $label   = "SKU {$sku}";
+            } elseif ($name !== '') {
+                $product = Product::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+                $label   = "\"{$name}\"";
+            } else {
+                $errors[] = "Row {$line}: needs a barcode, SKU or product name.";
+                continue;
+            }
+
+            if (! $product) {
+                $errors[] = "Row {$line}: no product found for {$label} — add it under Products first.";
+                continue;
+            }
+
+            $qty  = Spreadsheet::num($r['quantity'] ?? 0);
+            $cost = Spreadsheet::num($r['unit_price'] ?? 0);
+
+            if ($qty <= 0) {
+                $errors[] = "Row {$line}: quantity must be greater than zero.";
+                continue;
+            }
+            if ($cost < 0) {
+                $errors[] = "Row {$line}: unit price cannot be negative.";
+                continue;
+            }
+
+            $items[] = [
+                'product_id' => $product->id,
+                'quantity'   => $qty,
+                'unit_price' => $cost,
+                'batch_no'   => Spreadsheet::has($r, 'batch_no') ? trim((string) $r['batch_no']) : null,
+                'mrp'        => Spreadsheet::has($r, 'mrp') ? Spreadsheet::num($r['mrp']) : '',
+                'sale_price' => Spreadsheet::has($r, 'sale_price') ? Spreadsheet::num($r['sale_price']) : '',
+            ];
+        }
+
+        if ($errors) {
+            return view('purchases.import', [
+                'suppliers' => Supplier::orderBy('name')->get(),
+                'result'    => ['ok' => false, 'errors' => $errors, 'lines' => count($items)],
+            ]);
+        }
+        if (! $items) {
+            return back()->withInput()->with('error', 'That file has no goods lines in it.');
+        }
+
+        DB::beginTransaction();
+        try {
+            $subtotal = collect($items)->sum(fn ($i) => $i['quantity'] * $i['unit_price']);
+
+            // Received now, paid later: the whole amount lands on the supplier's
+            // balance, and payment goes through Payment Out as usual.
+            $purchase = Purchase::create([
+                'bill_no'         => $this->nextBillNo(),
+                'supplier_id'     => $request->supplier_id,
+                'branch_id'       => $branchId,
+                'user_id'         => auth()->id(),
+                'subtotal'        => $subtotal,
+                'discount_amount' => 0,
+                'tax_amount'      => 0,
+                'total'           => $subtotal,
+                'paid_amount'     => 0,
+                'balance_due'     => $subtotal,
+                'payment_status'  => 'unpaid',
+                'purchase_date'   => $request->purchase_date,
+                'notes'           => $request->notes,
+            ]);
+
+            foreach ($items as $item) {
+                $this->createPurchaseItem($purchase, $item, $branchId, $request->purchase_date);
+            }
+
+            $supplier = Supplier::find($request->supplier_id);
+            $supplier->increment('total_purchases', $subtotal);
+            $supplier->increment('balance_due', $subtotal);
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->withInput()->with('error', 'Import failed: ' . $e->getMessage());
+        }
+
+        return view('purchases.import', [
+            'suppliers' => Supplier::orderBy('name')->get(),
+            'result'    => [
+                'ok'       => true,
+                'errors'   => [],
+                'lines'    => count($items),
+                'units'    => collect($items)->sum('quantity'),
+                'total'    => $subtotal,
+                'purchase' => $purchase,
+            ],
+        ]);
+    }
+
+
 
     /**
      * Create one purchase line + its cost/price layer, applying WAC (weighed) or

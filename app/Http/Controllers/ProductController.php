@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
+use App\Support\Spreadsheet;
 
 use App\Models\Product;
 use App\Models\Brand;
@@ -77,7 +78,7 @@ class ProductController extends Controller
             ['Old Item',        '', '', '',          '',          'Piece', '0', '', '0',   '0',   '0', '0', '0',  '0',   '', 'inactive', '0', ''],
         ];
 
-        return $this->writeSpreadsheet(self::IMPORT_COLUMNS, $samples, $format, 'products_sample');
+        return Spreadsheet::download(self::IMPORT_COLUMNS, $samples, $format, 'products_sample');
     }
 
     // Export products (honouring the same filters as the list) to CSV or Excel,
@@ -107,31 +108,7 @@ class ProductController extends Controller
             $p->imageUrl(),
         ])->all();
 
-        return $this->writeSpreadsheet(self::IMPORT_COLUMNS, $rows, $format, 'products_export_' . date('Ymd_His'));
-    }
-
-    /** Write headers + rows to a CSV/XLSX file and return it as a download. */
-    private function writeSpreadsheet(array $headers, iterable $rows, string $format, string $basename)
-    {
-        $writer = $format === 'xlsx'
-            ? new \OpenSpout\Writer\XLSX\Writer()
-            : new \OpenSpout\Writer\CSV\Writer();
-
-        $tmp = tempnam(sys_get_temp_dir(), 'exp');
-        $writer->openToFile($tmp);
-        $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues($headers));
-        foreach ($rows as $row) {
-            $clean = array_map(fn ($v) => $v === null ? '' : $v, $row);
-            $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues($clean));
-        }
-        $writer->close();
-
-        $mime = $format === 'xlsx'
-            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            : 'text/csv';
-
-        return response()->download($tmp, $basename . '.' . $format, ['Content-Type' => $mime])
-                         ->deleteFileAfterSend(true);
+        return Spreadsheet::download(self::IMPORT_COLUMNS, $rows, $format, 'products_export_' . date('Ymd_His'));
     }
 
     public function import(Request $request)
@@ -145,7 +122,7 @@ class ProductController extends Controller
         }
 
         try {
-            $rows = $this->readSpreadsheet($file->getRealPath(), $ext === 'xlsx' ? 'xlsx' : 'csv');
+            $rows = Spreadsheet::read($file->getRealPath(), $ext === 'xlsx' ? 'xlsx' : 'csv');
         } catch (\Throwable $e) {
             return back()->with('error', 'Could not read the file: ' . $e->getMessage());
         }
@@ -153,7 +130,7 @@ class ProductController extends Controller
         // Products themselves aren't branch-scoped, but opening stock is — so a file
         // carrying opening stock needs a concrete working branch to land it in.
         $branchId = CurrentBranch::id();
-        if (! $branchId && collect($rows)->contains(fn($r) => (float) $this->importNum($r['opening_stock'] ?? 0) > 0)) {
+        if (! $branchId && collect($rows)->contains(fn($r) => (float) Spreadsheet::num($r['opening_stock'] ?? 0) > 0)) {
             return back()->with('error', 'This file sets opening stock — pick a working branch before importing it.');
         }
 
@@ -203,17 +180,17 @@ class ProductController extends Controller
                 // ── Existing product: update prices / stock / any supplied fields ──
                 if ($existing) {
                     $updates = [];
-                    if ($has('purchase_price'))       $updates['purchase_price']       = $this->importNum($r['purchase_price']);
-                    if ($has('sale_price'))           $updates['sale_price']           = $this->importNum($r['sale_price']);
-                    if ($has('tax_percent'))          $updates['tax_percent']          = $this->importNum($r['tax_percent']);
-                    if ($has('discount_percent'))     $updates['discount_percent']     = $this->importNum($r['discount_percent']);
-                    if ($has('min_stock'))            $updates['min_stock']            = (int) $this->importNum($r['min_stock']);
+                    if ($has('purchase_price'))       $updates['purchase_price']       = Spreadsheet::num($r['purchase_price']);
+                    if ($has('sale_price'))           $updates['sale_price']           = Spreadsheet::num($r['sale_price']);
+                    if ($has('tax_percent'))          $updates['tax_percent']          = Spreadsheet::num($r['tax_percent']);
+                    if ($has('discount_percent'))     $updates['discount_percent']     = Spreadsheet::num($r['discount_percent']);
+                    if ($has('min_stock'))            $updates['min_stock']            = (int) Spreadsheet::num($r['min_stock']);
                     if ($has('unit'))                 $updates['unit']                 = trim((string) $r['unit']);
                     if ($has('category'))             $updates['category_id']          = $this->importLookup(Category::class, $r['category']);
                     if ($has('brand'))                $updates['brand_id']             = $this->importLookup(Brand::class, $r['brand']);
                     if ($has('description'))          $updates['description']          = trim((string) $r['description']);
                     if ($has('status'))               $updates['status']               = strtolower(trim((string) $r['status'])) === 'inactive' ? 'inactive' : 'active';
-                    if ($has('show_in_online_store')) $updates['show_in_online_store'] = $this->importBool($r['show_in_online_store']);
+                    if ($has('show_in_online_store')) $updates['show_in_online_store'] = Spreadsheet::bool($r['show_in_online_store']);
                     if ($has('image_url'))            $updates['image']                = $this->importImageUrl($r['image_url']);
 
                     DB::beginTransaction();
@@ -222,7 +199,7 @@ class ProductController extends Controller
                     }
                     // Set branch stock to the supplied quantity (blank = leave stock alone).
                     if ($branchId && $has('opening_stock')) {
-                        $this->reconcileStock($existing, $branchId, $this->importNum($r['opening_stock']));
+                        $this->reconcileStock($existing, $branchId, Spreadsheet::num($r['opening_stock']));
                     }
                     DB::commit();
 
@@ -239,7 +216,7 @@ class ProductController extends Controller
                     continue;
                 }
 
-                $isWeighed = $this->importBool($r['is_weighed'] ?? null);
+                $isWeighed = Spreadsheet::bool($r['is_weighed'] ?? null);
                 $scalePlu  = preg_replace('/\D/', '', (string) ($r['scale_plu'] ?? '')) ?: null;
 
                 DB::beginTransaction();
@@ -252,19 +229,19 @@ class ProductController extends Controller
                     'unit'                 => trim((string) ($r['unit'] ?? '')) ?: 'Piece',
                     'is_weighed'           => $isWeighed,
                     'scale_plu'            => $isWeighed ? $scalePlu : null,
-                    'purchase_price'       => $this->importNum($r['purchase_price'] ?? 0),
-                    'sale_price'           => $this->importNum($r['sale_price'] ?? 0),
-                    'tax_percent'          => $this->importNum($r['tax_percent'] ?? 0),
-                    'discount_percent'     => $this->importNum($r['discount_percent'] ?? 0),
-                    'min_stock'            => (int) $this->importNum($r['min_stock'] ?? 0),
+                    'purchase_price'       => Spreadsheet::num($r['purchase_price'] ?? 0),
+                    'sale_price'           => Spreadsheet::num($r['sale_price'] ?? 0),
+                    'tax_percent'          => Spreadsheet::num($r['tax_percent'] ?? 0),
+                    'discount_percent'     => Spreadsheet::num($r['discount_percent'] ?? 0),
+                    'min_stock'            => (int) Spreadsheet::num($r['min_stock'] ?? 0),
                     'description'          => trim((string) ($r['description'] ?? '')) ?: null,
                     'status'               => strtolower(trim((string) ($r['status'] ?? 'active'))) === 'inactive' ? 'inactive' : 'active',
-                    'show_in_online_store' => $this->importBool($r['show_in_online_store'] ?? null),
+                    'show_in_online_store' => Spreadsheet::bool($r['show_in_online_store'] ?? null),
                     'image'                => $this->importImageUrl($r['image_url'] ?? null),
                     'created_by'           => auth()->id(),
                 ]);
 
-                $opening = $this->importNum($r['opening_stock'] ?? 0);
+                $opening = Spreadsheet::num($r['opening_stock'] ?? 0);
                 if ($opening > 0) {
                     \App\Support\Inventory::addLayer(
                         $product->id, $branchId, $opening,
@@ -298,58 +275,10 @@ class ProductController extends Controller
         ]);
     }
 
-    /** Read the first sheet into an array of header-keyed rows. */
-    private function readSpreadsheet(string $path, string $type): array
-    {
-        $reader = $type === 'xlsx'
-            ? new \OpenSpout\Reader\XLSX\Reader()
-            : new \OpenSpout\Reader\CSV\Reader();
-
-        $reader->open($path);
-        $rows    = [];
-        $headers = null;
-
-        foreach ($reader->getSheetIterator() as $sheet) {
-            foreach ($sheet->getRowIterator() as $row) {
-                $cells = array_map(fn ($v) => is_string($v) ? trim($v) : $v, $row->toArray());
-
-                if ($headers === null) {
-                    $headers = array_map(fn ($h) => strtolower(trim((string) $h)), $cells);
-                    continue;
-                }
-                if (count(array_filter($cells, fn ($v) => $v !== '' && $v !== null)) === 0) {
-                    continue;   // blank line
-                }
-
-                $assoc = [];
-                foreach ($headers as $i => $h) {
-                    if ($h !== '') {
-                        $assoc[$h] = $cells[$i] ?? null;
-                    }
-                }
-                $rows[] = $assoc;
-            }
-            break;   // first sheet only
-        }
-        $reader->close();
-
-        return $rows;
-    }
-
     private function importLookup(string $model, ?string $name): ?int
     {
         $name = trim((string) $name);
         return $name === '' ? null : $model::firstOrCreate(['name' => $name])->id;
-    }
-
-    private function importBool($v): bool
-    {
-        return in_array(strtolower(trim((string) $v)), ['1', 'yes', 'y', 'true', 'active'], true);
-    }
-
-    private function importNum($v): float
-    {
-        return (float) preg_replace('/[^0-9.\-]/', '', (string) $v);
     }
 
     private function importImageUrl($v): ?string

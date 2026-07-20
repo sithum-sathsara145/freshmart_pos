@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\CurrentBranch;
+use App\Support\Spreadsheet;
 
 
 use App\Models\Customer;
@@ -182,6 +183,123 @@ class SupplierController extends Controller
         }
         $s->delete();
         return redirect()->route('suppliers.index')->with('success', 'Deleted.');
+    }
+
+    // ── CSV / Excel ──────────────────────────────────────────────────────────
+    //
+    // total_purchases and balance_due are deliberately absent: they are derived
+    // from purchase records, so letting a spreadsheet set them would put the
+    // supplier ledger out of step with the purchases behind it.
+
+    private const IMPORT_COLUMNS = ['name', 'contact_person', 'phone', 'email', 'address', 'city'];
+
+    public function importForm()
+    {
+        return view('suppliers.import', ['result' => null]);
+    }
+
+    public function importSample(Request $request)
+    {
+        $format  = $request->get('format') === 'xlsx' ? 'xlsx' : 'csv';
+        $samples = [
+            ['Ceylon Foods (Pvt) Ltd', 'Nimal Perera',  '0112345678', 'orders@ceylonfoods.lk', '45 Galle Road', 'Colombo'],
+            ['Lanka Dairy Supplies',   'Kamala Silva',  '0771234567', '',                      '12 Kandy Road', 'Kadawatha'],
+            ['Fresh Veg Traders',      '',              '0812223344', '',                      '',             'Kandy'],
+        ];
+
+        return Spreadsheet::download(self::IMPORT_COLUMNS, $samples, $format, 'suppliers_sample');
+    }
+
+    // Export in the import column layout, so the file can be edited and sent back in.
+    public function export(Request $request)
+    {
+        $format = $request->get('format') === 'xlsx' ? 'xlsx' : 'csv';
+
+        $rows = Supplier::when($request->search, fn ($q) => $q->where(function ($q) use ($request) {
+                $q->where('name', 'like', "%{$request->search}%")
+                  ->orWhere('phone', 'like', "%{$request->search}%");
+            }))
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($s) => [$s->name, $s->contact_person, $s->phone, $s->email, $s->address, $s->city])
+            ->all();
+
+        return Spreadsheet::download(self::IMPORT_COLUMNS, $rows, $format, 'suppliers_export_' . date('Ymd_His'));
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate(['file' => 'required|file|max:10240']);
+
+        $file = $request->file('file');
+        $type = Spreadsheet::typeFor($file->getClientOriginalExtension());
+        if (! $type) {
+            return back()->with('error', 'Unsupported file. Please upload a .csv or .xlsx file.');
+        }
+
+        try {
+            $rows = Spreadsheet::read($file->getRealPath(), $type);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Could not read the file: ' . $e->getMessage());
+        }
+
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors  = [];
+        $seen    = [];
+
+        foreach ($rows as $n => $r) {
+            $line = $n + 2;                      // +1 header row, +1 to make it 1-based
+            $name = trim((string) ($r['name'] ?? ''));
+
+            if ($name === '') {
+                $errors[] = "Row {$line}: missing supplier name — skipped.";
+                continue;
+            }
+
+            $phone = trim((string) ($r['phone'] ?? ''));
+            $email = trim((string) ($r['email'] ?? ''));
+
+            // A supplier is the same supplier if the phone matches, else the email,
+            // else the name — phone first because it is the field least likely to
+            // be shared between two genuinely different companies.
+            $key = $phone !== '' ? "p:$phone" : ($email !== '' ? "e:" . mb_strtolower($email) : "n:" . mb_strtolower($name));
+            if (isset($seen[$key])) {
+                $skipped++;
+                continue;
+            }
+            $seen[$key] = true;
+
+            if ($phone !== '') {
+                $existing = Supplier::where('phone', $phone)->first();
+            } elseif ($email !== '') {
+                $existing = Supplier::whereRaw('LOWER(email) = ?', [mb_strtolower($email)])->first();
+            } else {
+                $existing = Supplier::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+            }
+
+            $fields = [];
+            foreach (self::IMPORT_COLUMNS as $col) {
+                if (Spreadsheet::has($r, $col)) {
+                    $fields[$col] = trim((string) $r[$col]);
+                }
+            }
+
+            try {
+                if ($existing) {
+                    $existing->update($fields);   // blanks were dropped above, so nothing gets wiped
+                    $updated++;
+                } else {
+                    Supplier::create($fields + ['name' => $name]);
+                    $created++;
+                }
+            } catch (\Throwable $e) {
+                $errors[] = "Row {$line}: {$e->getMessage()}";
+            }
+        }
+
+        return view('suppliers.import', ['result' => compact('created', 'updated', 'skipped', 'errors')]);
     }
 }
 

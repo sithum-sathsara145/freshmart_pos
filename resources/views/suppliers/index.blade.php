@@ -13,9 +13,30 @@
         </div>
         <button type="submit" style="height:34px;padding:0 12px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Search</button>
     </form>
-    <a href="{{ route('suppliers.create') }}" style="height:34px;padding:0 14px;background:#312e81;color:#a5b4fc;border:.5px solid #534AB7;border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
+    @can('suppliers.export')
+    @php $exportFilters = request()->only('search'); @endphp
+    <details style="position:relative">
+        <summary style="height:34px;padding:0 12px;background:var(--surface-2);color:var(--text-2);border:.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;cursor:pointer;list-style:none">
+            <i class="ti ti-file-export" style="font-size:13px"></i>Export
+        </summary>
+        <div style="position:absolute;right:0;top:38px;background:var(--surface);border:.5px solid var(--border);border-radius:6px;z-index:20;min-width:150px;overflow:hidden;box-shadow:0 8px 22px var(--shadow)">
+            <a href="{{ route('suppliers.export', array_merge($exportFilters, ['format'=>'csv'])) }}" style="display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:12px;color:var(--text-2);text-decoration:none">
+                <i class="ti ti-file-text" style="font-size:13px"></i>Export as CSV</a>
+            <a href="{{ route('suppliers.export', array_merge($exportFilters, ['format'=>'xlsx'])) }}" style="display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:12px;color:var(--text-2);text-decoration:none;border-top:.5px solid var(--border)">
+                <i class="ti ti-file-spreadsheet" style="font-size:13px"></i>Export as Excel</a>
+        </div>
+    </details>
+    @endcan
+    @can('suppliers.import')
+    <a href="{{ route('suppliers.import') }}" style="height:34px;padding:0 12px;background:var(--surface-2);color:var(--text-2);border:.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
+        <i class="ti ti-file-import" style="font-size:13px"></i>Import
+    </a>
+    @endcan
+    @can('suppliers.create')
+    <a href="{{ route('suppliers.create') }}" style="height:34px;padding:0 14px;background:var(--primary-soft);color:var(--primary-text);border:.5px solid var(--primary-border);border-radius:6px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px;text-decoration:none">
         <i class="ti ti-plus" style="font-size:13px"></i>Add Supplier
     </a>
+    @endcan
 </div>
 <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;overflow:hidden">
 <table style="width:100%;border-collapse:collapse;font-size:12px">
