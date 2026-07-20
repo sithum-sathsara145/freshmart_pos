@@ -427,9 +427,20 @@ class PosController extends Controller
             ], 422);
         }
 
-        // An assigned counter must have an open session before any sale
+        // Every sale happens at an open counter. This used to be skipped entirely
+        // for anyone without a counter, so they could bill with no session at all
+        // — and the cash portion of those sales was tracked nowhere, since it
+        // stays with the counter until close and never touches a cash book.
         $counterId = auth()->user()->counter_id;
-        if ($counterId && ! CounterSession::where('counter_id', $counterId)->where('status', 'open')->exists()) {
+
+        if (! $counterId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your account is not linked to a counter, so it cannot take payments. An admin can assign one under Settings → Users.',
+            ], 422);
+        }
+
+        if (! CounterSession::where('counter_id', $counterId)->where('status', 'open')->exists()) {
             return response()->json(['success' => false, 'message' => 'Open the counter before making sales.'], 422);
         }
 
@@ -667,8 +678,10 @@ class PosController extends Controller
                 }
             }
 
-            // Update counter cash by the cash portion (covers cash and split sales)
-            if ($counterId && $cashInDrawer > 0) {
+            // The cash portion sits with the counter until it is closed and counted.
+            // A counter is guaranteed by the guard above, so this is where every
+            // rupee of cash taken at the till is accounted for.
+            if ($cashInDrawer > 0) {
                 \App\Models\Counter::find($counterId)->increment('cash_balance', $cashInDrawer);
             }
 

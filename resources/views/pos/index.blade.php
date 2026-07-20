@@ -638,6 +638,26 @@ input[type=number]{-moz-appearance:textfield}
     </div>
     </template>
 
+    {{-- No counter on the account: nothing can be sold, and there is no session
+         to open either, so this says what to do rather than offering a float. --}}
+    <template x-teleport="body">
+    <div x-show="showNoCounter" x-cloak
+         style="position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50">
+        <div style="background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:20px;width:380px;text-align:center">
+            <div style="width:48px;height:48px;border-radius:50%;background:var(--warning-soft);display:flex;align-items:center;justify-content:center;margin:2px auto 12px">
+                <i class="ti ti-device-desktop-off" style="font-size:24px;color:var(--warning)"></i>
+            </div>
+            <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">No counter on your account</div>
+            <div style="font-size:12px;color:var(--text-3);line-height:1.6;margin-bottom:16px">
+                Sales are rung up at a counter, and the cash you take is held against it until the
+                counter is closed. Until an admin links your account to one under
+                <b style="color:var(--text-2)">Settings → Users</b>, you can browse but not take payment.
+            </div>
+            <a href="{{ route('dashboard') }}" style="display:block;height:38px;line-height:38px;background:var(--primary-soft);border:.5px solid var(--primary-border);border-radius:7px;color:var(--primary-text);font-size:13px;font-weight:600;text-decoration:none">Back to dashboard</a>
+        </div>
+    </div>
+    </template>
+
     {{-- Open counter popup (required — blocks POS until a session is open) --}}
     <template x-teleport="body">
     <div x-show="showOpenModal" x-cloak
@@ -915,9 +935,10 @@ function posScreen() {
             this.$watch('showOpenModal', v => { if (v) this.$nextTick(() => document.querySelector('.denom-open')?.focus()); });
             this.$watch('showCloseModal', v => { if (v && !this.closeResult) this.$nextTick(() => document.querySelector('.denom-close')?.focus()); });
 
-            // Block POS use until a counter session is open
-            if (this.hasCounter && !this.counterOpen) {
-                this.$nextTick(() => this.openCounterPrompt());
+            // Nothing can be sold until a counter session is open, so ask for the
+            // opening float straight away rather than waiting for a failed sale.
+            if (!this.canSell) {
+                this.$nextTick(() => this.requireCounter());
             }
         },
 
@@ -1042,6 +1063,7 @@ function posScreen() {
         retention: (window.__POS && window.__POS.retention) || null,
         depositAccountId: (window.__POS && window.__POS.defaultBookId) || '',
         showOpenModal: false,
+        showNoCounter: false,
         showCloseModal: false,
         openDenoms: {},
         closeDenoms: {},
@@ -1137,13 +1159,13 @@ function posScreen() {
         },
         openSplit() {
             if (this.cart.length === 0) { alert('Cart is empty!'); return; }
-            if (this.hasCounter && !this.counterOpen) { this.openCounterPrompt(); return; }
+            if (!this.canSell) { this.requireCounter(); return; }
             this.splitCard = ''; this.splitCash = ''; this.splitLast4 = ''; this.splitCredit = '';
             this.showSplitModal = true;
         },
         openCredit() {
             if (this.cart.length === 0) { alert('Cart is empty!'); return; }
-            if (this.hasCounter && !this.counterOpen) { this.openCounterPrompt(); return; }
+            if (!this.canSell) { this.requireCounter(); return; }
             if (!this.customer) { alert("Select a registered customer first — walk-in customers can't buy on credit."); this.openCustomerSearch(); return; }
             if (!this.customer.credit_approved && !this.allowCreditNewCustomers) { alert('This customer is not approved for credit.'); return; }
             if (!this.customer.nic) { alert("Add the customer's NIC before selling on credit."); return; }
@@ -1517,7 +1539,7 @@ function posScreen() {
 
         pay(method) {
             if (this.cart.length === 0) { alert('Cart is empty!'); return; }
-            if (this.hasCounter && !this.counterOpen) { this.openCounterPrompt(); return; }
+            if (!this.canSell) { this.requireCounter(); return; }
             if (method === 'cash') {
                 if (this.cashNum < this.total) { alert('Insufficient cash amount!'); return; }
                 this.showCashModal = true;   // confirm before completing
@@ -1671,6 +1693,17 @@ function posScreen() {
         get closeKeptNotes() {
             return Object.entries(this.closeSplit.keep)
                 .map(([d, n]) => [Number(d), n]).sort((a, b) => b[0] - a[0]);
+        },
+
+        // Nothing may be sold unless this cashier is at a counter with an open
+        // session — the cash they take is held against that counter until it is
+        // closed, so a sale without one has nowhere to put the money.
+        get canSell() { return this.hasCounter && this.counterOpen; },
+
+        /** Ask for whatever is missing: a counter to work at, or an open session. */
+        requireCounter() {
+            if (!this.hasCounter) { this.showNoCounter = true; return; }
+            this.openCounterPrompt();
         },
 
         openCounterPrompt() {
