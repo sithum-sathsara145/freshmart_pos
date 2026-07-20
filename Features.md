@@ -95,6 +95,9 @@ Written for everyone (no technical knowledge needed).
 _Newest first. New ideas and improvements are added here as they come up._
 
 <!-- NEW-FEATURES -->
+- **2026-07-19 — CSV import updates existing products** — Re-importing a product (matched by SKU/barcode/name) now updates its prices and stock in place instead of skipping or duplicating it.
+- **2026-07-19 — Product bulk delete** — Select multiple products on the Products page and delete them at once (products with sales history are skipped).
+- **2026-07-19 — Credit sales** — Sell to approved customers on credit — cash/card/credit split tender, a signed credit bill showing NIC/address and a signature line, and a photo of the signed copy uploaded by webcam or the cashier's phone via QR (code- or password-gated).
 - **2026-07-19 — Staff reports** — Three new reports: attendance summary (days, hours, overtime per person), the monthly payroll register or salary sheet, and a leave summary showing entitled, used and remaining days. All three export to PDF, Excel and CSV.
 - **2026-07-19 — My HR for staff** — Every employee can sign in and see their own attendance, hours, leave balance and payslips, and request leave themselves — without being able to see anyone else's records.
 - **2026-07-19 — Leave balances** — Each staff member has annual, casual and sick day allowances per year. The system shows how many days are left, refuses requests that would go over, and does not charge leave for public holidays.

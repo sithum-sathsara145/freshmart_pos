@@ -45,22 +45,53 @@ class CustomerController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['name' => 'required|string|max:150', 'phone' => 'nullable', 'email' => 'nullable|email']);
-        Customer::create($request->only(['name', 'phone', 'email', 'address']));
+        $data = $request->validate([
+            'name'         => 'required|string|max:150',
+            'phone'        => 'nullable|string|max:30',
+            'email'        => 'nullable|email',
+            'address'      => 'nullable|string',
+            'nic'          => 'nullable|string|max:30',
+            'credit_limit' => 'nullable|numeric|min:0',
+        ]);
+        $data['credit_approved'] = $request->boolean('credit_approved');
+        Customer::create($data);
         return redirect()->route('customers.index')->with('success', 'Customer added.');
     }
 
     public function show(Customer $customer)
     {
         $customer->load(['sales' => fn($q) => $q->latest()->limit(10)]);
-        return view('customers.show', compact('customer'));
+
+        // Credit history = sales that carried a credit portion (paid off or not), plus any
+        // still-unpaid sale so nothing owed is ever hidden. Newest first.
+        $creditSales = $customer->sales()
+            ->where(fn($q) => $q->where('credit_amount', '>', 0)->orWhereColumn('paid_amount', '<', 'total'))
+            ->latest()
+            ->get();
+
+        // Accounts the repayment can be received into (branch cash/bank).
+        $accounts = Account::whereBranch(CurrentBranch::id())
+            ->whereIn('type', ['cash', 'bank'])
+            ->orderBy('name')
+            ->get();
+
+        return view('customers.show', compact('customer', 'creditSales', 'accounts'));
     }
 
     public function edit(Customer $customer) { return view('customers.edit', compact('customer')); }
 
     public function update(Request $request, Customer $customer)
     {
-        $customer->update($request->only(['name', 'phone', 'email', 'address']));
+        $data = $request->validate([
+            'name'         => 'required|string|max:150',
+            'phone'        => 'nullable|string|max:30',
+            'email'        => 'nullable|email',
+            'address'      => 'nullable|string',
+            'nic'          => 'nullable|string|max:30',
+            'credit_limit' => 'nullable|numeric|min:0',
+        ]);
+        $data['credit_approved'] = $request->boolean('credit_approved');
+        $customer->update($data);
         return redirect()->route('customers.show', $customer)->with('success', 'Customer updated.');
     }
 
@@ -81,8 +112,9 @@ class CustomerController extends Controller
         return response()->json(
             Customer::where('name', 'like', "%{$request->q}%")
                 ->orWhere('phone', 'like', "%{$request->q}%")
+                ->orWhere('nic', 'like', "%{$request->q}%")
                 ->limit(10)
-                ->get(['id', 'name', 'phone', 'loyalty_points'])
+                ->get(['id', 'name', 'phone', 'nic', 'address', 'credit_approved', 'credit_limit', 'loyalty_points'])
         );
     }
 
@@ -90,17 +122,23 @@ class CustomerController extends Controller
     public function apiStore(Request $request)
     {
         $data = $request->validate([
-            'name'  => 'required|string|max:150',
-            'phone' => 'nullable|string|max:30',
-            'email' => 'nullable|email',
+            'name'    => 'required|string|max:150',
+            'phone'   => 'nullable|string|max:30',
+            'email'   => 'nullable|email',
+            'nic'     => 'nullable|string|max:30',
+            'address' => 'nullable|string',
         ]);
 
         $customer = Customer::create($data);
 
         return response()->json([
-            'id'    => $customer->id,
-            'name'  => $customer->name,
-            'phone' => $customer->phone,
+            'id'              => $customer->id,
+            'name'            => $customer->name,
+            'phone'           => $customer->phone,
+            'nic'             => $customer->nic,
+            'address'         => $customer->address,
+            'credit_approved' => (bool) $customer->credit_approved,
+            'credit_limit'    => $customer->credit_limit,
         ], 201);
     }
 }

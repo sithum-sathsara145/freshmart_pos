@@ -62,6 +62,19 @@ body{font-family:'Courier New',Courier,monospace;font-size:11.5px;color:#000;bac
 @endif
 <div class="row"><span>Payment&nbsp; :</span><span>{{ strtoupper($sale->payment_method) }}</span></div>
 
+@php $isCredit = $sale->balanceDue() > 0; @endphp
+@if($isCredit)
+<div class="dashed"></div>
+<div class="bold" style="text-align:center;font-size:12px">CREDIT BILL</div>
+<div class="dashed"></div>
+<div class="row"><span>Name&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:</span><span>{{ $sale->customer?->name ?? '—' }}</span></div>
+<div class="row"><span>NIC&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:</span><span>{{ $sale->customer?->nic ?? '—' }}</span></div>
+<div class="row"><span>Mobile&nbsp;&nbsp;:</span><span>{{ $sale->customer?->phone ?? '—' }}</span></div>
+@if($sale->customer?->address)
+<div style="font-size:10px;color:#333;padding:1px 0"><span>Address : {{ $sale->customer->address }}</span></div>
+@endif
+@endif
+
 <div class="dashed"></div>
 
 {{-- Items --}}
@@ -92,9 +105,12 @@ body{font-family:'Courier New',Courier,monospace;font-size:11.5px;color:#000;bac
 <div class="row total-row"><span>TOTAL</span><span>Rs. {{ number_format($sale->total) }}</span></div>
 <div class="dashed"></div>
 
-<div class="row"><span>Paid ({{ strtoupper($sale->payment_method) }})</span><span>Rs. {{ number_format($sale->paid_amount) }}</span></div>
+<div class="row"><span>Paid{{ $isCredit ? ' now' : '' }}</span><span>Rs. {{ number_format($sale->paid_amount) }}</span></div>
 @if($sale->change_amount > 0)
 <div class="row bold"><span>Change</span><span>Rs. {{ number_format($sale->change_amount) }}</span></div>
+@endif
+@if($isCredit)
+<div class="row bold"><span>Balance due (credit)</span><span>Rs. {{ number_format($sale->balanceDue()) }}</span></div>
 @endif
 
 {{-- Coupon --}}
@@ -121,6 +137,22 @@ body{font-family:'Courier New',Courier,monospace;font-size:11.5px;color:#000;bac
 </div>
 @endif
 <div class="barcode-placeholder">{{ $sale->invoice_no }}</div>
+
+{{-- Signature area (credit bills only) --}}
+@if($isCredit)
+<div class="dashed"></div>
+@php $creditTerms = \App\Models\Setting::get('credit_terms'); @endphp
+@if($creditTerms)
+<div style="font-size:9px;color:#333;line-height:1.5;margin-bottom:8px">{{ $creditTerms }}</div>
+@endif
+<div style="margin-top:26px;font-size:10px;color:#111">
+    <div style="border-top:1px solid #000;width:70%;padding-top:2px">Customer signature</div>
+</div>
+<div style="margin-top:18px;font-size:10px;color:#111">
+    <div style="border-top:1px solid #000;width:45%;padding-top:2px">Date</div>
+</div>
+<div class="dashed"></div>
+@endif
 
 {{-- Footer --}}
 <div class="footer-text" style="margin-top:6px">

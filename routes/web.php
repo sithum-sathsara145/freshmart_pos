@@ -33,6 +33,7 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\BarcodeController;
 use App\Http\Controllers\BannerController;
 use App\Http\Controllers\PosController;
+use App\Http\Controllers\CreditDocumentController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController;
 
@@ -41,6 +42,14 @@ use App\Http\Controllers\RoleController;
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
+
+// Signed, unauthenticated credit-document upload from the cashier's phone (opened via QR).
+// The signature makes the URL a bearer token; the page also demands a one-time code or
+// the cashier's password before the photo is accepted.
+Route::middleware('signed')->group(function () {
+    Route::get('/credit-upload/{sale}', [CreditDocumentController::class, 'phoneForm'])->name('pos.credit.upload.form');
+    Route::post('/credit-upload/{sale}', [CreditDocumentController::class, 'storeFromPhone'])->name('pos.credit.upload.store');
+});
 
 // Protected routes
 Route::middleware(['auth'])->group(function () {
@@ -71,6 +80,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/pos/products/barcode/{barcode}', [PosController::class, 'findByBarcode'])->name('pos.barcode');
         Route::get('/pos/receipt/{id}', [PosController::class, 'receipt'])->name('pos.receipt');
     });
+    // Credit-sale signed-document evidence: request a phone QR link, upload from the POS
+    // webcam, or poll for arrival. Usable both from the POS counter and later from the
+    // back office (customer page), so it's gated by either POS access or sales viewing.
+    Route::middleware('permission:pos.access|sales.view')->group(function () {
+        Route::get('/pos/sale/{sale}/credit-upload-link', [CreditDocumentController::class, 'link'])->name('pos.credit.link');
+        Route::post('/pos/sale/{sale}/credit-document', [CreditDocumentController::class, 'storeFromCounter'])->name('pos.credit.counter');
+        Route::get('/pos/sale/{sale}/credit-document', [CreditDocumentController::class, 'status'])->name('pos.credit.status');
+    });
     Route::middleware('permission:pos.counter')->group(function () {
         Route::post('/pos/counter/open', [PosController::class, 'openCounter'])->name('pos.counter.open');
         Route::post('/pos/counter/close', [PosController::class, 'closeCounter'])->name('pos.counter.close');
@@ -84,6 +101,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/products/import', [ProductController::class, 'import'])->middleware('permission:products.import')->name('products.import.store');
     Route::get('/products/export', [ProductController::class, 'export'])->middleware('permission:products.export')->name('products.export');
     Route::post('/products/quick', [ProductController::class, 'quickStore'])->middleware('permission:products.create')->name('products.quick');
+    Route::post('/products/bulk-delete', [ProductController::class, 'bulkDestroy'])->middleware('permission:products.delete')->name('products.bulk-delete');
     Route::resource('products', ProductController::class)
         ->middlewareFor(['index', 'show'], 'permission:products.view')
         ->middlewareFor(['create', 'store'], 'permission:products.create')

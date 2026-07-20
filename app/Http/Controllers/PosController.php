@@ -316,6 +316,7 @@ class PosController extends Controller
             'card_last4'     => 'nullable|digits:4',
             'cash_amount'    => 'nullable|numeric|min:0',
             'card_amount'    => 'nullable|numeric|min:0',
+            'credit_amount'  => 'nullable|numeric|min:0',
         ]);
 
         // A sale belongs to exactly one branch, so All-branches mode can't ring one up.
@@ -391,19 +392,57 @@ class PosController extends Controller
             $total  = max(0, $subtotal - $discountAmount + $taxAmount);
             $method = $request->payment_method;
 
-            // Split tender (cash + card) vs single-method payment.
+            // Tender breakdown across cash / card / credit. The credit portion is
+            // placed on the customer's account (the unpaid remainder) — it is NOT a
+            // payment, so it never gets a payments row; it surfaces as balanceDue().
             if ($method === 'mixed') {
-                $cardPortion  = min((float) $request->card_amount, $total);
-                $cashNeeded   = round($total - $cardPortion, 2);            // cash to complete the bill
-                $cashGiven    = (float) $request->cash_amount;
-                $paidAmount   = $total;
-                $change       = max(0, round($cashGiven - $cashNeeded, 2)); // change out of the cash given
-                $cashInDrawer = $cashNeeded;                                // net cash retained
+                $creditPortion = max(0, min((float) $request->credit_amount, $total));
+                $cardPortion   = max(0, min((float) $request->card_amount, $total - $creditPortion));
+                $cashNeeded    = round($total - $cardPortion - $creditPortion, 2); // cash to complete the paid part
+                $cashGiven     = (float) $request->cash_amount;
+                $paidAmount    = round($total - $creditPortion, 2);                // paid now (cash + card)
+                $change        = max(0, round($cashGiven - $cashNeeded, 2));        // change out of the cash given
+                $cashInDrawer  = $cashNeeded;                                       // net cash retained
+            } elseif ($method === 'credit') {
+                $creditPortion = $total;                                            // whole bill on account
+                $cardPortion   = 0;
+                $paidAmount    = 0;
+                $change        = 0;
+                $cashInDrawer  = 0;
             } else {
-                $paidAmount   = min($request->paid_amount, $total);
-                $change       = max(0, $request->paid_amount - $total);
-                $cardPortion  = $method === 'card' ? $paidAmount : 0;
-                $cashInDrawer = $method === 'cash' ? $paidAmount : 0;
+                $creditPortion = 0;
+                $paidAmount    = min($request->paid_amount, $total);
+                $change        = max(0, $request->paid_amount - $total);
+                $cardPortion   = $method === 'card' ? $paidAmount : 0;
+                $cashInDrawer  = $method === 'cash' ? $paidAmount : 0;
+            }
+
+            // Credit guard: only registered, approved customers (or any registered
+            // customer when the store allows credit for new ones) may take credit,
+            // never walk-in — and only within their credit limit.
+            if ($creditPortion > 0) {
+                $creditCustomer = $request->customer_id ? Customer::find($request->customer_id) : null;
+                if (! $creditCustomer) {
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => "Select a registered customer for credit — walk-in customers can't buy on credit."], 422);
+                }
+                $allowNew = filter_var(\App\Models\Setting::get('allow_credit_new_customers'), FILTER_VALIDATE_BOOLEAN);
+                if (! $creditCustomer->credit_approved && ! $allowNew) {
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => 'This customer is not approved for credit.'], 422);
+                }
+                if (blank($creditCustomer->nic)) {
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => "Add the customer's NIC before selling on credit."], 422);
+                }
+                if ($creditCustomer->credit_limit !== null) {
+                    $projected = $creditCustomer->outstandingBalance() + $creditPortion;
+                    if ($projected > (float) $creditCustomer->credit_limit + 1e-9) {
+                        $over = round($projected - (float) $creditCustomer->credit_limit, 2);
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => "Over the customer's credit limit by Rs. " . number_format($over, 2) . '.'], 422);
+                    }
+                }
             }
 
             // Create sale
@@ -421,6 +460,7 @@ class PosController extends Controller
                 'paid_amount'    => $paidAmount,
                 'cash_amount'    => $cashInDrawer,
                 'change_amount'  => $change,
+                'credit_amount'  => $creditPortion,
                 'payment_method' => $method,
                 'status'         => $paidAmount >= $total ? 'paid' : 'partial',
                 'notes'          => $request->notes,
@@ -528,6 +568,8 @@ class PosController extends Controller
                 'total'       => $total,
                 'change'      => $change,
                 'cash_amount' => $cashInDrawer,
+                'balance_due' => round($creditPortion, 2),
+                'is_credit'   => $creditPortion > 0,
                 'message'     => 'Sale completed successfully',
             ]);
 

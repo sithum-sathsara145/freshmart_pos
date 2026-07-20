@@ -35,6 +35,9 @@ class SaleController extends Controller
             ->when($request->payment_method, fn($q) => $q->where('payment_method', $request->payment_method))
             ->when($request->from_date, fn($q) => $q->whereDate('created_at', '>=', $request->from_date))
             ->when($request->to_date, fn($q) => $q->whereDate('created_at', '<=', $request->to_date))
+            // Credit sales whose signed evidence photo hasn't been attached yet.
+            ->when($request->filter === 'credit_no_doc', fn($q) =>
+                $q->where('credit_amount', '>', 0)->whereNull('credit_doc_url'))
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -50,6 +53,7 @@ class SaleController extends Controller
             'today_count'  => Sale::whereBranch($branchId)->whereDate('created_at', today())->count(),
             'month_total'  => Sale::whereBranch($branchId)->whereMonth('created_at', now()->month)->sum('total') - $returnsMonth,
             'pending_dues' => Sale::whereBranch($branchId)->where('status', 'partial')->sum(DB::raw('total - paid_amount')),
+            'credit_no_doc'=> Sale::whereBranch($branchId)->where('credit_amount', '>', 0)->whereNull('credit_doc_url')->count(),
         ];
 
         return view('sales.index', compact('sales', 'stats'));
@@ -118,6 +122,31 @@ class SaleController extends Controller
             $total    = $subtotal + $tax - $discount;
             $paid     = min((float) $request->paid_amount, $total);
 
+            // Credit guard (mirror of the POS rule): an on-account balance is only for
+            // registered, approved customers (or any registered customer when the store
+            // allows credit for new ones), never walk-in, and within their credit limit.
+            $creditRemainder = round($total - $paid, 2);
+            if ($request->payment_method === 'credit' && $creditRemainder > 0) {
+                $creditCustomer = $request->customer_id ? Customer::find($request->customer_id) : null;
+                $allowNew = filter_var(\App\Models\Setting::get('allow_credit_new_customers'), FILTER_VALIDATE_BOOLEAN);
+                $err = null;
+                if (! $creditCustomer) {
+                    $err = "Select a registered customer for credit — walk-in customers can't buy on credit.";
+                } elseif (! $creditCustomer->credit_approved && ! $allowNew) {
+                    $err = 'This customer is not approved for credit.';
+                } elseif (blank($creditCustomer->nic)) {
+                    $err = "Add the customer's NIC before selling on credit.";
+                } elseif ($creditCustomer->credit_limit !== null
+                        && ($creditCustomer->outstandingBalance() + $creditRemainder) > (float) $creditCustomer->credit_limit + 1e-9) {
+                    $over = round($creditCustomer->outstandingBalance() + $creditRemainder - (float) $creditCustomer->credit_limit, 2);
+                    $err = "Over the customer's credit limit by Rs. " . number_format($over, 2) . '.';
+                }
+                if ($err) {
+                    DB::rollBack();
+                    return back()->withInput()->with('error', $err);
+                }
+            }
+
             $sale = Sale::create([
                 'invoice_no'      => $this->nextInvoiceNo(),
                 'customer_id'     => $request->customer_id,
@@ -131,6 +160,7 @@ class SaleController extends Controller
                 'total'           => $total,
                 'paid_amount'     => $paid,
                 'change_amount'   => max(0, (float) $request->paid_amount - $total),
+                'credit_amount'   => $request->payment_method === 'credit' ? $creditRemainder : 0,
                 'payment_method'  => $request->payment_method,
                 'status'          => $paid >= $total ? 'paid' : 'partial',
                 'notes'           => $request->input('note', $request->notes),

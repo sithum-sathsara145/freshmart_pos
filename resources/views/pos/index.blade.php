@@ -181,6 +181,7 @@ input[type=number]{-moz-appearance:textfield}
                 <template x-if="customer">
                     <div style="flex:1;display:flex;align-items:center;gap:6px">
                         <span style="font-size:11px;color:#e2e8f0;flex:1" x-text="customer.name + (customer.phone ? ' · ' + customer.phone : '')"></span>
+                        <span x-show="customer.credit_approved" x-cloak title="Approved for credit" style="font-size:9px;padding:1px 6px;border-radius:8px;background:#14532d;color:#4ade80">credit</span>
                         <i class="ti ti-x" style="font-size:13px;color:#ef4444;cursor:pointer" @click="clearCustomer()" title="Remove customer"></i>
                     </div>
                 </template>
@@ -303,9 +304,14 @@ input[type=number]{-moz-appearance:textfield}
                     <i class="ti ti-credit-card"></i> Card
                 </button>
             </div>
-            <button class="pay-btn" style="background:#0E7490;color:#fff;margin-top:6px" @click="openSplit()">
-                <i class="ti ti-arrows-split-2"></i> Split (cash + card)
-            </button>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
+                <button class="pay-btn" style="background:#0E7490;color:#fff" @click="openSplit()" title="Split / credit payment (F5)">
+                    <i class="ti ti-arrows-split-2"></i> Split
+                </button>
+                <button class="pay-btn" style="background:#B45309;color:#fff" @click="openCredit()" title="Sell on credit">
+                    <i class="ti ti-calendar-due"></i> Credit
+                </button>
+            </div>
         </div>
     </div>
 
@@ -339,6 +345,8 @@ input[type=number]{-moz-appearance:textfield}
 
             <input class="cust-input" x-model="newCustomer.name" placeholder="Full name *" @keydown.enter="saveCustomer()">
             <input class="cust-input" x-model="newCustomer.phone" placeholder="Phone" @keydown.enter="saveCustomer()">
+            <input class="cust-input" x-model="newCustomer.nic" placeholder="NIC (needed for credit)" @keydown.enter="saveCustomer()">
+            <input class="cust-input" x-model="newCustomer.address" placeholder="Address (for credit bill)" @keydown.enter="saveCustomer()">
             <input class="cust-input" type="email" x-model="newCustomer.email" placeholder="Email (optional)" @keydown.enter="saveCustomer()">
             <div x-show="customerError" x-cloak x-text="customerError" style="color:#f87171;font-size:11px;margin-bottom:8px"></div>
             <div style="display:flex;gap:8px;margin-top:4px">
@@ -351,13 +359,13 @@ input[type=number]{-moz-appearance:textfield}
 
     {{-- Sale success popup --}}
     <template x-teleport="body">
-    <div x-show="showSaleModal" x-cloak @keydown.escape.window="showSaleModal=false"
+    <div x-show="showSaleModal" x-cloak @keydown.escape.window="if (!(lastSale && lastSale.is_credit)) showSaleModal=false"
          style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50">
         <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:22px;width:320px;text-align:center">
             <div style="width:52px;height:52px;border-radius:50%;background:#14532d;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
                 <i class="ti ti-check" style="font-size:28px;color:#4ade80"></i>
             </div>
-            <div style="font-size:15px;font-weight:600;color:#e2e8f0;margin-bottom:4px">Payment successful</div>
+            <div style="font-size:15px;font-weight:600;color:#e2e8f0;margin-bottom:4px" x-text="lastSale && lastSale.is_credit ? 'Credit sale recorded' : 'Payment successful'"></div>
             <div style="font-size:12px;color:#64748b;margin-bottom:14px" x-text="lastSale ? 'Invoice ' + lastSale.invoice_no : ''"></div>
             <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:8px;padding:12px;margin-bottom:16px">
                 <div style="display:flex;justify-content:space-between;font-size:13px;color:#e2e8f0;margin-bottom:4px">
@@ -366,11 +374,32 @@ input[type=number]{-moz-appearance:textfield}
                 <div style="display:flex;justify-content:space-between;font-size:13px;color:#4ade80" x-show="lastSale && lastSale.change > 0">
                     <span>Change</span><span x-text="lastSale ? 'Rs. ' + Number(lastSale.change).toLocaleString() : ''"></span>
                 </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:#fbbf24;margin-top:4px" x-show="lastSale && lastSale.is_credit">
+                    <span>On credit</span><span x-text="lastSale ? 'Rs. ' + Number(lastSale.balance_due).toLocaleString() : ''"></span>
+                </div>
             </div>
+            {{-- Non-credit sale: close + print --}}
+            <template x-if="!(lastSale && lastSale.is_credit)">
             <div style="display:flex;gap:8px">
                 <button @click="showSaleModal=false" style="flex:1;height:38px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:7px;color:#94a3b8;font-size:13px;cursor:pointer">Close</button>
                 <button x-ref="printBtn" @click="printReceipt()" style="flex:1;height:38px;background:#312e81;border:.5px solid #534AB7;border-radius:7px;color:#a5b4fc;font-size:13px;font-weight:500;cursor:pointer">Next <i class="ti ti-arrow-right" style="font-size:13px"></i></button>
             </div>
+            </template>
+            {{-- Credit sale: BOTH steps are required — print the bill, then attach the signed photo. No skip. --}}
+            <template x-if="lastSale && lastSale.is_credit">
+            <div>
+                <div style="font-size:11px;color:#fbbf24;background:#3a2c0c;border:.5px solid #78531a;border-radius:6px;padding:7px 9px;margin-bottom:10px;text-align:center">Print the bill, get it signed, then attach the signed copy — both are required.</div>
+                <button x-ref="printBtn" @click="printCreditBill()" style="width:100%;height:38px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer"
+                        :style="creditBillPrinted ? 'background:#14532d;border:.5px solid #166534;color:#4ade80' : 'background:#312e81;border:.5px solid #534AB7;color:#a5b4fc'">
+                    <i class="ti" :class="creditBillPrinted ? 'ti-check' : 'ti-printer'" style="font-size:14px"></i>
+                    <span x-text="creditBillPrinted ? 'Bill printed — reprint' : 'Print credit bill'"></span>
+                </button>
+                <button @click="openEvidence()" :disabled="!creditBillPrinted" :style="!creditBillPrinted ? 'opacity:.5;cursor:not-allowed' : ''"
+                        style="width:100%;height:38px;margin-top:8px;background:#14532d;border:.5px solid #166534;border-radius:7px;color:#4ade80;font-size:13px;font-weight:600;cursor:pointer">
+                    <i class="ti ti-signature" style="font-size:14px"></i> Attach signed copy
+                </button>
+            </div>
+            </template>
         </div>
     </div>
     </template>
@@ -418,12 +447,12 @@ input[type=number]{-moz-appearance:textfield}
     </div>
     </template>
 
-    {{-- Split payment (cash + card) popup --}}
+    {{-- Split / credit payment (cash + card + credit) popup --}}
     <template x-teleport="body">
     <div x-show="showSplitModal" x-cloak @keydown.escape.window="showSplitModal=false" @click.self="showSplitModal=false"
          style="position:fixed;inset:0;background:rgba(8,9,13,.7);display:flex;align-items:center;justify-content:center;z-index:60">
-        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:340px">
-            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Split payment</div>
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:10px;padding:18px;width:340px;max-height:94vh;overflow-y:auto">
+            <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:2px">Split / credit payment</div>
             <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="'Total: Rs. ' + total.toLocaleString()"></div>
 
             <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Card amount (Rs.)</label>
@@ -439,12 +468,24 @@ input[type=number]{-moz-appearance:textfield}
 
             <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Cash amount (Rs.)</label>
             <input type="number" min="0" step="0.01" x-model.number="splitCash" x-ref="splitCashInput" placeholder="0.00"
+                   @keydown.enter.prevent="$refs.splitCreditInput.focus()"
+                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;padding:8px 10px;outline:none;margin-bottom:8px">
+
+            <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Credit — on account (Rs.)</label>
+            <input type="number" min="0" step="0.01" x-model.number="splitCredit" x-ref="splitCreditInput" placeholder="0.00"
                    @keydown.enter.prevent="if (splitValid) $refs.splitBtn.focus()"
-                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;padding:8px 10px;outline:none;margin-bottom:12px">
+                   style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:13px;padding:8px 10px;outline:none;margin-bottom:8px">
+
+            <div x-show="splitCreditNum > 0" x-cloak style="font-size:11px;border-radius:6px;padding:7px 9px;margin-bottom:10px"
+                 :style="creditCustomerOk ? 'background:#0f2a1b;border:.5px solid #14532d;color:#4ade80' : 'background:#3a1414;border:.5px solid #7f1d1d;color:#fca5a5'">
+                <span x-show="creditCustomerOk">On account for <b x-text="customer ? customer.name : ''"></b> · NIC <span x-text="customer && customer.nic ? customer.nic : '—'"></span></span>
+                <span x-show="!creditCustomerOk" x-text="creditCustomerError"></span>
+            </div>
 
             <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:12px">
                 <div style="display:flex;justify-content:space-between;color:#94a3b8"><span>Cash needed</span><span x-text="'Rs. ' + splitCashNeeded.toLocaleString()"></span></div>
                 <div style="display:flex;justify-content:space-between;color:#94a3b8;margin-top:3px"><span>Change</span><span x-text="'Rs. ' + splitChange.toLocaleString()"></span></div>
+                <div x-show="splitCreditNum > 0" style="display:flex;justify-content:space-between;color:#fbbf24;margin-top:3px"><span>On credit</span><span x-text="'Rs. ' + splitCreditNum.toLocaleString()"></span></div>
                 <div x-show="splitError" style="color:#f87171;margin-top:5px;font-size:11px" x-text="splitError"></div>
             </div>
 
@@ -453,6 +494,64 @@ input[type=number]{-moz-appearance:textfield}
                 <button @click="confirmSplit()" x-ref="splitBtn" :disabled="!splitValid" @keydown.enter.prevent="confirmSplit()" :style="!splitValid?'opacity:.5;cursor:not-allowed':''"
                         style="flex:1;height:36px;background:#534AB7;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Complete sale</button>
             </div>
+        </div>
+    </div>
+    </template>
+
+    {{-- Credit signed-document evidence popup (webcam or phone QR) --}}
+    <template x-teleport="body">
+    <div x-show="showEvidenceModal" x-cloak @keydown.escape.window="evidenceDone ? closeEvidence() : evBack()"
+         style="position:fixed;inset:0;background:rgba(8,9,13,.72);display:flex;align-items:center;justify-content:center;z-index:70">
+        <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:12px;padding:18px;width:400px;max-height:94vh;overflow-y:auto">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <div style="font-size:14px;font-weight:600;color:#e2e8f0;display:flex;align-items:center;gap:6px"><i class="ti ti-signature" style="color:#818cf8"></i> Signed copy</div>
+                <i class="ti ti-x" @click="closeEvidence()" style="font-size:16px;color:#64748b;cursor:pointer"></i>
+            </div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:12px" x-text="lastSale ? 'Invoice ' + lastSale.invoice_no + ' · photograph the signed bill' : ''"></div>
+
+            {{-- Done --}}
+            <template x-if="evidenceDone">
+                <div style="text-align:center;padding:18px 0">
+                    <div style="width:52px;height:52px;border-radius:50%;background:#14532d;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="ti ti-check" style="font-size:28px;color:#4ade80"></i></div>
+                    <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:4px">Signed copy attached</div>
+                    <div style="font-size:12px;color:#64748b;margin-bottom:16px">Saved as evidence for this credit sale.</div>
+                    <button @click="closeEvidence()" style="width:100%;height:38px;background:#312e81;border:.5px solid #534AB7;border-radius:7px;color:#a5b4fc;font-size:13px;font-weight:600;cursor:pointer">Done</button>
+                </div>
+            </template>
+
+            {{-- Capture --}}
+            <template x-if="!evidenceDone">
+              <div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
+                    <button @click="switchEvidenceTab('webcam')" :style="evidenceTab==='webcam' ? 'background:#312e81;color:#a5b4fc;border-color:#534AB7' : 'background:#1e2130;color:#94a3b8;border-color:#2a2d3a'"
+                            style="height:34px;border:.5px solid;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-camera" style="font-size:13px"></i> Webcam</button>
+                    <button @click="switchEvidenceTab('phone')" :style="evidenceTab==='phone' ? 'background:#312e81;color:#a5b4fc;border-color:#534AB7' : 'background:#1e2130;color:#94a3b8;border-color:#2a2d3a'"
+                            style="height:34px;border:.5px solid;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer"><i class="ti ti-device-mobile" style="font-size:13px"></i> Use my phone</button>
+                </div>
+
+                {{-- Webcam --}}
+                <div x-show="evidenceTab==='webcam'">
+                    <video x-ref="evidenceVideo" autoplay playsinline muted style="width:100%;border-radius:8px;background:#0f1117;aspect-ratio:4/3;object-fit:cover"></video>
+                    <button @click="captureWebcam()" :disabled="evidenceBusy" style="width:100%;height:40px;margin-top:10px;background:#14532d;border:.5px solid #166534;border-radius:7px;color:#4ade80;font-size:13px;font-weight:600;cursor:pointer"><i class="ti ti-camera" style="font-size:14px"></i> <span x-text="evidenceBusy ? 'Uploading…' : 'Capture & upload'"></span></button>
+                </div>
+
+                {{-- Phone / QR --}}
+                <div x-show="evidenceTab==='phone'" style="text-align:center">
+                    <div style="font-size:12px;color:#94a3b8;margin-bottom:10px">Scan with the cashier's phone, then enter the code on the phone.</div>
+                    <div style="background:#fff;border-radius:8px;padding:10px;display:inline-block;min-width:180px;min-height:180px" x-html="qrSvg"></div>
+                    <div x-show="qrLoading" x-cloak style="font-size:11px;color:#64748b;margin-top:8px">Creating link…</div>
+                    <div x-show="qrCode" x-cloak style="margin-top:12px">
+                        <div style="font-size:11px;color:#64748b">Security code</div>
+                        <div style="font-size:26px;font-weight:700;letter-spacing:6px;color:#e2e8f0" x-text="qrCode"></div>
+                        <div style="font-size:10px;color:#475569;margin-top:2px">Or the cashier can enter their own login password on the phone.</div>
+                    </div>
+                    <div style="font-size:11px;color:#a5b4fc;margin-top:12px"><i class="ti ti-loader-2" style="font-size:12px"></i> Waiting for the phone upload…</div>
+                </div>
+
+                <div x-show="evidenceMsg" x-cloak style="font-size:11px;color:#f87171;margin-top:10px;text-align:center" x-text="evidenceMsg"></div>
+                <button @click="evBack()" style="width:100%;height:34px;margin-top:12px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer"><i class="ti ti-arrow-left" style="font-size:12px"></i> Back (print / reprint)</button>
+              </div>
+            </template>
         </div>
     </div>
     </template>
@@ -651,6 +750,7 @@ input[type=number]{-moz-appearance:textfield}
                 ['F2','Focus search'],
                 ['F3','Focus cash received'],
                 ['F4','Cash payment'],
+                ['F5','Split / credit payment'],
                 ['F6','Card payment'],
                 ['F7','Set exact cash'],
                 ['F8','Toggle full screen'],
@@ -711,6 +811,7 @@ window.__POS = {
     denoms: @json($denominations),
     hasCounter: {{ $counter ? 'true' : 'false' }},
     dashboardUrl: '{{ route('dashboard') }}',
+    allowCreditNewCustomers: {{ \App\Models\Setting::get('allow_credit_new_customers') === '1' ? 'true' : 'false' }},
     counterOpen: {{ $openSession ? 'true' : 'false' }},
     openingBalance: {{ $openSession ? (float) $openSession->opening_balance : 0 }},
     cashSalesSoFar: {{ $openSession ? (float) ($openSession->cash_sales_so_far ?? 0) : 0 }},
@@ -746,6 +847,7 @@ function posScreen() {
                     case 'F2': e.preventDefault(); document.getElementById('scan-input')?.focus(); break;
                     case 'F3': if (!this.anyModalOpen) { e.preventDefault(); document.getElementById('cash-input')?.focus(); } break;
                     case 'F4': if (!this.anyModalOpen) { e.preventDefault(); this.pay('cash'); } break;
+                    case 'F5': if (!this.anyModalOpen) { e.preventDefault(); this.openSplit(); } break;
                     case 'F6': if (!this.anyModalOpen) { e.preventDefault(); this.pay('card'); } break;
                     case 'F7': if (!this.anyModalOpen) { e.preventDefault(); this.npExact(); document.getElementById('cash-input')?.focus(); } break;
                     case 'F8': e.preventDefault(); this.toggleFullscreen(); break;
@@ -875,6 +977,7 @@ function posScreen() {
         // popups
         showSaleModal: false,
         lastSale: null,
+        creditBillPrinted: false,
         showCardModal: false,
         cardLast4: '',
         showCashModal: false,
@@ -943,36 +1046,157 @@ function posScreen() {
             this.$nextTick(() => this.scrollToActive());
         },
 
-        // ── Split payment (cash + card) ──
+        // ── Split / credit payment (cash + card + credit) ──
         showSplitModal: false,
-        splitCard: '', splitCash: '', splitLast4: '',
+        splitCard: '', splitCash: '', splitLast4: '', splitCredit: '',
+        allowCreditNewCustomers: !!(window.__POS && window.__POS.allowCreditNewCustomers),
         get splitCardNum() { return Math.max(0, parseFloat(this.splitCard) || 0); },
         get splitCashNum() { return Math.max(0, parseFloat(this.splitCash) || 0); },
-        get splitCashNeeded() { return Math.max(0, this.total - Math.min(this.splitCardNum, this.total)); },
-        get splitChange() { return Math.max(0, this.splitCashNum - this.splitCashNeeded); },
+        get splitCreditNum() { return Math.max(0, parseFloat(this.splitCredit) || 0); },
+        // Cash needed = the bill minus what card and credit already cover.
+        get splitCashNeeded() { return Math.max(0, Math.round((this.total - Math.min(this.splitCardNum, this.total) - Math.min(this.splitCreditNum, this.total)) * 100) / 100); },
+        get splitChange() { return Math.max(0, Math.round((this.splitCashNum - this.splitCashNeeded) * 100) / 100); },
+        // Is the selected customer allowed to take the credit portion?
+        get creditCustomerOk() {
+            if (this.splitCreditNum <= 0) return true;
+            if (!this.customer) return false;
+            if (!this.customer.credit_approved && !this.allowCreditNewCustomers) return false;
+            if (!this.customer.nic) return false;
+            return true;
+        },
+        get creditCustomerError() {
+            if (!this.customer) return "Select a registered customer for credit — walk-in can't buy on credit.";
+            if (!this.customer.credit_approved && !this.allowCreditNewCustomers) return 'This customer is not approved for credit.';
+            if (!this.customer.nic) return "Add the customer's NIC before selling on credit.";
+            return '';
+        },
         get splitValid() {
             if (this.total <= 0) return false;
-            if (this.splitCardNum > this.total + 1e-9) return false;
+            if (this.splitCardNum + this.splitCreditNum > this.total + 1e-9) return false;
             if (this.splitCardNum > 0 && this.splitLast4.length !== 4) return false;
-            return this.splitCashNum + this.splitCardNum >= this.total - 1e-9;
+            if (this.splitCreditNum > 0 && !this.creditCustomerOk) return false;
+            return this.splitCashNum + this.splitCardNum + this.splitCreditNum >= this.total - 1e-9;
         },
         get splitError() {
-            if (this.splitCardNum > this.total) return 'Card amount is more than the total.';
+            if (this.splitCardNum + this.splitCreditNum > this.total + 1e-9) return 'Card + credit is more than the total.';
             if (this.splitCardNum > 0 && this.splitLast4.length !== 4) return 'Enter the card last 4 digits.';
-            if (this.splitCashNum + this.splitCardNum < this.total - 1e-9) return 'Cash + card is less than the total.';
+            if (this.splitCreditNum > 0 && !this.creditCustomerOk) return this.creditCustomerError;
+            if (this.splitCashNum + this.splitCardNum + this.splitCreditNum < this.total - 1e-9) return 'Cash + card + credit is less than the total.';
             return '';
         },
         openSplit() {
             if (this.cart.length === 0) { alert('Cart is empty!'); return; }
             if (this.hasCounter && !this.counterOpen) { this.openCounterPrompt(); return; }
+            this.splitCard = ''; this.splitCash = ''; this.splitLast4 = ''; this.splitCredit = '';
+            this.showSplitModal = true;
+        },
+        openCredit() {
+            if (this.cart.length === 0) { alert('Cart is empty!'); return; }
+            if (this.hasCounter && !this.counterOpen) { this.openCounterPrompt(); return; }
+            if (!this.customer) { alert("Select a registered customer first — walk-in customers can't buy on credit."); this.openCustomerSearch(); return; }
+            if (!this.customer.credit_approved && !this.allowCreditNewCustomers) { alert('This customer is not approved for credit.'); return; }
+            if (!this.customer.nic) { alert("Add the customer's NIC before selling on credit."); return; }
             this.splitCard = ''; this.splitCash = ''; this.splitLast4 = '';
+            this.splitCredit = this.total;      // whole bill on account by default
             this.showSplitModal = true;
         },
         confirmSplit() {
             if (!this.splitValid) return;
             this.showSplitModal = false;
-            this.processPayment('mixed');
+            // Pure credit → 'credit'; anything with cash/card → 'mixed'.
+            const method = (this.splitCreditNum > 0 && this.splitCashNum <= 0 && this.splitCardNum <= 0) ? 'credit' : 'mixed';
+            this.processPayment(method);
         },
+
+        // ── Credit signed-document evidence (webcam or phone QR) ──
+        showEvidenceModal: false,
+        evidenceTab: 'webcam',
+        evidenceStream: null,
+        evidenceBusy: false,
+        evidenceMsg: '',
+        evidenceDone: false,
+        qrSvg: '', qrCode: '', qrLoading: false,
+        evidencePoll: null,
+        openEvidence() {
+            if (!this.lastSale) return;
+            this.showSaleModal = false;
+            this.evidenceTab = 'webcam';
+            this.evidenceMsg = ''; this.evidenceDone = false;
+            this.qrSvg = ''; this.qrCode = '';
+            this.showEvidenceModal = true;
+            this.$nextTick(() => this.startWebcam());
+        },
+        async startWebcam() {
+            this.stopWebcam();
+            this.evidenceMsg = '';
+            try {
+                this.evidenceStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                const v = this.$refs.evidenceVideo;
+                if (v) { v.srcObject = this.evidenceStream; await v.play().catch(() => {}); }
+            } catch (e) {
+                this.evidenceMsg = 'No webcam available — use your phone instead.';
+                this.switchEvidenceTab('phone');
+            }
+        },
+        stopWebcam() {
+            if (this.evidenceStream) { this.evidenceStream.getTracks().forEach(t => t.stop()); this.evidenceStream = null; }
+        },
+        async captureWebcam() {
+            const v = this.$refs.evidenceVideo;
+            if (!v || !v.videoWidth) { this.evidenceMsg = 'Camera not ready yet.'; return; }
+            this.evidenceBusy = true; this.evidenceMsg = 'Uploading…';
+            try {
+                const c = document.createElement('canvas');
+                c.width = v.videoWidth; c.height = v.videoHeight;
+                c.getContext('2d').drawImage(v, 0, 0);
+                const blob = await new Promise(ok => c.toBlob(ok, 'image/webp', 0.85));
+                const fd = new FormData();
+                fd.append('photo', blob, 'signed.webp');
+                fd.append('_token', this.csrf());
+                const res = await fetch(`/pos/sale/${this.lastSale.sale_id}/credit-document`, {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf() },
+                    body: fd,
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success) { this.evidenceDone = true; this.stopWebcam(); this.stopEvidencePoll(); }
+                else { this.evidenceMsg = data.message || 'Upload failed. Try again.'; }
+            } catch (e) { this.evidenceMsg = 'Upload failed. Try again.'; }
+            this.evidenceBusy = false;
+        },
+        switchEvidenceTab(tab) {
+            this.evidenceTab = tab;
+            this.evidenceMsg = '';
+            if (tab === 'webcam') { this.stopEvidencePoll(); this.startWebcam(); }
+            else { this.stopWebcam(); this.loadQr(); this.startEvidencePoll(); }
+        },
+        async loadQr() {
+            if (!this.lastSale) return;
+            this.qrLoading = true; this.qrSvg = ''; this.qrCode = '';
+            try {
+                const res = await fetch(`/pos/sale/${this.lastSale.sale_id}/credit-upload-link`, { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                this.qrSvg = data.qr_svg || '';
+                this.qrCode = data.code || '';
+            } catch (e) { this.evidenceMsg = 'Could not create the upload link.'; }
+            this.qrLoading = false;
+        },
+        startEvidencePoll() {
+            this.stopEvidencePoll();
+            this.evidencePoll = setInterval(async () => {
+                if (!this.lastSale || this.evidenceDone) return;
+                try {
+                    const res = await fetch(`/pos/sale/${this.lastSale.sale_id}/credit-document`, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json();
+                    if (data.attached) { this.evidenceDone = true; this.stopEvidencePoll(); this.stopWebcam(); }
+                } catch (e) {}
+            }, 3000);
+        },
+        stopEvidencePoll() { if (this.evidencePoll) { clearInterval(this.evidencePoll); this.evidencePoll = null; } },
+        closeEvidence() { this.stopWebcam(); this.stopEvidencePoll(); this.showEvidenceModal = false; },
+        // Go back to the success screen (to print/reprint) without dismissing the flow —
+        // the signed copy is still required before the next sale.
+        evBack() { this.stopWebcam(); this.stopEvidencePoll(); this.showEvidenceModal = false; this.showSaleModal = true; },
 
         // ── Held / parked bills ──
         heldBills: [],
@@ -1168,14 +1392,14 @@ function posScreen() {
         customerQuery: '',
         customerResults: [],
         customerSearching: false,
-        newCustomer: { name: '', phone: '', email: '' },
+        newCustomer: { name: '', phone: '', email: '', nic: '', address: '' },
         customerError: '',
 
         openCustomerSearch() {
             this.customerError = '';
             this.customerQuery = '';
             this.customerResults = [];
-            this.newCustomer = { name: '', phone: '', email: '' };
+            this.newCustomer = { name: '', phone: '', email: '', nic: '', address: '' };
             this.showCustomerModal = true;
         },
 
@@ -1279,10 +1503,12 @@ function posScreen() {
                 tax_amount: this.tax,
                 payment_method: method,
                 paid_amount: method === 'cash' ? this.cashNum
-                           : (method === 'mixed' ? (this.splitCashNum + this.splitCardNum) : this.total),
+                           : (method === 'mixed' ? (this.splitCashNum + this.splitCardNum)
+                           : (method === 'credit' ? 0 : this.total)),
                 card_last4: method === 'card' ? this.cardLast4 : (method === 'mixed' ? this.splitLast4 : null),
                 cash_amount: method === 'mixed' ? this.splitCashNum : 0,
                 card_amount: method === 'mixed' ? this.splitCardNum : 0,
+                credit_amount: method === 'mixed' ? this.splitCreditNum : (method === 'credit' ? this.total : 0),
                 _token: document.querySelector('meta[name=csrf-token]').content,
             };
 
@@ -1299,7 +1525,8 @@ function posScreen() {
                 const data = await res.json();
 
                 if (data.success) {
-                    this.lastSale = data;        // { sale_id, invoice_no, total, change, cash_amount }
+                    this.lastSale = data;        // { sale_id, invoice_no, total, change, cash_amount, is_credit, balance_due }
+                    this.creditBillPrinted = false;
                     this.cashSalesSoFar += Number(data.cash_amount) || 0;   // only the cash portion
                     this.showSaleModal = true;
                     this.clearCart();
@@ -1318,8 +1545,13 @@ function posScreen() {
             }
             this.showSaleModal = false;
         },
+        // Credit bills: print but KEEP the success modal open — the signed copy is still required.
+        printCreditBill() {
+            if (this.lastSale) window.open(`/pos/receipt/${this.lastSale.sale_id}`, '_blank', 'width=380,height=600');
+            this.creditBillPrinted = true;
+        },
 
-        get anyModalOpen() { return this.showCustomerModal || this.showSaleModal || this.showCardModal || this.showCashModal || this.showOpenModal || this.showCloseModal || this.showCalc || this.showShortcuts; },
+        get anyModalOpen() { return this.showCustomerModal || this.showSaleModal || this.showCardModal || this.showCashModal || this.showSplitModal || this.showEvidenceModal || this.showOpenModal || this.showCloseModal || this.showCalc || this.showShortcuts; },
 
         toggleFullscreen() {
             const el = document.documentElement;

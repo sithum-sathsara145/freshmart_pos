@@ -11,6 +11,7 @@
         ['counters','ti-device-desktop','Counters'],
         ['users','ti-users','Users & roles'],
         ['receipt','ti-receipt','Receipt setup'],
+        ['credit','ti-credit-card','Credit sales'],
         ['tax','ti-percent','Tax settings'],
         ['hardware','ti-printer','Hardware'],
         ['scale','ti-scale','Scale barcodes'],
@@ -81,6 +82,29 @@
         <input type="checkbox" name="{{ $k }}" value="1" {{ ($settings[$k]??'1')==='1'?'checked':'' }} style="accent-color:#818cf8;width:16px;height:16px">
     </div>
     @endforeach
+</div>
+</div>
+
+<div id="sec-credit" class="settings-section" style="display:none">
+<div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:14px">
+    <div style="font-size:12px;font-weight:500;color:#94a3b8;margin-bottom:4px">Credit sales</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:14px">Credit is always limited to registered customers — walk-in customers can never buy on credit.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:.5px solid #1a1d2a;font-size:12px">
+        <div style="padding-right:12px">
+            <div style="color:#e2e8f0">Allow credit for new customers</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">When off, only customers marked “Approved to buy on credit” can buy on credit.</div>
+        </div>
+        <div style="flex-shrink:0">
+            {{-- hidden field so unchecking actually persists the off state --}}
+            <input type="hidden" name="allow_credit_new_customers" value="0">
+            <input type="checkbox" name="allow_credit_new_customers" value="1" {{ ($settings['allow_credit_new_customers'] ?? '0')==='1'?'checked':'' }} style="accent-color:#818cf8;width:16px;height:16px">
+        </div>
+    </div>
+    <div style="margin-top:12px">
+        <label style="display:block;font-size:11px;color:#64748b;margin-bottom:4px">Credit bill terms (printed above the signature line)</label>
+        <input type="text" name="credit_terms" value="{{ $settings['credit_terms'] ?? '' }}" placeholder="e.g. I agree to settle this balance within 30 days."
+            style="width:100%;background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:7px 10px;outline:none">
+    </div>
 </div>
 </div>
 

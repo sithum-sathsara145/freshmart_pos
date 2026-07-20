@@ -4,12 +4,26 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class Customer extends Model
 {
-    protected $fillable = ['name','phone','email','address','loyalty_points','loyalty_level','total_purchases'];
+    protected $fillable = ['name','phone','email','address','nic','credit_approved','credit_limit','loyalty_points','loyalty_level','total_purchases'];
+
+    protected $casts = [
+        'credit_approved' => 'boolean',
+        'credit_limit'    => 'decimal:2',
+    ];
 
     public function sales(): HasMany { return $this->hasMany(Sale::class); }
+
+    /** Total unpaid balance across this customer's credit/partial sales. */
+    public function outstandingBalance(): float
+    {
+        return (float) $this->sales()
+            ->whereColumn('paid_amount', '<', 'total')
+            ->sum(DB::raw('total - paid_amount'));
+    }
 
     public function addLoyaltyPoints(float $amount): void
     {

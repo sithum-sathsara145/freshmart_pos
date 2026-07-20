@@ -21,6 +21,11 @@
     <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:10px 12px">
         <div style="font-size:10px;color:#64748b;margin-bottom:3px">Pending dues</div>
         <div style="font-size:18px;font-weight:500;color:#fb923c">Rs. {{ number_format($stats['pending_dues']) }}</div>
+        @if(($stats['credit_no_doc'] ?? 0) > 0)
+        <a href="{{ route('sales.index', ['filter' => 'credit_no_doc']) }}" style="display:inline-flex;align-items:center;gap:3px;margin-top:5px;font-size:10px;color:#f87171;text-decoration:none" title="Credit sales awaiting the signed copy">
+            <i class="ti ti-alert-triangle" style="font-size:11px"></i> {{ $stats['credit_no_doc'] }} awaiting signed copy
+        </a>
+        @endif
     </div>
 </div>
 

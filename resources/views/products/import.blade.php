@@ -9,13 +9,17 @@
 {{-- ── Result summary ─────────────────────────────────── --}}
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:16px;margin-bottom:14px">
     <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:12px">Import finished</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
         <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:10px 12px">
-            <div style="font-size:10px;color:#64748b">Imported</div>
+            <div style="font-size:10px;color:#64748b">Added (new)</div>
             <div style="font-size:22px;font-weight:600;color:#4ade80">{{ $result['created'] }}</div>
         </div>
         <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:10px 12px">
-            <div style="font-size:10px;color:#64748b">Skipped (already exist)</div>
+            <div style="font-size:10px;color:#64748b">Updated (existing)</div>
+            <div style="font-size:22px;font-weight:600;color:#60a5fa">{{ $result['updated'] ?? 0 }}</div>
+        </div>
+        <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:10px 12px">
+            <div style="font-size:10px;color:#64748b">Skipped (duplicate rows)</div>
             <div style="font-size:22px;font-weight:600;color:#fbbf24">{{ $result['skipped'] }}</div>
         </div>
         <div style="background:#0f1117;border:.5px solid #2a2d3a;border-radius:6px;padding:10px 12px">
@@ -47,7 +51,9 @@
     <div style="font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:4px">Upload a file</div>
     <div style="font-size:11px;color:#64748b;margin-bottom:14px">
         Accepts <b style="color:#94a3b8">.csv</b> or <b style="color:#94a3b8">.xlsx</b> (max 10MB). The first row must be column headers.
-        Products whose SKU or barcode already exists are skipped.
+        A row whose <b style="color:#94a3b8">SKU / barcode / name</b> matches an existing product <b style="color:#94a3b8">updates</b> it
+        (prices, and the <b style="color:#94a3b8">stock</b> is set to the <i>opening_stock</i> value) instead of adding a duplicate.
+        Leave a cell blank to keep the current value; leave <i>opening_stock</i> blank to leave stock untouched.
     </div>
 
     <label for="import-file" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;height:120px;background:#0f1117;border:.5px dashed #2a2d3a;border-radius:8px;cursor:pointer;color:#64748b;font-size:12px">

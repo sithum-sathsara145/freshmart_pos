@@ -343,6 +343,9 @@ CREATE TABLE customers (
     loyalty_points INT DEFAULT 0,
     loyalty_level ENUM('bronze','silver','gold','platinum') DEFAULT 'bronze',
     total_purchases DECIMAL(15,2) DEFAULT 0,
+    nic VARCHAR(30) NULL,
+    credit_approved TINYINT(1) NOT NULL DEFAULT 0,
+    credit_limit DECIMAL(15,2) NULL,
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -396,6 +399,7 @@ CREATE TABLE sales (
     paid_amount DECIMAL(15,2) DEFAULT 0,
     cash_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
     change_amount DECIMAL(15,2) DEFAULT 0,
+    credit_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
     loyalty_points_earned INT DEFAULT 0,
     coupon_code VARCHAR(50),
     coupon_discount DECIMAL(15,2) DEFAULT 0,
@@ -403,6 +407,9 @@ CREATE TABLE sales (
     status ENUM('paid','partial','pending','returned') DEFAULT 'paid',
     notes TEXT,
     is_online_order TINYINT(1) DEFAULT 0,
+    credit_doc_url VARCHAR(255) NULL,
+    credit_doc_public_id VARCHAR(255) NULL,
+    credit_doc_uploaded_at TIMESTAMP NULL,
     created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES customers(id),

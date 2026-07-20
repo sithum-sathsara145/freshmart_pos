@@ -158,6 +158,7 @@ class ProductController extends Controller
         }
 
         $created     = 0;
+        $updated     = 0;
         $skipped     = 0;
         $errors      = [];
         $seenSku     = [];
@@ -176,28 +177,68 @@ class ProductController extends Controller
             $barcode = trim((string) ($r['barcode'] ?? ''));
             $nameKey = mb_strtolower($name);
 
-            // Ignore records that already exist, and duplicates within the file. Match on
-            // SKU or barcode when given; otherwise fall back to the product name so a
-            // name-only catalogue can be re-imported without creating duplicates.
-            if ($sku !== '' && (isset($seenSku[$sku]) || Product::where('sku', $sku)->exists())) {
-                $skipped++;
-                continue;
+            // Find an existing product to UPDATE in place (so a re-import edits prices/stock
+            // instead of creating a duplicate). Match on SKU, else barcode, else name.
+            if ($sku !== '') {
+                $existing = Product::where('sku', $sku)->first();
+            } elseif ($barcode !== '') {
+                $existing = Product::where('barcode', $barcode)->first();
+            } else {
+                $existing = Product::whereRaw('LOWER(name) = ?', [$nameKey])->first();
             }
-            if ($barcode !== '' && (isset($seenBarcode[$barcode]) || Product::where('barcode', $barcode)->exists())) {
+
+            // Skip repeats within the same file (first row wins).
+            if (($sku !== '' && isset($seenSku[$sku]))
+                || ($barcode !== '' && isset($seenBarcode[$barcode]))
+                || ($sku === '' && $barcode === '' && isset($seenName[$nameKey]))) {
                 $skipped++;
-                continue;
-            }
-            if ($sku === '' && $barcode === ''
-                && (isset($seenName[$nameKey]) || Product::whereRaw('LOWER(name) = ?', [$nameKey])->exists())) {
-                $skipped++;
-                continue;
-            }
-            if ($sku !== '' && ! preg_match('/^\d{6}$/', $sku)) {
-                $errors[] = "Row {$line}: SKU must be exactly 6 digits — skipped.";
                 continue;
             }
 
+            // Only overwrite a field when the cell actually carries a value — blanks in the
+            // file must never wipe existing data.
+            $has = fn($k) => array_key_exists($k, $r) && trim((string) ($r[$k] ?? '')) !== '';
+
             try {
+                // ── Existing product: update prices / stock / any supplied fields ──
+                if ($existing) {
+                    $updates = [];
+                    if ($has('purchase_price'))       $updates['purchase_price']       = $this->importNum($r['purchase_price']);
+                    if ($has('sale_price'))           $updates['sale_price']           = $this->importNum($r['sale_price']);
+                    if ($has('tax_percent'))          $updates['tax_percent']          = $this->importNum($r['tax_percent']);
+                    if ($has('discount_percent'))     $updates['discount_percent']     = $this->importNum($r['discount_percent']);
+                    if ($has('min_stock'))            $updates['min_stock']            = (int) $this->importNum($r['min_stock']);
+                    if ($has('unit'))                 $updates['unit']                 = trim((string) $r['unit']);
+                    if ($has('category'))             $updates['category_id']          = $this->importLookup(Category::class, $r['category']);
+                    if ($has('brand'))                $updates['brand_id']             = $this->importLookup(Brand::class, $r['brand']);
+                    if ($has('description'))          $updates['description']          = trim((string) $r['description']);
+                    if ($has('status'))               $updates['status']               = strtolower(trim((string) $r['status'])) === 'inactive' ? 'inactive' : 'active';
+                    if ($has('show_in_online_store')) $updates['show_in_online_store'] = $this->importBool($r['show_in_online_store']);
+                    if ($has('image_url'))            $updates['image']                = $this->importImageUrl($r['image_url']);
+
+                    DB::beginTransaction();
+                    if ($updates) {
+                        $existing->update($updates);
+                    }
+                    // Set branch stock to the supplied quantity (blank = leave stock alone).
+                    if ($branchId && $has('opening_stock')) {
+                        $this->reconcileStock($existing, $branchId, $this->importNum($r['opening_stock']));
+                    }
+                    DB::commit();
+
+                    if ($sku !== '') { $seenSku[$sku] = true; }
+                    if ($existing->barcode) { $seenBarcode[$existing->barcode] = true; }
+                    $seenName[$nameKey] = true;
+                    $updated++;
+                    continue;
+                }
+
+                // ── New product: create ──
+                if ($sku !== '' && ! preg_match('/^\d{6}$/', $sku)) {
+                    $errors[] = "Row {$line}: SKU must be exactly 6 digits — skipped.";
+                    continue;
+                }
+
                 $isWeighed = $this->importBool($r['is_weighed'] ?? null);
                 $scalePlu  = preg_replace('/\D/', '', (string) ($r['scale_plu'] ?? '')) ?: null;
 
@@ -250,6 +291,7 @@ class ProductController extends Controller
             'result'  => [
                 'total'   => count($rows),
                 'created' => $created,
+                'updated' => $updated,
                 'skipped' => $skipped,
                 'errors'  => $errors,
             ],
@@ -314,6 +356,27 @@ class ProductController extends Controller
     {
         $v = trim((string) $v);
         return str_starts_with($v, 'http') ? $v : null;
+    }
+
+    /**
+     * Set a product's on-hand stock at a branch to $target by adding or consuming layers
+     * through the costing engine, so the aggregate and cost layers stay in step.
+     */
+    private function reconcileStock(Product $product, int $branchId, float $target): void
+    {
+        $target  = max(0, $target);
+        $current = (float) (\App\Models\Stock::where('product_id', $product->id)->where('branch_id', $branchId)->value('quantity') ?? 0);
+        $diff    = round($target - $current, 3);
+
+        if ($diff > 0) {
+            \App\Support\Inventory::addLayer(
+                $product->id, $branchId, $diff,
+                (float) $product->purchase_price, (float) $product->sale_price,
+                'IMPORT', now()->toDateString()
+            );
+        } elseif ($diff < 0) {
+            \App\Support\Inventory::consume($product, $branchId, -$diff);
+        }
     }
 
     // Signed params for direct browser → Cloudinary uploads (keeps the secret server-side).
@@ -568,6 +631,48 @@ class ProductController extends Controller
         $product->delete();
 
         return redirect()->route('products.index')->with('success', 'Product deleted.');
+    }
+
+    /** Delete several products at once; anything with sales history (or other references) is skipped. */
+    public function bulkDestroy(Request $request)
+    {
+        $data = $request->validate([
+            'product_ids'   => 'required|array|min:1',
+            'product_ids.*' => 'integer|exists:products,id',
+        ]);
+
+        $cloud   = app(CloudinaryService::class);
+        $deleted = 0;
+        $blocked = 0;
+
+        foreach (Product::whereIn('id', $data['product_ids'])->get() as $product) {
+            // Products used in a sale carry history — never hard-delete those.
+            if ($product->saleItems()->exists()) {
+                $blocked++;
+                continue;
+            }
+            try {
+                $publicId = $product->image_public_id;
+                $localImg = (! $publicId && $product->image && ! str_starts_with($product->image, 'http')) ? $product->image : null;
+                $product->delete();
+                // Clean the image only once the row is actually gone.
+                if ($publicId) {
+                    $cloud->delete($publicId);
+                } elseif ($localImg) {
+                    Storage::disk('public')->delete($localImg);
+                }
+                $deleted++;
+            } catch (\Throwable $e) {
+                $blocked++;   // referenced elsewhere (stock, purchases, …) — leave it be
+            }
+        }
+
+        $msg = "Deleted {$deleted} product(s).";
+        if ($blocked > 0) {
+            $msg .= " {$blocked} skipped — they have sales history or other records.";
+        }
+        return redirect()->route('products.index')
+            ->with(($deleted === 0 && $blocked > 0) ? 'error' : 'success', $msg);
     }
 
     // AJAX search for POS and other screens

@@ -5,7 +5,7 @@
 
 @section('content')
 @push('styles')<style>details > summary::-webkit-details-marker{display:none}</style>@endpush
-<div style="padding:14px 16px">
+<div style="padding:14px 16px" x-data="{ selected: [], allIds: @js($products->pluck('id')->map(fn($id) => (string) $id)->values()) }">
 
 {{-- Stats --}}
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
@@ -58,11 +58,26 @@
     </a>
 </div>
 
+{{-- Bulk actions --}}
+<div x-show="selected.length" x-cloak style="display:flex;align-items:center;gap:10px;margin-bottom:10px;background:#161821;border:.5px solid #2a2d3a;border-radius:8px;padding:8px 12px">
+    <span style="font-size:12px;color:#e2e8f0"><span x-text="selected.length"></span> selected</span>
+    <button type="button" @click="if (confirm('Delete ' + selected.length + ' selected product(s)? Products with sales history are skipped.')) $refs.bulkForm.submit()"
+            style="height:30px;padding:0 12px;background:#7f1d1d;border:.5px solid #b91c1c;border-radius:6px;color:#fca5a5;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px">
+        <i class="ti ti-trash" style="font-size:13px"></i> Delete selected
+    </button>
+    <button type="button" @click="selected = []" style="height:30px;padding:0 10px;background:#1e2130;border:.5px solid #2a2d3a;border-radius:6px;color:#94a3b8;font-size:12px;cursor:pointer">Clear</button>
+    <form x-ref="bulkForm" method="POST" action="{{ route('products.bulk-delete') }}" style="display:none">
+        @csrf
+        <template x-for="id in selected" :key="id"><input type="hidden" name="product_ids[]" :value="id"></template>
+    </form>
+</div>
+
 {{-- Table --}}
 <div style="background:#161821;border:.5px solid #2a2d3a;border-radius:8px;overflow:hidden">
 <table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead>
         <tr style="border-bottom:.5px solid #2a2d3a">
+            <th style="padding:9px 12px;text-align:center;width:34px"><input type="checkbox" @change="selected = $event.target.checked ? allIds.slice() : []" :checked="allIds.length && selected.length === allIds.length" title="Select all on this page" style="accent-color:#818cf8;width:15px;height:15px;cursor:pointer"></th>
             <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:500;font-size:11px">Product</th>
             <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:500;font-size:11px">Barcode</th>
             <th style="padding:9px 12px;text-align:left;color:#64748b;font-weight:500;font-size:11px">Category</th>
@@ -77,6 +92,7 @@
     <tbody>
         @forelse($products as $p)
         <tr style="border-bottom:.5px solid #1a1d2a">
+            <td style="padding:10px 12px;text-align:center"><input type="checkbox" value="{{ $p->id }}" x-model="selected" style="accent-color:#818cf8;width:15px;height:15px;cursor:pointer"></td>
             <td style="padding:10px 12px">
                 <div style="display:flex;align-items:center;gap:8px">
                     <div style="width:34px;height:34px;background:#1e2130;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -118,7 +134,7 @@
             </td>
         </tr>
         @empty
-        <tr><td colspan="9" style="padding:32px;text-align:center;color:#4a5568">
+        <tr><td colspan="10" style="padding:32px;text-align:center;color:#4a5568">
             <i class="ti ti-package" style="font-size:28px;display:block;margin-bottom:8px"></i>No products found
         </td></tr>
         @endforelse

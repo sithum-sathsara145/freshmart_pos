@@ -83,7 +83,7 @@ class CloudinaryService
      *
      * @throws \RuntimeException with a user-friendly message when the upload is rejected.
      */
-    public function upload(string $path): array
+    public function upload(string $path, ?string $folder = null): array
     {
         if (! $this->configured()) {
             throw new \RuntimeException('Image service is not configured. Please add your Cloudinary credentials before uploading images.');
@@ -91,7 +91,7 @@ class CloudinaryService
 
         try {
             $res = $this->cloudinary->uploadApi()->upload($path, [
-                'folder'        => $this->folder,
+                'folder'        => $folder ?: $this->folder,
                 'resource_type' => 'image',
             ]);
         } catch (\Throwable $e) {
