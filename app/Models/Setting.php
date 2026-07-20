@@ -53,4 +53,25 @@ class Setting extends Model
     {
         return static::where('key_name', $key)->whereNotNull('value')->where('value', '!=', '')->exists();
     }
+
+    /**
+     * Store the keys a settings screen owns, from config/settings.php.
+     *
+     * Only listed keys are written, so a stray or crafted field can't become a
+     * setting. Toggles are stored from whether they arrived at all, because a
+     * browser omits an unticked checkbox — reading them like ordinary fields
+     * would mean a toggle could be switched on but never back off.
+     */
+    public static function saveGroup(string $group, \Illuminate\Http\Request $request): void
+    {
+        foreach (config("settings.$group.fields", []) as $key) {
+            if ($request->has($key)) {
+                static::put($key, (string) $request->input($key));
+            }
+        }
+
+        foreach (config("settings.$group.toggles", []) as $key) {
+            static::put($key, $request->boolean($key) ? '1' : '0');
+        }
+    }
 }

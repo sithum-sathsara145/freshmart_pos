@@ -672,15 +672,11 @@ class SettingController extends Controller
                 ->update(['float_amount' => max(0, (float) $amount)]);
         }
 
-        // Never let API-key fields flow through the generic plaintext save.
-        $reserved = collect(config('api_credentials', []))
-            ->flatMap(fn ($g) => array_keys($g['fields']))
-            ->flatMap(fn ($k) => [$k, $k . '_clear'])
-            ->all();
+        // Only the keys this screen owns. Walking the whole request instead
+        // turned any field that reached it into a stored setting — including
+        // API-key fields, which must go through the encrypted path.
+        Setting::saveGroup('pos', $request);
 
-        foreach ($request->except(array_merge(['_token', '_method', 'counter_float'], $reserved)) as $key => $value) {
-            Setting::updateOrCreate(['key_name' => $key], ['value' => $value]);
-        }
         return back()->with('success', 'Settings saved.');
     }
 
@@ -1007,9 +1003,9 @@ class WebsiteController extends Controller
 
     public function saveSettings(Request $request)
     {
-        foreach ($request->except(['_token']) as $key => $value) {
-            Setting::updateOrCreate(['key_name' => $key], ['value' => $value]);
-        }
+        // Same rule as the main settings screen: only the keys it owns.
+        Setting::saveGroup('website', $request);
+
         return back()->with('success', 'Website settings saved.');
     }
 }
