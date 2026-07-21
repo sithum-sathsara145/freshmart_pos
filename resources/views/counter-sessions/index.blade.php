@@ -49,8 +49,8 @@
 <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;overflow:hidden">
 <table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr style="border-bottom:.5px solid var(--border)">
-        @foreach(['Opened','Counter','Cashier','Opening','Cash sales','Expected','Counted','Variance','Status',''] as $h)
-        <th style="padding:9px 12px;text-align:{{ in_array($h,['Opening','Cash sales','Expected','Counted','Variance']) ? 'right' : 'left' }};color:var(--text-3);font-weight:500;font-size:11px">{{ $h }}</th>
+        @foreach(['Opened','Counter','Cashier','Opening','Cash sales','Expected','Counted','Variance','Sent','Left in drawer','Status',''] as $h)
+        <th style="padding:9px 12px;text-align:{{ in_array($h,['Opening','Cash sales','Expected','Counted','Variance','Sent','Left in drawer']) ? 'right' : 'left' }};color:var(--text-3);font-weight:500;font-size:11px">{{ $h }}</th>
         @endforeach
     </tr></thead>
     <tbody>
@@ -66,6 +66,14 @@
         <td style="padding:9px 12px;text-align:right;font-weight:500;color:{{ $s->variance === null ? 'var(--text-4)' : ($s->variance < 0 ? 'var(--danger)' : ($s->variance > 0 ? 'var(--warning-2)' : 'var(--success)')) }}">
             {{ $s->variance === null ? '—' : ($s->variance == 0 ? 'Balanced' : ($s->variance > 0 ? '+' : '−').' Rs. '.number_format(abs($s->variance))) }}
         </td>
+        {{-- The two halves of the close, on the list itself: what went to the cash
+             book, and what the drawer was left holding — the figure the next
+             opening count is checked against. --}}
+        <td style="padding:9px 12px;text-align:right;color:var(--text-2)">{{ $s->deposit_amount > 0 ? 'Rs. '.number_format($s->deposit_amount) : '—' }}</td>
+        <td style="padding:9px 12px;text-align:right;color:var(--text)"
+            title="{{ $s->retained_denoms ? collect($s->retained_denoms)->map(fn($q, $d) => $q.' × '.number_format((int) $d))->implode(' · ') : '' }}">
+            {{ $s->float_retained !== null ? 'Rs. '.number_format($s->float_retained) : '—' }}
+        </td>
         <td style="padding:9px 12px">
             <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:{{ $s->status === 'open' ? 'var(--success-soft)' : 'var(--surface-2)' }};color:{{ $s->status === 'open' ? 'var(--success)' : 'var(--text-2)' }}">{{ ucfirst($s->status) }}</span>
         </td>
@@ -74,7 +82,7 @@
         </td>
     </tr>
     @empty
-    <tr><td colspan="10" style="padding:32px;text-align:center;color:var(--text-4)">No counter sessions yet</td></tr>
+    <tr><td colspan="12" style="padding:32px;text-align:center;color:var(--text-4)">No counter sessions yet</td></tr>
     @endforelse
     </tbody>
 </table>

@@ -104,9 +104,12 @@
     @foreach([
         ['Opening count', $s->opening_denoms],
         ['Closing count', $s->closing_denoms],
-        // What the cashier was left holding — this is what the next opening
-        // count is checked against, so it belongs on the record.
-        ['Kept by the cashier', $s->retained_denoms],
+        // The two halves of the closing count, each as its own record: the notes
+        // that physically went, and the notes left behind. The next opening count
+        // is checked against what was left, so it has to survive on the record —
+        // whoever looks this shift up later can always see what the drawer held.
+        ['Sent to the cash book', $s->deposit_denoms],
+        ['Left in the drawer', $s->retained_denoms],
     ] as [$label, $denoms])
     <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:14px">
         <div style="font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:10px">{{ $label }}</div>
