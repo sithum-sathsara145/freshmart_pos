@@ -164,21 +164,18 @@
 
     <form method="POST" action="{{ route('stock.conversions.rules.store') }}" style="margin-bottom:12px">
     @csrf
-    <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Bulk product</label>
-    <select name="from_product_id" required style="{{ $inp }};width:100%;height:32px;margin-bottom:8px">
-        <option value="">— pick —</option>
-        @foreach($products as $p)
-        <option value="{{ $p->id }}">{{ $p->name }} ({{ $p->unit }})</option>
-        @endforeach
-    </select>
-
-    <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">Becomes</label>
-    <select name="to_product_id" required style="{{ $inp }};width:100%;height:32px;margin-bottom:8px">
-        <option value="">— pick —</option>
-        @foreach($products as $p)
-        <option value="{{ $p->id }}">{{ $p->name }} ({{ $p->unit }}){{ $p->is_weighed ? ' — by weight' : '' }}</option>
-        @endforeach
-    </select>
+    @include('stock._product_picker', [
+        'field'  => 'from_product_id',
+        'label'  => 'Bulk product',
+        'hint'   => 'The pack you open — a 20kg bag',
+        'inp'    => $inp,
+    ])
+    @include('stock._product_picker', [
+        'field'  => 'to_product_id',
+        'label'  => 'Becomes',
+        'hint'   => 'What you sell it as — loose kg, or a small packet',
+        'inp'    => $inp,
+    ])
 
     <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:4px">One pack gives</label>
     <input type="number" name="yield_qty" step="0.001" min="0.001" required placeholder="e.g. 20"
@@ -209,6 +206,75 @@
 
 @push('scripts')
 <script>
+/**
+ * Search-as-you-type product field, backing _product_picker.blade.php.
+ *
+ * The catalogue runs to thousands of products, so the list is fetched as the
+ * person types rather than rendered into the page. `picked` is what the form
+ * posts: typing alone never sets it, so a half-finished search can't be
+ * submitted as though it were a product.
+ */
+function productPicker() {
+    return {
+        q: '',
+        results: [],
+        picked: null,
+        open: false,
+        loading: false,
+        searched: false,
+        cursor: 0,
+
+        fmt(v) { return (Math.round((v || 0) * 1000) / 1000).toLocaleString(); },
+
+        async search() {
+            const term = this.q.trim();
+            this.picked = null;          // editing the text drops the old choice
+            this.cursor = 0;
+
+            if (term.length < 2) { this.results = []; this.searched = false; this.open = false; return; }
+
+            this.loading = true;
+            this.open = true;
+            try {
+                const res = await fetch('/api/products/search?q=' + encodeURIComponent(term), {
+                    headers: { 'Accept': 'application/json' },
+                });
+                this.results = res.ok ? await res.json() : [];
+            } catch (e) {
+                this.results = [];
+            } finally {
+                this.loading = false;
+                this.searched = true;
+            }
+        },
+
+        /** Re-show the last results when coming back to a field already typed in. */
+        reopen() { if (this.results.length && !this.picked) this.open = true; },
+
+        move(step) {
+            if (!this.results.length) return;
+            this.cursor = (this.cursor + step + this.results.length) % this.results.length;
+        },
+
+        choose(p) {
+            if (!p) return;
+            this.picked = p;
+            this.q = p.name;
+            this.results = [];
+            this.open = false;
+            this.searched = false;
+        },
+
+        clear() {
+            this.picked = null;
+            this.q = '';
+            this.results = [];
+            this.open = false;
+            this.searched = false;
+        },
+    };
+}
+
 function bulkBreak() {
     return {
         ruleId: '',

@@ -133,9 +133,10 @@ class StockController extends Controller
             ->latest()
             ->paginate(15);
 
-        $products = Product::where('status', 'active')->orderBy('name')->get(['id', 'name', 'sku', 'unit', 'is_weighed']);
-
-        return view('stock.conversions', compact('rules', 'onHand', 'retailOnHand', 'history', 'products'));
+        // No product list is passed: the two pickers search /api/products/search
+        // instead. A shop this size has thousands of products, and rendering them
+        // twice as <option>s made the page heavy and the dropdowns unusable.
+        return view('stock.conversions', compact('rules', 'onHand', 'retailOnHand', 'history'));
     }
 
     public function storeConversion(Request $request)
