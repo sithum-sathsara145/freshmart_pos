@@ -82,6 +82,9 @@ class ReportController extends Controller
             ['title' => 'Sales',            'desc' => 'Invoices, baskets, peak hours',       'icon' => 'ti-shopping-cart',   'color' => '#4ade80', 'url' => route('reports.sales_summary', $q)],
             ['title' => 'Revenue & Profit', 'desc' => 'Revenue, COGS, margin, net profit',   'icon' => 'ti-trending-up',     'color' => '#a5b4fc', 'url' => route('reports.profit_loss', $q)],
             ['title' => 'Product sales',    'desc' => 'Best sellers and profit per product', 'icon' => 'ti-package',         'color' => '#60a5fa', 'url' => route('reports.product_sales', $q)],
+            ['title' => 'Gross profit',     'desc' => 'By item, category, supplier, location or invoice', 'icon' => 'ti-trending-up', 'color' => '#a5b4fc', 'url' => route('reports.gross_profit', $q)],
+            ['title' => 'Net profit',       'desc' => 'Day by day, after cost and expenses', 'icon' => 'ti-report-money',    'color' => '#4ade80', 'url' => route('reports.net_profit', $q)],
+            ['title' => 'Refunds',          'desc' => 'What came back, and the margin with it', 'icon' => 'ti-arrow-back-up', 'color' => '#f87171', 'url' => route('reports.refunds', $q)],
             ['title' => 'Purchases',        'desc' => 'Buying, payables, top suppliers',     'icon' => 'ti-truck-delivery',  'color' => '#fbbf24', 'url' => null],
             ['title' => 'Stock movement',   'desc' => 'In / out, write-offs, stock value',   'icon' => 'ti-transfer',        'color' => '#2dd4bf', 'url' => null],
             ['title' => 'Stock summary',    'desc' => 'On-hand value by product',            'icon' => 'ti-boxes',           'color' => '#60a5fa', 'url' => route('reports.stock_summary', $q)],
@@ -641,6 +644,213 @@ class ReportController extends Controller
     }
 
     /**
+     * Gross profit, grouped whichever way you need to look at it.
+     *
+     * The menu lists item, category, supplier, location and invoice versions as
+     * five reports; they are one query over the sale lines, totalled by a
+     * different key. Profit is measured against the cost captured on each line
+     * when it sold, and returns are netted off both revenue and cost so a
+     * refunded sale stops counting as profit.
+     */
+    public function grossProfit(Request $request)
+    {
+        $range    = ReportRange::fromRequest($request);
+        $branchId = CurrentBranch::id();
+        $by       = in_array($request->by, ['category', 'supplier', 'location', 'invoice', 'customer'], true)
+            ? $request->by : 'item';
+
+        $lines = SaleItem::whereHas('sale', fn ($q) => $q->whereBranch($branchId)
+                ->whereBetween(DB::raw('DATE(created_at)'), [$range->fromDate(), $range->toDate()]))
+            ->with(['product:id,name,unit,category_id', 'product.category:id,name',
+                    'sale:id,invoice_no,created_at,branch_id,customer_id', 'sale.customer:id,name', 'sale.branch:id,name'])
+            ->get();
+
+        $returns   = $this->returnsByProduct($branchId, $range->fromDate(), $range->toDate());
+        $suppliers = $by === 'supplier' ? $this->productSuppliers($lines->pluck('product_id')->unique()) : collect();
+
+        // Returns are known per product, so they can only be netted off groupings
+        // that stay product-shaped. Grouping by invoice or customer is gross.
+        $netsReturns = in_array($by, ['item', 'category', 'supplier'], true);
+
+        $keyed = $lines->groupBy(function ($l) use ($by, $suppliers) {
+            return match ($by) {
+                'category' => $l->product?->category?->name ?? 'Uncategorised',
+                'supplier' => $suppliers[$l->product_id] ?? 'No purchase record',
+                'location' => $l->sale?->branch?->name ?? '—',
+                'invoice'  => $l->sale?->invoice_no ?? '—',
+                'customer' => $l->sale?->customer?->name ?? 'Walk-in',
+                default    => $l->product?->name ?? 'Deleted product',
+            };
+        });
+
+        $rows = $keyed->map(function ($group, $label) use ($returns, $netsReturns) {
+            $revenue = (float) $group->sum('subtotal');
+            $cost    = (float) $group->sum('cost');
+            $qty     = (float) $group->sum('quantity');
+
+            if ($netsReturns) {
+                foreach ($group->pluck('product_id')->unique() as $pid) {
+                    if ($r = $returns[$pid] ?? null) {
+                        $revenue -= (float) $r->revenue;
+                        $cost    -= (float) $r->cogs;
+                        $qty     -= (float) $r->qty;
+                    }
+                }
+            }
+
+            return [
+                'label'   => $label,
+                'qty'     => $qty,
+                'unit'    => $group->first()->product?->unit,
+                'lines'   => $group->count(),
+                'revenue' => round($revenue, 2),
+                'cost'    => round($cost, 2),
+                'profit'  => round($revenue - $cost, 2),
+                'margin'  => $revenue > 0 ? round(($revenue - $cost) / $revenue * 100, 1) : 0.0,
+                'sale_id' => $group->first()->sale?->id,
+            ];
+        })->sortByDesc('profit')->values();
+
+        return view('reports.gross_profit', [
+            'range'  => $range,
+            'by'     => $by,
+            'rows'   => $rows,
+            'netsReturns' => $netsReturns,
+            'totals' => [
+                'revenue' => round($rows->sum('revenue'), 2),
+                'cost'    => round($rows->sum('cost'), 2),
+                'profit'  => round($rows->sum('profit'), 2),
+                'margin'  => $rows->sum('revenue') > 0 ? round($rows->sum('profit') / $rows->sum('revenue') * 100, 1) : 0.0,
+            ],
+        ]);
+    }
+
+    /**
+     * Which supplier each product comes from, taken from the most recent purchase.
+     *
+     * Products carry no supplier of their own, so this reads it back out of the
+     * buying history. The latest purchase is used rather than every supplier who
+     * ever supplied it, so an item bought from two suppliers lands in one group
+     * and the column totals still add up.
+     */
+    private function productSuppliers($productIds)
+    {
+        return DB::table('purchase_items')
+            ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
+            ->join('suppliers', 'suppliers.id', '=', 'purchases.supplier_id')
+            ->whereIn('purchase_items.product_id', $productIds)
+            ->orderBy('purchases.purchase_date')
+            ->orderBy('purchases.id')
+            ->pluck('suppliers.name', 'purchase_items.product_id');   // later rows win
+    }
+
+    /**
+     * What was handed back, by item — the money and the margin that went with it.
+     */
+    public function refunds(Request $request)
+    {
+        $range    = ReportRange::fromRequest($request);
+        $branchId = CurrentBranch::id();
+
+        $items = SaleReturnItem::with(['product:id,name,unit', 'saleReturn.sale:id,invoice_no'])
+            ->whereHas('saleReturn', fn ($q) => $q
+                ->whereBetween(DB::raw('DATE(created_at)'), [$range->fromDate(), $range->toDate()])
+                ->whereHas('sale', fn ($s) => $s->whereBranch($branchId)))
+            ->get();
+
+        $rows = $items->groupBy('product_id')->map(fn ($g) => [
+            'label'   => $g->first()->product?->name ?? 'Deleted product',
+            'unit'    => $g->first()->product?->unit,
+            'qty'     => (float) $g->sum('quantity'),
+            'notes'   => $g->pluck('sale_return_id')->unique()->count(),
+            'revenue' => (float) $g->sum('subtotal'),
+            'cost'    => (float) $g->sum('cost'),
+        ])->map(fn ($r) => $r + ['profit' => round($r['revenue'] - $r['cost'], 2)])
+          ->sortByDesc('revenue')->values();
+
+        return view('reports.refunds', [
+            'range'  => $range,
+            'rows'   => $rows,
+            'totals' => [
+                'qty'     => $rows->sum('qty'),
+                'revenue' => round($rows->sum('revenue'), 2),
+                'cost'    => round($rows->sum('cost'), 2),
+                'profit'  => round($rows->sum('profit'), 2),
+                'notes'   => $items->pluck('sale_return_id')->unique()->count(),
+            ],
+        ]);
+    }
+
+    /**
+     * Net profit day by day: what was sold, what it cost, what was spent.
+     */
+    public function netProfit(Request $request)
+    {
+        $range    = ReportRange::fromRequest($request);
+        $branchId = CurrentBranch::id();
+        $from     = $range->fromDate();
+        $to       = $range->toDate();
+
+        $sales = Sale::whereBranch($branchId)->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
+            ->selectRaw('DATE(created_at) d, COUNT(*) invoices, SUM(total) revenue')
+            ->groupBy('d')->pluck('revenue', 'd');
+        $counts = Sale::whereBranch($branchId)->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
+            ->selectRaw('DATE(created_at) d, COUNT(*) c')->groupBy('d')->pluck('c', 'd');
+
+        $cogs = SaleItem::whereHas('sale', fn ($q) => $q->whereBranch($branchId))
+            ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->whereBetween(DB::raw('DATE(sales.created_at)'), [$from, $to])
+            ->selectRaw('DATE(sales.created_at) d, SUM(sale_items.cost) c')
+            ->groupBy('d')->pluck('c', 'd');
+
+        $retAmt = SaleReturn::whereHas('sale', fn ($q) => $q->whereBranch($branchId))
+            ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
+            ->selectRaw('DATE(created_at) d, SUM(return_amount) a')->groupBy('d')->pluck('a', 'd');
+
+        $retCogs = SaleReturnItem::whereHas('saleReturn', fn ($q) => $q
+                ->whereHas('sale', fn ($s) => $s->whereBranch($branchId)))
+            ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
+            ->whereBetween(DB::raw('DATE(sale_returns.created_at)'), [$from, $to])
+            ->selectRaw('DATE(sale_returns.created_at) d, SUM(sale_return_items.cost) c')
+            ->groupBy('d')->pluck('c', 'd');
+
+        $expenses = Expense::whereBranch($branchId)->whereBetween('expense_date', [$from, $to])
+            ->selectRaw('expense_date d, SUM(amount) a')->groupBy('d')->pluck('a', 'd');
+
+        $days = collect(array_unique(array_merge(
+            $sales->keys()->all(), $retAmt->keys()->all(), $expenses->keys()->all()
+        )))->sort()->values();
+
+        $rows = $days->map(function ($d) use ($sales, $counts, $cogs, $retAmt, $retCogs, $expenses) {
+            $net   = (float) ($sales[$d] ?? 0) - (float) ($retAmt[$d] ?? 0);
+            $c     = (float) ($cogs[$d] ?? 0) - (float) ($retCogs[$d] ?? 0);
+            $exp   = (float) ($expenses[$d] ?? 0);
+            $gross = $net - $c;
+
+            return [
+                'date' => $d, 'invoices' => (int) ($counts[$d] ?? 0),
+                'sales' => (float) ($sales[$d] ?? 0), 'returns' => (float) ($retAmt[$d] ?? 0),
+                'net' => round($net, 2), 'cogs' => round($c, 2),
+                'gross' => round($gross, 2), 'expenses' => $exp,
+                'profit' => round($gross - $exp, 2),
+                'margin' => $net > 0 ? round(($gross - $exp) / $net * 100, 1) : 0.0,
+            ];
+        });
+
+        return view('reports.net_profit', [
+            'range'  => $range,
+            'rows'   => $rows,
+            'totals' => [
+                'invoices' => $rows->sum('invoices'), 'sales' => $rows->sum('sales'),
+                'returns' => $rows->sum('returns'), 'net' => $rows->sum('net'),
+                'cogs' => $rows->sum('cogs'), 'gross' => $rows->sum('gross'),
+                'expenses' => $rows->sum('expenses'), 'profit' => $rows->sum('profit'),
+                'margin' => $rows->sum('net') > 0 ? round($rows->sum('profit') / $rows->sum('net') * 100, 1) : 0.0,
+            ],
+        ]);
+    }
+
+    /**
      * The cash book: every movement through cash and bank accounts, with a
      * running balance, plus the day's hand-overs from the tills.
      *
@@ -834,7 +1044,8 @@ class ReportController extends Controller
             'hrm_leave'      => 'hrm.view',
             'profit_loss'    => 'reports.profit',
             'product_sales'  => 'reports.profit',
-        ][$type] ?? null;
+            'net_profit'     => 'reports.profit',
+        ][$type] ?? (str_starts_with($type, 'gross_profit_') ? 'reports.profit' : null);
 
         abort_if($extraPermission && ! auth()->user()->can($extraPermission), 403);
 
@@ -970,6 +1181,51 @@ class ReportController extends Controller
             case 'invoices_summary':
             case 'invoices_cancelled':
                 return $this->invoiceExport(substr($type, 9), $branchId, $from, $to, $money);
+
+            case 'gross_profit_item':
+            case 'gross_profit_category':
+            case 'gross_profit_supplier':
+            case 'gross_profit_location':
+            case 'gross_profit_invoice':
+            case 'gross_profit_customer':
+                $by   = substr($type, 13);
+                $d    = $this->grossProfit(request()->merge(['by' => $by]))->getData();
+                $head = ['item'=>'Item','category'=>'Category','supplier'=>'Supplier','location'=>'Branch','invoice'=>'Invoice','customer'=>'Customer'][$by];
+                $qty  = in_array($by, ['item', 'category', 'supplier'], true);
+                $rows = $d['rows']->map(fn ($r) => [
+                    $r['label'], $qty ? $this->trim($r['qty'], 3) : $r['lines'],
+                    $money($r['revenue']), $money($r['cost']), $money($r['profit']), $r['margin'] . '%',
+                ])->all();
+                $rows[] = ['Total', '', $money($d['totals']['revenue']), $money($d['totals']['cost']),
+                           $money($d['totals']['profit']), $d['totals']['margin'] . '%'];
+
+                return ["Gross profit by " . strtolower($head),
+                    [$head, $qty ? 'Qty' : 'Lines', 'Revenue (Rs.)', 'Cost (Rs.)', 'Profit (Rs.)', 'Margin'], $rows];
+
+            case 'refunds':
+                $d    = $this->refunds(request())->getData();
+                $rows = $d['rows']->map(fn ($r) => [
+                    $r['label'], $this->trim($r['qty'], 3) . ' ' . $r['unit'], $r['notes'],
+                    $money($r['revenue']), $money($r['cost']), $money($r['profit']),
+                ])->all();
+                $rows[] = ['Total', $this->trim($d['totals']['qty'], 3), $d['totals']['notes'],
+                           $money($d['totals']['revenue']), $money($d['totals']['cost']), $money($d['totals']['profit'])];
+
+                return ['Refunds & cancellations',
+                    ['Item', 'Qty back', 'Credit notes', 'Refunded (Rs.)', 'Cost back (Rs.)', 'Margin lost (Rs.)'], $rows];
+
+            case 'net_profit':
+                $d    = $this->netProfit(request())->getData();
+                $t    = $d['totals'];
+                $rows = $d['rows']->map(fn ($r) => [
+                    $r['date'], $r['invoices'], $money($r['sales']), $money($r['returns']), $money($r['net']),
+                    $money($r['cogs']), $money($r['gross']), $money($r['expenses']), $money($r['profit']), $r['margin'] . '%',
+                ])->all();
+                $rows[] = ['Total', $t['invoices'], $money($t['sales']), $money($t['returns']), $money($t['net']),
+                           $money($t['cogs']), $money($t['gross']), $money($t['expenses']), $money($t['profit']), $t['margin'] . '%'];
+
+                return ['Net profit by date',
+                    ['Date', 'Invoices', 'Sales', 'Returns', 'Net sales', 'Cost of goods', 'Gross profit', 'Expenses', 'Net profit', 'Margin'], $rows];
 
             case 'cash_book_ledger':
             case 'cash_book_balances':
