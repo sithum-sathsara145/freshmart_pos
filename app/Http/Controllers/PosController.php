@@ -67,7 +67,20 @@ class PosController extends Controller
         $defaultBook = $counter ? $this->cashierBookFor($counter, null) : null;
 
         // Nothing on the account: offer the free counters instead of a dead end.
-        $freeCounters = $counter ? collect() : $this->availableCounters();
+        // Each carries its own last-close float, because somebody stepping up to a
+        // till inherits that till's drawer — not one of their own. Without this the
+        // opening count starts at zero however much the drawer was left holding.
+        $freeCounters = $counter ? collect() : $this->availableCounters()->map(function ($c) {
+            $last = CounterSession::where('counter_id', $c->id)
+                ->where('status', 'closed')->latest('closed_at')->first();
+
+            return [
+                'id'     => $c->id,
+                'name'   => $c->name,
+                'float'  => (float) ($last->float_retained ?? 0),
+                'denoms' => $last->retained_denoms ?? [],
+            ];
+        })->values();
 
         return view('pos.index', compact('categories', 'branch', 'counter', 'openSession', 'lastClose', 'depositAccounts', 'retention', 'defaultBook', 'freeCounters')
             + ['denominations' => self::DENOMINATIONS]);

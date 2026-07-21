@@ -670,10 +670,12 @@ input[type=number]{-moz-appearance:textfield}
             <template x-if="!hasCounter">
                 <div style="margin-bottom:12px">
                     <label style="display:block;font-size:11px;color:var(--text-3);margin-bottom:5px">Which counter are you at?</label>
-                    <select x-model="pickedCounter"
+                    {{-- Switching counter switches drawers, so the carried float and
+                         the pre-filled count have to follow the pick. --}}
+                    <select x-model="pickedCounter" @change="syncPickedCounterFloat(); refillOpenDenoms()"
                             style="width:100%;height:34px;background:var(--bg);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:0 9px;outline:none">
                         <template x-for="c in freeCounters" :key="c.id">
-                            <option :value="c.id" x-text="c.name"></option>
+                            <option :value="c.id" x-text="c.float > 0 ? (c.name + ' — float Rs. ' + c.float.toLocaleString()) : c.name"></option>
                         </template>
                     </select>
                     <div style="font-size:10px;color:var(--text-3);margin-top:5px">
@@ -1761,10 +1763,25 @@ function posScreen() {
         openCounterPrompt() {
             this.openError = '';
             this.openDenoms = {};
-            // Pre-fill with the float the last close left, so the count starts from
-            // what should be in the drawer.
-            this.denoms.forEach(d => { this.openDenoms[d] = (this.prevClose && this.prevClose.denoms && this.prevClose.denoms[d]) || 0; });
+            // Someone with no till of their own inherits the drawer of whichever
+            // counter they step up to, so the carried float has to come from the
+            // pick rather than from their account.
+            if (!this.hasCounter) this.syncPickedCounterFloat();
+            this.refillOpenDenoms();
             this.showOpenModal = true;
+        },
+
+        /** The float the picked counter was left holding at its last close. */
+        syncPickedCounterFloat() {
+            const c = this.freeCounters.find(x => String(x.id) === String(this.pickedCounter));
+            this.prevClose = (c && c.float > 0) ? { balance: c.float, denoms: { ...(c.denoms || {}) } } : null;
+        },
+
+        /** Start the opening count from the notes that were left behind. */
+        refillOpenDenoms() {
+            this.denoms.forEach(d => {
+                this.openDenoms[d] = (this.prevClose && this.prevClose.denoms && this.prevClose.denoms[d]) || 0;
+            });
         },
 
         closeCounterPrompt() {
