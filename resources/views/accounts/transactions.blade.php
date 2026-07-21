@@ -92,6 +92,16 @@ $closing = $opening + $moneyIn - $moneyOut;
             @if($e->counterparty)
             <span style="color:var(--text-3)"> · {{ $e->counterparty->name }}</span>
             @endif
+            {{-- For takings banked at a counter close, the notes that actually came
+                 in — so the cash can be checked against the ledger entry. --}}
+            @php($notes = $e->source_type === 'counter_close' ? ($depositDenoms[$e->source_id] ?? null) : null)
+            @if($notes)
+            <div style="font-size:10.5px;color:var(--text-3);margin-top:3px">
+                @foreach(collect($notes)->sortKeysDesc() as $denom => $qty)
+                <span style="white-space:nowrap">{{ $qty }} × {{ number_format((int) $denom) }}</span>{{ ! $loop->last ? ' · ' : '' }}
+                @endforeach
+            </div>
+            @endif
         </td>
         <td style="padding:9px 12px;color:var(--text-3);font-size:11px">{{ $e->reference ?: '—' }}</td>
         <td style="padding:9px 12px;text-align:right;color:var(--success)">{{ $e->isCredit() ? 'Rs. '.number_format((float) $e->amount, 2) : '' }}</td>

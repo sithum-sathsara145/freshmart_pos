@@ -57,6 +57,16 @@ class User extends Authenticatable
         return $this->hasRole(Role::SUPER_ADMIN);
     }
 
+    /**
+     * Admin or super_admin — the ranks that run the whole place. Unlike a
+     * cashier tied to one till, they may step onto any counter that's free right
+     * now, assigned to someone else or not.
+     */
+    public function isAdminOrAbove(): bool
+    {
+        return $this->hasRole([Role::ADMIN, Role::SUPER_ADMIN]);
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';

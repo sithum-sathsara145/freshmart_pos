@@ -110,7 +110,11 @@ CREATE TABLE counter_sessions (
     float_retained DECIMAL(15,2) NULL,
     deposit_amount DECIMAL(15,2) NULL,
     deposit_account_id BIGINT UNSIGNED NULL,
+    -- Both sides of the close split, as counted: the notes left in the drawer as
+    -- tomorrow's float, and the notes physically handed in. Storing each means the
+    -- next opening count is checked against what really stayed.
     retained_denoms TEXT NULL,
+    deposit_denoms TEXT NULL,
     deposited_at TIMESTAMP NULL,
     deposited_by BIGINT UNSIGNED NULL,
     status ENUM('open','closed') NOT NULL DEFAULT 'open',

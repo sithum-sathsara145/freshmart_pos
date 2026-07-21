@@ -11,7 +11,8 @@ class CounterSession extends Model
         'counter_id', 'branch_id', 'opened_by', 'closed_by',
         'opening_balance', 'opening_denoms',
         'cash_sales', 'expected_closing', 'closing_balance', 'closing_denoms',
-        'variance', 'float_retained', 'retained_denoms', 'deposit_amount', 'deposit_account_id',
+        'variance', 'float_retained', 'retained_denoms',
+        'deposit_amount', 'deposit_denoms', 'deposit_account_id',
         'deposited_at', 'deposited_by', 'status', 'opened_at', 'closed_at',
     ];
 
@@ -19,6 +20,7 @@ class CounterSession extends Model
         'opening_denoms'   => 'array',
         'closing_denoms'   => 'array',
         'retained_denoms'  => 'array',
+        'deposit_denoms'   => 'array',
         'opening_balance'  => 'decimal:2',
         'cash_sales'       => 'decimal:2',
         'expected_closing' => 'decimal:2',

@@ -681,17 +681,21 @@ input[type=number]{-moz-appearance:textfield}
                     </div>
                 </div>
             </template>
-            <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Count the cash float — type a count, press <b style="color:var(--text-2)">Tab</b> for the next.</div>
-            {{-- Tally against what was left with the cashier last time, so a
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">Count the cash float left in the drawer — type a count, press <b style="color:var(--text-2)">Tab</b> for the next.</div>
+            {{-- Tally against the float the last close left in the drawer, so a
                  shortfall shows up before the shift starts. --}}
-            <div x-show="prevClose" x-cloak style="font-size:11px;background:var(--warning-soft-3);border:.5px solid var(--warning-border-2);border-radius:6px;padding:7px 9px;margin-bottom:10px">
+            <div x-show="prevClose && openCarried > 0" x-cloak style="font-size:11px;background:var(--warning-soft-3);border:.5px solid var(--warning-border-2);border-radius:6px;padding:7px 9px;margin-bottom:10px">
                 <div style="color:var(--warning-2)">
-                    You were left with <b x-text="'Rs. ' + (prevClose ? prevClose.balance.toLocaleString() : '')"></b> at the last close — the drawer should still hold it.
+                    The last close left <b x-text="'Rs. ' + openCarried.toLocaleString()"></b> as the float — the drawer should still hold it.
                 </div>
-                <div x-show="openTotal > 0 && openVariance !== 0" x-cloak style="margin-top:4px;font-weight:600"
-                     :style="openVariance > 0 ? 'color:var(--success)' : 'color:var(--danger)'">
-                    <span x-text="openVariance > 0 ? 'Over by' : 'Short by'"></span>
-                    <span x-text="'Rs. ' + Math.abs(openVariance).toLocaleString()"></span>
+                {{-- The colour goes on the inner span, not this div: a :style binding
+                     on the same element overwrites the display:none that x-show sets,
+                     which showed "Short by Rs. 0" every morning the drawer tallied. --}}
+                <div x-show="openTotal > 0 && openVariance !== 0" x-cloak style="margin-top:4px;font-weight:600">
+                    <span :style="openVariance > 0 ? 'color:var(--success)' : 'color:var(--danger)'">
+                        <span x-text="openVariance > 0 ? 'Over by' : 'Short by'"></span>
+                        <span x-text="'Rs. ' + Math.abs(openVariance).toLocaleString()"></span>
+                    </span>
                 </div>
             </div>
             <template x-for="d in denoms" :key="d">
@@ -733,51 +737,84 @@ input[type=number]{-moz-appearance:textfield}
                     <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px"><span>Cash sales</span><span x-text="'Rs. ' + cashSalesSoFar.toLocaleString()"></span></div>
                     <div style="display:flex;justify-content:space-between;color:var(--text);font-weight:600;padding-top:5px;border-top:.5px solid var(--border)"><span>Expected in drawer</span><span x-text="'Rs. ' + closeExpected.toLocaleString()"></span></div>
                 </div>
-                <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">Count the cash now — type a count, <b style="color:var(--text-2)">Tab</b> for the next:</div>
+                <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">
+                    Count the drawer, then say how many of each note you are sending —
+                    what's left stays as tomorrow's float.
+                </div>
+                {{-- Two counts per note: what's in the drawer, and what physically goes
+                     in the bag. Recording both means the split is a real count instead
+                     of a guess at how a total broke down. --}}
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:10px;color:var(--text-4)">
+                    <span style="width:58px"></span>
+                    <span style="width:64px;text-align:center">Counted</span>
+                    <span style="width:64px;text-align:center;color:var(--warning-2)">Sending</span>
+                    <span style="flex:1;text-align:right">Staying</span>
+                </div>
                 <template x-for="d in denoms" :key="d">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
                         <span style="width:58px;font-size:12px;color:var(--text-2);text-align:right">Rs. <span x-text="d.toLocaleString()"></span></span>
-                        <span style="color:var(--text-5)">×</span>
                         <input type="text" inputmode="numeric" class="amt-input denom-close" style="width:64px;text-align:center"
                                x-model="closeDenoms[d]" @focus="$event.target.select()"
                                @input="closeDenoms[d] = String(closeDenoms[d]).replace(/\D/g,'')">
-                        <span style="flex:1;text-align:right;font-size:12px;color:var(--text)" x-text="'Rs. ' + (d * (parseInt(closeDenoms[d])||0)).toLocaleString()"></span>
+                        <input type="text" inputmode="numeric" class="amt-input" style="width:64px;text-align:center"
+                               :style="handInOver(d) ? 'border-color:var(--danger);color:var(--danger)' : ''"
+                               x-model="handIn[d]" @focus="$event.target.select()"
+                               @input="handIn[d] = String(handIn[d]).replace(/\D/g,'')">
+                        <span style="flex:1;text-align:right;font-size:12px"
+                              :style="handInOver(d) ? 'color:var(--danger)' : 'color:var(--text-3)'"
+                              x-text="stayingQty(d)"></span>
                     </div>
                 </template>
                 <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text);font-weight:600;padding-top:8px;margin-top:6px;border-top:.5px solid var(--border)"><span>Counted</span><span x-text="'Rs. ' + closeTotal.toLocaleString()"></span></div>
+                <div x-show="handInError" x-cloak x-text="handInError" style="font-size:10px;color:var(--danger);margin-top:5px"></div>
                 <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-top:4px"
                      :style="closeVariance===0 ? 'color:var(--success)' : 'color:var(--danger)'">
                     <span x-text="closeVariance===0 ? 'Balanced' : (closeVariance>0 ? 'Over by' : 'Short by')"></span>
                     <span x-text="'Rs. ' + Math.abs(closeVariance).toLocaleString()"></span>
                 </div>
-                {{-- Coins and the set notes stay with the cashier; the rest is handed in. --}}
+                {{-- The notes staying behind are tomorrow's float; the ones being sent
+                     go to a cash book now, at close, so a large sum never sits in the
+                     till overnight. Both figures come from the counts above. --}}
                 <div x-show="closeTotal > 0" x-cloak
                      style="background:var(--bg);border:.5px solid var(--border);border-radius:8px;padding:10px;margin-top:10px;font-size:12px">
-                    <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px">
-                        <span>You keep</span>
-                        <span x-text="'Rs. ' + closeFloat.toLocaleString()"></span>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+                        <span style="color:var(--text-2);white-space:nowrap">Staying as float</span>
+                        <span style="color:var(--text);font-weight:600" x-text="'Rs. ' + keepValue.toLocaleString()"></span>
                     </div>
-                    <div style="font-size:10px;color:var(--text-3);margin-bottom:6px" x-show="closeKeptNotes.length">
-                        <template x-for="([d, n], i) in closeKeptNotes" :key="d">
-                            <span><span x-text="n"></span>×<span x-text="d.toLocaleString()"></span><span x-text="i < closeKeptNotes.length - 1 ? ' · ' : ''"></span></span>
-                        </template>
+                    <template x-if="closeTransfer > 0 && depositAccounts.length">
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+                                <span style="color:var(--text-2);white-space:nowrap">Bank to</span>
+                                <template x-if="depositAccounts.length > 1">
+                                    <select x-model="depositAccountId"
+                                            style="flex:1;max-width:175px;height:30px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:0 6px">
+                                        <template x-for="a in depositAccounts" :key="a.id">
+                                            <option :value="a.id" x-text="a.name"></option>
+                                        </template>
+                                    </select>
+                                </template>
+                                <template x-if="depositAccounts.length === 1">
+                                    <span style="color:var(--text);font-weight:600" x-text="depositAccounts[0].name"></span>
+                                </template>
+                            </div>
+                            <textarea x-model="transferNote" rows="2" placeholder="Note (optional)"
+                                      style="width:100%;box-sizing:border-box;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:6px 8px;resize:vertical"></textarea>
+                        </div>
+                    </template>
+                    <div style="display:flex;justify-content:space-between;color:var(--text);font-weight:600;padding-top:8px;margin-top:8px;border-top:.5px solid var(--border)">
+                        <span>To cash book</span>
+                        <span x-text="'Rs. ' + closeTransfer.toLocaleString()"></span>
                     </div>
-                    <div style="display:flex;justify-content:space-between;color:var(--text);font-weight:600;padding-top:5px;border-top:.5px solid var(--border)">
-                        <span>To hand in</span>
-                        <span x-text="'Rs. ' + closeDeposit.toLocaleString()"></span>
-                    </div>
-                    <div x-show="closeDeposit > 0" x-cloak style="font-size:10px;color:var(--text-3);margin-top:6px">
-                        Set this aside for whoever takes it to the safe. It only reaches a cash book once they record it.
-                    </div>
-                    <div x-show="closeDeposit === 0 && closeTotal > 0" x-cloak
-                         style="font-size:10px;color:var(--text-3);margin-top:6px">
-                        Under the Rs. <span x-text="(retention ? retention.minimum : floatAmount).toLocaleString()"></span> minimum — it all stays with you.
+                    <div x-show="closeTransfer > 0 && !depositAccounts.length" x-cloak style="font-size:10px;color:var(--warning-2);margin-top:6px">
+                        No cash book set up — keep the full amount as float, or add a cash book first.
                     </div>
                 </div>
                 <div x-show="closeError" x-cloak x-text="closeError" style="color:var(--danger);font-size:11px;margin-top:8px"></div>
                 <div style="display:flex;gap:8px;margin-top:14px">
                     <button @click="showCloseModal=false" style="flex:1;height:36px;background:var(--surface-2);border:.5px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer">Cancel</button>
-                    <button @click="submitClose()" style="flex:1;height:36px;background:var(--danger-solid);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Close counter</button>
+                    <button @click="submitClose()" :disabled="!!handInError"
+                            :style="handInError ? 'opacity:.5;cursor:not-allowed' : ''"
+                            style="flex:1;height:36px;background:var(--danger-solid);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Close counter</button>
                 </div>
             </div>
             </template>
@@ -799,13 +836,24 @@ input[type=number]{-moz-appearance:textfield}
                     </div>
                     <div style="margin-top:8px;padding-top:8px;border-top:.5px solid var(--border)">
                         <div style="display:flex;justify-content:space-between;color:var(--text-2);margin-bottom:4px">
-                            <span>Kept by you</span>
+                            <span>Kept as float</span>
                             <span x-text="closeResult ? 'Rs. ' + (closeResult.float || 0).toLocaleString() : ''"></span>
                         </div>
                         <div style="display:flex;justify-content:space-between;color:var(--text-2)">
-                            <span>Set aside to hand in</span>
+                            <span>Sent to cash book</span>
                             <span x-text="closeResult ? 'Rs. ' + (closeResult.deposit || 0).toLocaleString() : ''"></span>
                         </div>
+                        {{-- The exact notes in the bag, so whoever receives it can
+                             check the cash against this list. --}}
+                        <template x-if="closeResult && closeResult.deposit > 0">
+                            <div style="margin-top:6px;font-size:11px;color:var(--text-3);line-height:1.6">
+                                <template x-for="d in denoms" :key="d">
+                                    <span x-show="(closeResult.sent || {})[d] > 0">
+                                        <span x-text="closeResult.sent[d] + ' × ' + d.toLocaleString()"></span><span style="color:var(--text-5)"> · </span>
+                                    </span>
+                                </template>
+                            </div>
+                        </template>
                     </div>
                 </div>
                 <button @click="window.location.href = dashboardUrl" style="width:100%;height:38px;background:var(--primary-soft);border:.5px solid var(--primary-border);border-radius:7px;color:var(--primary-text);font-size:13px;font-weight:600;cursor:pointer">Done</button>
@@ -1087,6 +1135,8 @@ function posScreen() {
         showCloseModal: false,
         openDenoms: {},
         closeDenoms: {},
+        handIn: {},
+        transferNote: '',
         openError: '',
         closeError: '',
         closeResult: null,
@@ -1664,61 +1714,33 @@ function posScreen() {
             return this.denoms.reduce((s, d) => s + d * (parseInt(obj[d]) || 0), 0);
         },
         get openTotal() { return this.denomsTotal(this.openDenoms); },
-        // Against what the last close left with this cashier, so a drawer that
-        // lost money overnight is caught before the shift rather than at the end.
+        // The float the last close left in the drawer, and a check that it's all
+        // still there before the shift starts.
+        get openCarried() { return this.prevClose ? this.prevClose.balance : 0; },
         get openVariance() {
             if (!this.prevClose) return 0;
-            return Math.round((this.openTotal - this.prevClose.balance) * 100) / 100;
+            return Math.round((this.openTotal - this.openCarried) * 100) / 100;
         },
         get closeTotal() { return this.denomsTotal(this.closeDenoms); },
         get closeExpected() { return this.openingBalance + this.cashSalesSoFar; },
         get closeVariance() { return Math.round((this.closeTotal - this.closeExpected) * 100) / 100; },
 
-        // Mirrors App\Support\CashRetention so the cashier sees the split before
-        // committing to it; the server works it out again and has the last word.
-        get closeSplit() {
-            const rule = this.retention || { coins: true, notes: {}, minimum: this.floatAmount };
-            const counted = {};
-            for (const d of this.denoms) {
-                const n = parseInt(this.closeDenoms[d]) || 0;
-                if (n > 0) counted[d] = n;
-            }
-            const keep = {};
-            const value = m => Object.entries(m).reduce((t, [d, n]) => t + d * n, 0);
-            const spare = () => {
-                const s = {};
-                for (const [d, n] of Object.entries(counted)) {
-                    const left = n - (keep[d] || 0);
-                    if (left > 0) s[d] = left;
-                }
-                return s;
-            };
+        // The notes going out, and so what's left as tomorrow's float. Both are
+        // counts of actual notes rather than a typed total; the server recomputes
+        // them the same way and refuses anything the drawer can't cover.
+        get handInTotal() { return this.denomsTotal(this.handIn); },
+        get closeTransfer() { return this.handInTotal; },
+        get keepValue() { return Math.round((this.closeTotal - this.handInTotal) * 100) / 100; },
 
-            if (rule.coins !== false) {
-                for (const [d, n] of Object.entries(counted)) if (+d <= 10) keep[d] = n;
-            }
-            for (const [d, want] of Object.entries(rule.notes || {})) {
-                if (+d <= 10 || !want) continue;
-                const avail = (counted[d] || 0) - (keep[d] || 0);
-                if (avail > 0) keep[d] = (keep[d] || 0) + Math.min(want, avail);
-            }
-            while (value(keep) + 0.0001 < (rule.minimum || 0)) {
-                const short = (rule.minimum || 0) - value(keep);
-                const left = spare();
-                const denoms = Object.keys(left).map(Number);
-                if (!denoms.length) break;
-                const fits = denoms.filter(d => d <= short);
-                const pick = fits.length ? Math.max(...fits) : Math.min(...denoms);
-                keep[pick] = (keep[pick] || 0) + 1;
-            }
-            return { keep, keepTotal: Math.round(value(keep) * 100) / 100,
-                     moveTotal: Math.round(value(spare()) * 100) / 100 };
-        },
-        get closeFloat() { return this.closeSplit.keepTotal; },
-        get closeDeposit() { return this.closeSplit.moveTotal; },
-        get closeKeptNotes() {
-            return Object.entries(this.closeSplit.keep)
-                .map(([d, n]) => [Number(d), n]).sort((a, b) => b[0] - a[0]);
+        stayingQty(d) { return Math.max(0, (parseInt(this.closeDenoms[d]) || 0) - (parseInt(this.handIn[d]) || 0)); },
+        handInOver(d) { return (parseInt(this.handIn[d]) || 0) > (parseInt(this.closeDenoms[d]) || 0); },
+
+        /** Sending more of a note than was counted — say which one. */
+        get handInError() {
+            const bad = this.denoms.find(d => this.handInOver(d));
+            if (!bad) return '';
+            return `You counted ${parseInt(this.closeDenoms[bad]) || 0} × Rs. ${bad.toLocaleString()} `
+                 + `but are sending ${parseInt(this.handIn[bad]) || 0}.`;
         },
 
         // Nothing may be sold unless this cashier is at a counter with an open
@@ -1739,6 +1761,8 @@ function posScreen() {
         openCounterPrompt() {
             this.openError = '';
             this.openDenoms = {};
+            // Pre-fill with the float the last close left, so the count starts from
+            // what should be in the drawer.
             this.denoms.forEach(d => { this.openDenoms[d] = (this.prevClose && this.prevClose.denoms && this.prevClose.denoms[d]) || 0; });
             this.showOpenModal = true;
         },
@@ -1747,7 +1771,12 @@ function posScreen() {
             this.closeError = '';
             this.closeResult = null;
             this.closeDenoms = {};
-            this.denoms.forEach(d => { this.closeDenoms[d] = 0; });
+            this.handIn = {};
+            // Both columns start empty: the cashier counts the drawer, then says
+            // which notes are actually going in the bag.
+            this.denoms.forEach(d => { this.closeDenoms[d] = 0; this.handIn[d] = 0; });
+            this.transferNote = '';
+            if (!this.depositAccountId && this.depositAccounts.length) this.depositAccountId = this.depositAccounts[0].id;
             this.showCloseModal = true;
         },
 
@@ -1778,12 +1807,17 @@ function posScreen() {
                 const res = await fetch('/pos/counter/close', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
-                    body: JSON.stringify({ denoms: this.closeDenoms }),
+                    body: JSON.stringify({
+                        denoms: this.closeDenoms,
+                        hand_in: this.handIn,
+                        deposit_account_id: this.depositAccountId || null,
+                        deposit_note: this.transferNote,
+                    }),
                 });
                 const data = await res.json();
                 if (data.success) {
                     this.counterOpen = false;
-                    // Next open tallies against what was kept back, not the count.
+                    // Next open verifies the float that was kept, not the whole count.
                     this.prevClose = { balance: data.float, denoms: { ...(data.kept || {}) } };
                     this.closeResult = data;   // show the result view; "Done" returns to dashboard
                 } else { this.closeError = data.message || 'Could not close counter.'; }

@@ -114,6 +114,9 @@ class PosController extends Controller
         $denoms  = $this->cleanDenoms($request->input('denoms', []));
         $opening = $this->denomsTotal($denoms);
 
+        // Open just counts the float that was left in the drawer at the last close
+        // and starts the shift on it. The banking of the surplus already happened at
+        // that close, so there is nothing to move here.
         DB::transaction(function () use ($counter, $denoms, $opening) {
             CounterSession::create([
                 'counter_id'      => $counter->id,
@@ -151,16 +154,31 @@ class PosController extends Controller
         return $picked ? Counter::find($picked) : null;
     }
 
-    /** Counters someone with no counter of their own could step up to. */
+    /**
+     * Counters someone without a till of their own can step up to, inside the
+     * branch they are working in.
+     *
+     * A cashier only sees counters that belong to nobody and aren't already
+     * open. Admins and super_admins run the floor, so they may also take over a
+     * counter assigned to a cashier — as long as it isn't currently open.
+     * Reaching another branch's tills is just a matter of switching the working
+     * branch first, which keeps the till and its sales in the same branch.
+     */
     private function availableCounters(): \Illuminate\Support\Collection
     {
-        $branchId = auth()->user()->branch_id;
+        $user   = auth()->user();
+        $branch = CurrentBranch::id() ?? $user->branch_id;
 
-        return Counter::whereBranch($branchId)
+        $query = Counter::whereBranch($branch)
             ->whereDoesntHave('sessions', fn ($q) => $q->where('status', 'open'))
-            ->whereNotIn('id', User::whereNotNull('counter_id')->pluck('counter_id'))
-            ->orderBy('name')
-            ->get(['id', 'name']);
+            ->orderBy('name');
+
+        // Cashiers are limited to unclaimed tills; admins are not.
+        if (! $user->isAdminOrAbove()) {
+            $query->whereNotIn('id', User::whereNotNull('counter_id')->pluck('counter_id'));
+        }
+
+        return $query->get(['id', 'name']);
     }
 
     /** How much of the drawer this counter's cashier keeps back. */
@@ -209,18 +227,42 @@ class PosController extends Controller
         $expected  = (float) $session->opening_balance + $cashSales;
         $variance  = round($counted - $expected, 2);
 
-        // What the cashier keeps: every coin, the notes the admin set aside, and
-        // more notes on top if that does not reach the minimum float.
-        $split    = CashRetention::split($denoms, $this->retentionRule($counter));
-        $retained = $split['keepTotal'];
-        $handIn   = $split['moveTotal'];
+        // The cashier says which notes are physically going, denomination by
+        // denomination — not just a total. Whatever isn't sent stays in the drawer
+        // as tomorrow's float, so both sides of the split are a real count rather
+        // than a guess at how the amount broke down. Sending nothing keeps it all.
+        $handIn = $this->cleanDenoms($request->input('hand_in', []));
+        $note   = trim((string) $request->input('deposit_note', ''));
 
-        // Closing only counts and sets the money aside. It is not in a cash book
-        // until somebody physically takes it there and records that — see
-        // CounterSessionController::deposit().
+        // You cannot hand in notes the drawer does not hold.
+        foreach ($handIn as $denom => $qty) {
+            if ($qty > ($denoms[$denom] ?? 0)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You counted ' . (int) ($denoms[$denom] ?? 0) . ' × Rs. '
+                               . number_format($denom) . ' but are sending ' . (int) $qty . '.',
+                ], 422);
+            }
+        }
+
+        $transfer       = $this->denomsTotal($handIn);
+        $retainedDenoms = $this->subtractDenoms($denoms, $handIn);
+        $keep           = $this->denomsTotal($retainedDenoms);
+
+        $book = $transfer > 0
+            ? $this->cashierBookFor($counter, $request->input('deposit_account_id'))
+            : null;
+
+        if ($transfer > 0 && ! $book) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pick a cash book to move the takings into.',
+            ], 422);
+        }
+
         DB::transaction(function () use (
-            $session, $counter, $denoms, $counted, $cashSales, $expected,
-            $variance, $retained, $handIn, $split
+            $session, $counter, $denoms, $counted, $cashSales, $expected, $variance,
+            $keep, $retainedDenoms, $transfer, $handIn, $book, $note
         ) {
             $session->update([
                 'closed_by'          => auth()->id(),
@@ -229,17 +271,41 @@ class PosController extends Controller
                 'cash_sales'         => $cashSales,
                 'expected_closing'   => $expected,
                 'variance'           => $variance,
-                'float_retained'     => $retained,
-                'retained_denoms'    => $split['keep'],
-                'deposit_amount'     => $handIn,
-                'deposit_account_id' => null,   // set when it is actually handed in
-                'deposited_at'       => null,
+                'float_retained'     => $keep,
+                'retained_denoms'    => $retainedDenoms,
+                'deposit_amount'     => $transfer,
+                'deposit_denoms'     => $handIn,
+                'deposit_account_id' => $book?->id,
+                'deposited_at'       => $book ? now() : null,
+                'deposited_by'       => $book ? auth()->id() : null,
                 'status'             => 'closed',
                 'closed_at'          => now(),
             ]);
 
-            // cash_balance is the float the cashier carries to the next shift.
-            $counter->update(['status' => 'closed', 'cash_balance' => $retained]);
+            // cash_balance is just the float left in the drawer for the next shift.
+            $counter->update(['status' => 'closed', 'cash_balance' => $keep]);
+
+            if ($book) {
+                $reference = 'DEP-' . strtoupper(Str::random(8));
+                $desc      = "Day's takings banked — {$counter->name}" . ($note !== '' ? " · {$note}" : '');
+
+                Ledger::credit($book, $transfer, [
+                    'reference'   => $reference,
+                    'description' => $desc,
+                    'source_type' => 'counter_close',
+                    'source_id'   => $session->id,
+                ]);
+
+                Payment::create([
+                    'reference_no' => $reference,
+                    'type'         => 'payment_in',
+                    'account_id'   => $book->id,
+                    'amount'       => $transfer,
+                    'method'       => 'cash',
+                    'notes'        => $desc,
+                    'created_by'   => auth()->id(),
+                ]);
+            }
         });
 
         $this->recordAttendance('out');
@@ -255,9 +321,10 @@ class PosController extends Controller
             'expected'   => $expected,
             'counted'    => $counted,
             'variance'   => $variance,
-            'float'      => $retained,
-            'kept'       => $split['keep'],
-            'deposit'    => $handIn,
+            'float'      => $keep,
+            'kept'       => $retainedDenoms,
+            'deposit'    => $transfer,
+            'sent'       => $handIn,
             'message'    => 'Counter closed.',
         ]);
     }
@@ -306,6 +373,20 @@ class PosController extends Controller
             $total += (int) $denom * (int) $qty;
         }
         return (float) $total;
+    }
+
+    /**
+     * What is left in the drawer once the notes being handed in are taken out of
+     * the count. An exact subtraction: the cashier states both sides, so this is a
+     * record of the physical split rather than a guess at how a total broke down.
+     */
+    private function subtractDenoms(array $counted, array $taken): array
+    {
+        foreach ($taken as $denom => $qty) {
+            $counted[$denom] = ($counted[$denom] ?? 0) - $qty;
+        }
+
+        return array_filter($counted, fn ($qty) => $qty > 0);
     }
 
     // Ajax: search products for POS screen

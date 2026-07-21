@@ -482,6 +482,15 @@ class AccountController extends Controller
             ->orderBy('occurred_at')->orderBy('id')
             ->paginate(50)->withQueryString();
 
+        // Note breakdown for takings banked at a counter close, so the cash on the
+        // ledger can be checked against the notes that physically arrived. Loaded
+        // once for the page rather than per row.
+        $depositDenoms = \App\Models\CounterSession::whereIn(
+                'id',
+                $entries->where('source_type', 'counter_close')->pluck('source_id')->filter()
+            )
+            ->pluck('deposit_denoms', 'id');
+
         $totals = AccountTransaction::where($inPeriod)
             ->selectRaw("
                 COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount ELSE 0 END), 0) AS money_in,
@@ -491,6 +500,7 @@ class AccountController extends Controller
         return view('accounts.transactions', [
             'account'  => $account,
             'entries'  => $entries,
+            'depositDenoms' => $depositDenoms,
             'opening'  => $opening,
             'moneyIn'  => (float) $totals->money_in,
             'moneyOut' => (float) $totals->money_out,
