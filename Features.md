@@ -95,6 +95,7 @@ Written for everyone (no technical knowledge needed).
 _Newest first. New ideas and improvements are added here as they come up._
 
 <!-- NEW-FEATURES -->
+- **2026-07-21 — Bulk breaking** — Open a wholesale pack and turn it into the retail item you sell it as — a 20kg bag of sugar into loose sugar by the kilo, or into 1kg packets. What the bag cost follows the stock across, so retail profit is measured against what you really paid, and a retail customer can never be charged the wholesale rate. Weighed items always give their full amount; when repacking into counted packets you can record what you actually got if some was spilled.
 - **2026-07-20 — Opening count checks against what you were left with** — When opening a counter, the drawer is now compared against the float the last close left with the cashier, and shows straight away if it is short. It used to compare against the whole drawer before the surplus was handed in.
 - **2026-07-20 — Cash is handed in by hand, not automatically** — Closing a counter now only counts the drawer and sets the surplus aside — the money reaches a cash book when someone records that they have actually taken it there. Counter Sessions shows what is still waiting to be handed in.
 - **2026-07-20 — Cover a till without being assigned to it** — An owner or manager whose account isn't tied to a counter can now pick a free one when they open it, instead of being told they can't sell. The counter is theirs until they close it, and counters someone else is on aren't offered.

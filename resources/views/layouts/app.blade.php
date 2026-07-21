@@ -148,7 +148,7 @@
             @endcan
             @endcanany
 
-            @canany(['stock.view','stock.transfer','stock.adjust'])
+            @canany(['stock.view','stock.transfer','stock.adjust','stock.convert'])
             <div class="sidebar-section">Inventory</div>
             @can('stock.view')
             <a href="{{ route('stock.index') }}" class="sidebar-link {{ request()->routeIs('stock.index') ? 'active' : '' }}">
@@ -158,6 +158,11 @@
             @can('stock.transfer')
             <a href="{{ route('stock.transfers') }}" class="sidebar-link {{ request()->routeIs('stock.transfers') ? 'active' : '' }}">
                 <i class="ti ti-arrows-exchange"></i>Stock Transfer
+            </a>
+            @endcan
+            @can('stock.convert')
+            <a href="{{ route('stock.conversions') }}" class="sidebar-link {{ request()->routeIs('stock.conversions') ? 'active' : '' }}">
+                <i class="ti ti-scissors"></i>Bulk Breaking
             </a>
             @endcan
             @can('stock.adjust')

@@ -307,6 +307,50 @@ CREATE TABLE stock_adjustments (
     FOREIGN KEY (branch_id) REFERENCES branches(id)
 );
 
+-- ── Breaking bulk packs down into the retail item they're sold as ──────────
+-- A 20kg bag of sugar and loose sugar by the kilo are two products with two
+-- prices, which is what stops a retail customer being charged the wholesale
+-- rate. These two tables link them: the rule, and each time it was actually done.
+
+-- The rule. Not branch-scoped — a 20kg bag holds 20kg wherever it is.
+CREATE TABLE product_conversions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    from_product_id BIGINT UNSIGNED NOT NULL,
+    to_product_id BIGINT UNSIGNED NOT NULL,
+    yield_qty DECIMAL(15,3) NOT NULL,
+    status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by BIGINT UNSIGNED NULL,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY pc_from_to (from_product_id, to_product_id),
+    CONSTRAINT pc_from_fk FOREIGN KEY (from_product_id) REFERENCES products(id) ON DELETE CASCADE,
+    CONSTRAINT pc_to_fk FOREIGN KEY (to_product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+-- The event. expected_qty is what the rule said, to_qty what really came out of
+-- the pack, and the difference is spillage — only meaningful when repacking into
+-- counted units, since weight doesn't go missing between a bag and a bin.
+CREATE TABLE stock_conversions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    branch_id BIGINT UNSIGNED NOT NULL,
+    from_product_id BIGINT UNSIGNED NOT NULL,
+    to_product_id BIGINT UNSIGNED NOT NULL,
+    from_qty DECIMAL(15,3) NOT NULL,
+    expected_qty DECIMAL(15,3) NOT NULL,
+    to_qty DECIMAL(15,3) NOT NULL,
+    wastage_qty DECIMAL(15,3) NOT NULL DEFAULT 0,
+    total_cost DECIMAL(15,2) NOT NULL DEFAULT 0,
+    unit_cost DECIMAL(15,2) NOT NULL DEFAULT 0,
+    note VARCHAR(255) NULL,
+    created_by BIGINT UNSIGNED NULL,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY sc_branch_date (branch_id, created_at),
+    CONSTRAINT sc_branch_fk FOREIGN KEY (branch_id) REFERENCES branches(id),
+    CONSTRAINT sc_from_fk FOREIGN KEY (from_product_id) REFERENCES products(id),
+    CONSTRAINT sc_to_fk FOREIGN KEY (to_product_id) REFERENCES products(id)
+);
+
 CREATE TABLE stock_transfers (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     from_branch_id BIGINT UNSIGNED NOT NULL,

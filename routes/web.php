@@ -124,6 +124,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/stock', [StockController::class, 'index'])->middleware('permission:stock.view')->name('stock.index');
     Route::get('/stock/adjustments', [StockController::class, 'adjustments'])->middleware('permission:stock.adjust')->name('stock.adjustments');
     Route::post('/stock/adjustments', [StockController::class, 'storeAdjustment'])->middleware('permission:stock.adjust')->name('stock.adjustments.store');
+    // Breaking bulk packs down into the retail item they're sold as
+    Route::get('/stock/conversions', [StockController::class, 'conversions'])->middleware('permission:stock.convert')->name('stock.conversions');
+    Route::post('/stock/conversions', [StockController::class, 'storeConversion'])->middleware('permission:stock.convert')->name('stock.conversions.store');
+    Route::post('/stock/conversions/rules', [StockController::class, 'storeConversionRule'])->middleware('permission:stock.convert')->name('stock.conversions.rules.store');
+    Route::delete('/stock/conversions/rules/{conversion}', [StockController::class, 'destroyConversionRule'])->middleware('permission:stock.convert')->name('stock.conversions.rules.destroy');
     Route::get('/stock/transfers', [StockController::class, 'transfers'])->middleware('permission:stock.transfer')->name('stock.transfers');
     Route::post('/stock/transfers', [StockController::class, 'storeTransfer'])->middleware('permission:stock.transfer')->name('stock.transfers.store');
     Route::patch('/stock/transfers/{id}/status', [StockController::class, 'updateTransferStatus'])->middleware('permission:stock.transfer');

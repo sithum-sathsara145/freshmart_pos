@@ -7,8 +7,11 @@ use App\Support\CurrentBranch;
 use App\Models\Stock;
 use App\Models\StockAdjustment;
 use App\Models\StockTransfer;
+use App\Models\StockConversion;
+use App\Models\ProductConversion;
 use App\Models\Product;
 use App\Models\Branch;
+use App\Support\BulkBreak;
 use App\Support\Inventory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -102,6 +105,109 @@ class StockController extends Controller
             DB::rollBack();
             return back()->with('error', $e->getMessage());
         }
+    }
+
+    // ── Breaking bulk down into retail ────────────────────────────────────
+
+    public function conversions(Request $request)
+    {
+        $branchId = CurrentBranch::id();
+
+        $rules = ProductConversion::with(['from', 'to'])
+            ->where('status', 'active')
+            ->get()
+            ->sortBy(fn ($r) => $r->from?->name)
+            ->values();
+
+        // How much bulk is on hand, so the screen can say what's breakable here.
+        $onHand = Stock::whereBranch($branchId)
+            ->whereIn('product_id', $rules->pluck('from_product_id'))
+            ->pluck('quantity', 'product_id');
+
+        $retailOnHand = Stock::whereBranch($branchId)
+            ->whereIn('product_id', $rules->pluck('to_product_id'))
+            ->pluck('quantity', 'product_id');
+
+        $history = StockConversion::with(['from', 'to', 'createdBy'])
+            ->whereBranch($branchId)
+            ->latest()
+            ->paginate(15);
+
+        $products = Product::where('status', 'active')->orderBy('name')->get(['id', 'name', 'sku', 'unit', 'is_weighed']);
+
+        return view('stock.conversions', compact('rules', 'onHand', 'retailOnHand', 'history', 'products'));
+    }
+
+    public function storeConversion(Request $request)
+    {
+        $request->validate([
+            'conversion_id' => 'required|exists:product_conversions,id',
+            'from_qty'      => 'required|numeric|min:0.001',
+            'to_qty'        => 'nullable|numeric|min:0.001',
+            'note'          => 'nullable|string|max:255',
+        ]);
+
+        if (! $branchId = CurrentBranch::requireId()) {
+            return back()->withInput()->with('error', CurrentBranch::pickBranchMessage());
+        }
+
+        $rule = ProductConversion::with(['from', 'to'])->findOrFail($request->conversion_id);
+
+        // Weight doesn't go missing when a bag is tipped into a bin, so those
+        // yields are fixed. Counted packets are where spillage happens, so there
+        // the person doing it says what really came out.
+        $expected = BulkBreak::expectedYield($rule, (float) $request->from_qty);
+        $produced = $rule->yieldIsFixed()
+            ? $expected
+            : (float) ($request->to_qty ?? $expected);
+
+        if ($reason = BulkBreak::refusalReason($rule, $branchId, (float) $request->from_qty, $produced)) {
+            return back()->withInput()->with('error', $reason);
+        }
+
+        $conversion = BulkBreak::run($rule, $branchId, (float) $request->from_qty, $produced, $request->note);
+
+        $trim = fn ($v) => rtrim(rtrim(number_format((float) $v, 3), '0'), '.');
+        $msg  = "Broke {$trim($conversion->from_qty)} × {$rule->from->name} into "
+              . "{$trim($conversion->to_qty)} {$rule->to->unit} of {$rule->to->name}.";
+
+        if ($conversion->hadWastage()) {
+            $msg .= " {$trim($conversion->wastage_qty)} {$rule->to->unit} short of the usual yield.";
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    public function storeConversionRule(Request $request)
+    {
+        $request->validate([
+            'from_product_id' => 'required|exists:products,id|different:to_product_id',
+            'to_product_id'   => 'required|exists:products,id',
+            'yield_qty'       => 'required|numeric|min:0.001',
+        ], [
+            'from_product_id.different' => 'A product cannot be broken into itself.',
+        ]);
+
+        ProductConversion::updateOrCreate(
+            [
+                'from_product_id' => $request->from_product_id,
+                'to_product_id'   => $request->to_product_id,
+            ],
+            [
+                'yield_qty'  => $request->yield_qty,
+                'status'     => 'active',
+                'created_by' => auth()->id(),
+            ]
+        );
+
+        return back()->with('success', 'Breakdown saved.');
+    }
+
+    public function destroyConversionRule(ProductConversion $conversion)
+    {
+        $conversion->delete();
+
+        return back()->with('success', 'Breakdown removed.');
     }
 
     public function transfers(Request $request)

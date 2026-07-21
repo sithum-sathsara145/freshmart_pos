@@ -73,7 +73,7 @@ class SetupRoles extends Command
             'products.view', 'products.create', 'products.edit', 'products.export',
             'catalog.brands.manage', 'catalog.categories.manage',
             'barcodes.print',
-            'stock.view', 'stock.adjust', 'stock.transfer',
+            'stock.view', 'stock.adjust', 'stock.transfer', 'stock.convert',
             'customers.view', 'customers.create', 'customers.edit',
             'suppliers.view', 'suppliers.create', 'suppliers.edit',
             'accounts.view', 'expenses.view', 'expenses.create',
@@ -96,7 +96,7 @@ class SetupRoles extends Command
             'products.view', 'products.create', 'products.edit', 'products.import', 'products.export',
             'catalog.brands.manage', 'catalog.categories.manage', 'catalog.variations.manage',
             'barcodes.print',
-            'stock.view', 'stock.adjust', 'stock.transfer',
+            'stock.view', 'stock.adjust', 'stock.transfer', 'stock.convert',
             'purchases.view', 'purchases.create',
             'purchase_returns.view', 'purchase_returns.create',
             'suppliers.view',
@@ -120,6 +120,17 @@ class SetupRoles extends Command
                         $role->givePermissionTo($permission);
                     }
                 }
+            }
+        }
+
+        // ── 5c. Whoever already adjusts stock can break bulk ──────────────
+        // Explicit for the same reason as above: the lists in step 4 only apply
+        // to a role that holds nothing yet, so an existing install would never
+        // pick this up and the new screen would 403 for everyone but admin.
+        foreach (['manager', 'stock_manager'] as $name) {
+            $role = Role::where('name', $name)->first();
+            if ($role && $role->hasPermissionTo('stock.adjust') && ! $role->hasPermissionTo('stock.convert')) {
+                $role->givePermissionTo('stock.convert');
             }
         }
 

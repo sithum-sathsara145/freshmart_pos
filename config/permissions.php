@@ -131,6 +131,7 @@ return [
             'stock.view'     => 'View stock levels',
             'stock.adjust'   => 'Adjust stock',
             'stock.transfer' => 'Transfer stock between branches',
+            'stock.convert'  => 'Break bulk packs into retail stock',
         ],
     ],
 
