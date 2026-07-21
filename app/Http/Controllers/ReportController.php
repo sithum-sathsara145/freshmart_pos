@@ -13,6 +13,8 @@ use App\Models\Expense;
 use App\Models\Product;
 use App\Models\Stock;
 use App\Models\Payment;
+use App\Models\Account;
+use App\Models\AccountTransaction;
 use App\Support\ReportRange;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -76,6 +78,7 @@ class ReportController extends Controller
         // Report cards. `route` = null means "coming in a later phase".
         $q = $range->query();
         $cards = [
+            ['title' => 'Invoices',         'desc' => 'Every invoice, daily totals, credit notes', 'icon' => 'ti-file-invoice', 'color' => '#4ade80', 'url' => route('reports.invoices', $q)],
             ['title' => 'Sales',            'desc' => 'Invoices, baskets, peak hours',       'icon' => 'ti-shopping-cart',   'color' => '#4ade80', 'url' => route('reports.sales_summary', $q)],
             ['title' => 'Revenue & Profit', 'desc' => 'Revenue, COGS, margin, net profit',   'icon' => 'ti-trending-up',     'color' => '#a5b4fc', 'url' => route('reports.profit_loss', $q)],
             ['title' => 'Product sales',    'desc' => 'Best sellers and profit per product', 'icon' => 'ti-package',         'color' => '#60a5fa', 'url' => route('reports.product_sales', $q)],
@@ -83,6 +86,8 @@ class ReportController extends Controller
             ['title' => 'Stock movement',   'desc' => 'In / out, write-offs, stock value',   'icon' => 'ti-transfer',        'color' => '#2dd4bf', 'url' => null],
             ['title' => 'Stock summary',    'desc' => 'On-hand value by product',            'icon' => 'ti-boxes',           'color' => '#60a5fa', 'url' => route('reports.stock_summary', $q)],
             ['title' => 'Low stock alerts', 'desc' => 'Items at or below reorder level',     'icon' => 'ti-alert-triangle',  'color' => '#f87171', 'url' => route('reports.stock_alert', $q)],
+            ['title' => 'Cash book',        'desc' => 'Ledger, account balances, hand-overs', 'icon' => 'ti-book-2',         'color' => '#2dd4bf', 'url' => route('reports.cash_book', $q)],
+            ['title' => 'Cashier-wise',     'desc' => 'Takings by cashier, customer or item', 'icon' => 'ti-user-dollar',    'color' => '#818cf8', 'url' => route('reports.cashiers', $q)],
             ['title' => 'Counter sessions', 'desc' => 'Cash variance by till and cashier',   'icon' => 'ti-cash-register',   'color' => '#c084fc', 'url' => null],
             ['title' => 'Payments & cash',  'desc' => 'Money in vs out, by method',          'icon' => 'ti-cash',            'color' => '#4ade80', 'url' => route('reports.payments', $q)],
             ['title' => 'Expenses',         'desc' => 'Spending by category',                'icon' => 'ti-credit-card',     'color' => '#fb923c', 'url' => route('reports.expenses', $q)],
@@ -418,22 +423,39 @@ class ReportController extends Controller
         [$from, $to] = $this->dateRange($request);
         $branchId    = CurrentBranch::id();
 
-        $expenses = Expense::with(['category', 'account'])
-            ->whereBranch($branchId)
+        // The screen has always offered a category filter; it was never applied and
+        // the dropdown was never given anything to list.
+        $categoryId = $request->category_id ?: null;
+        $scoped     = fn () => Expense::whereBranch($branchId)
             ->whereBetween('expense_date', [$from, $to])
-            ->latest('expense_date')
-            ->paginate(20);
+            ->when($categoryId, fn ($q, $v) => $q->where('expense_category_id', $v));
 
-        $byCategory = Expense::whereBranch($branchId)
-            ->whereBetween('expense_date', [$from, $to])
-            ->selectRaw('expense_category_id, SUM(amount) as total')
+        $expenses = $scoped()->with(['category', 'account'])
+            ->latest('expense_date')
+            ->paginate(20)
+            ->withQueryString();
+
+        $byCategory = $scoped()
+            ->selectRaw('expense_category_id, SUM(amount) as total, COUNT(*) as entries')
             ->with('category')
             ->groupBy('expense_category_id')
+            ->orderByDesc('total')
             ->get();
 
-        $total = $expenses->sum('amount');
+        $categories = \App\Models\ExpenseCategory::orderBy('name')->get(['id', 'name']);
 
-        return view('reports.expenses', compact('expenses', 'byCategory', 'total', 'from', 'to'));
+        // The menu asks for spending by code and by date as separate reports; both
+        // are this same set of expenses, totalled a different way.
+        $byDate = $scoped()
+            ->selectRaw('expense_date, SUM(amount) as total, COUNT(*) as entries')
+            ->groupBy('expense_date')
+            ->orderBy('expense_date')
+            ->get();
+
+        $mode  = in_array($request->mode, ['category', 'date'], true) ? $request->mode : 'details';
+        $total = (float) $scoped()->sum('amount');
+
+        return view('reports.expenses', compact('expenses', 'byCategory', 'byDate', 'categories', 'mode', 'total', 'from', 'to'));
     }
 
     // User / Cashier Reports
@@ -452,7 +474,308 @@ class ReportController extends Controller
         return view('reports.user_reports', compact('cashiers', 'from', 'to'));
     }
 
-    // Export any report as PDF / Excel / CSV
+    // ── Transaction reports ───────────────────────────────────────────────
+
+    /**
+     * Invoices for a period, as a list, a per-day summary, or the credit notes
+     * raised against them.
+     *
+     * One screen rather than four: the menu lists "details", "summary", "cancel
+     * details" and "cancel summary" separately, but they are the same query
+     * presented differently, and splitting them would mean four places to keep
+     * the filters and totals agreeing.
+     */
+    public function invoices(Request $request)
+    {
+        $range    = ReportRange::fromRequest($request);
+        $branchId = CurrentBranch::id();
+        $mode     = in_array($request->mode, ['summary', 'cancelled'], true) ? $request->mode : 'details';
+
+        $filters = [
+            'user_id'        => $request->user_id ?: null,
+            'counter_id'     => $request->counter_id ?: null,
+            'payment_method' => $request->payment_method ?: null,
+            'status'         => $request->status ?: null,
+        ];
+
+        $rows    = collect();
+        $totals  = ['count' => 0, 'gross' => 0.0, 'discount' => 0.0, 'tax' => 0.0, 'net' => 0.0, 'paid' => 0.0, 'due' => 0.0];
+
+        if ($mode === 'cancelled') {
+            // Voided sales are removed outright, so the only durable record of
+            // money going back is a credit note. That is what this lists.
+            $returns = SaleReturn::with(['sale.customer', 'sale.user', 'createdBy'])
+                ->whereHas('sale', fn ($q) => $this->invoiceScope($q, $branchId, $range, $filters))
+                ->whereBetween(DB::raw('DATE(created_at)'), [$range->fromDate(), $range->toDate()])
+                ->latest()
+                ->get();
+
+            $rows = $returns;
+            $totals['count'] = $returns->count();
+            $totals['net']   = (float) $returns->sum('return_amount');
+        } else {
+            $sales = $this->invoiceScope(Sale::query(), $branchId, $range, $filters)
+                ->with(['customer', 'user', 'counter'])
+                ->orderBy('created_at')
+                ->get();
+
+            $totals = [
+                'count'    => $sales->count(),
+                'gross'    => (float) $sales->sum('subtotal'),
+                'discount' => (float) $sales->sum(fn ($s) => (float) $s->discount_amount + (float) $s->coupon_discount),
+                'tax'      => (float) $sales->sum('tax_amount'),
+                'net'      => (float) $sales->sum('total'),
+                'paid'     => (float) $sales->sum('paid_amount'),
+                'due'      => (float) $sales->sum(fn ($s) => max(0, (float) $s->total - (float) $s->paid_amount)),
+            ];
+
+            $rows = $mode === 'summary'
+                ? $sales->groupBy(fn ($s) => $s->created_at->toDateString())
+                    ->map(fn ($day, $date) => [
+                        'date'     => $date,
+                        'count'    => $day->count(),
+                        'gross'    => (float) $day->sum('subtotal'),
+                        'discount' => (float) $day->sum(fn ($s) => (float) $s->discount_amount + (float) $s->coupon_discount),
+                        'tax'      => (float) $day->sum('tax_amount'),
+                        'net'      => (float) $day->sum('total'),
+                        'paid'     => (float) $day->sum('paid_amount'),
+                    ])->values()
+                : $sales;
+        }
+
+        return view('reports.invoices', [
+            'range'    => $range,
+            'mode'     => $mode,
+            'rows'     => $rows,
+            'totals'   => $totals,
+            'filters'  => $filters,
+            'cashiers' => $this->cashierOptions($branchId),
+            'counters' => \App\Models\Counter::whereBranch($branchId)->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    /**
+     * What each cashier took, optionally broken down by the customers they
+     * served or the items they sold.
+     *
+     * The menu asks for three separate reports — sales summary, customer invoice
+     * summary, item sales summary — but they differ only in what the totals are
+     * grouped by underneath the cashier, so they are one screen with a switch.
+     */
+    public function cashiers(Request $request)
+    {
+        $range    = ReportRange::fromRequest($request);
+        $branchId = CurrentBranch::id();
+        $by       = in_array($request->by, ['customer', 'item'], true) ? $request->by : 'cashier';
+        $filters  = ['user_id' => $request->user_id ?: null, 'counter_id' => $request->counter_id ?: null];
+
+        $sales = $this->invoiceScope(Sale::query(), $branchId, $range, $filters)
+            ->with(['user', 'customer'])->get();
+
+        $totals = [
+            'invoices' => $sales->count(),
+            'net'      => (float) $sales->sum('total'),
+            'cash'     => (float) $sales->where('payment_method', 'cash')->sum('total'),
+            'card'     => (float) $sales->where('payment_method', 'card')->sum('total'),
+            'credit'   => (float) $sales->sum('credit_amount'),
+        ];
+
+        if ($by === 'item') {
+            // Item lines, attributed to whoever rang the sale up.
+            $lines = SaleItem::whereIn('sale_id', $sales->pluck('id'))
+                ->with(['product:id,name,unit', 'sale:id,user_id'])
+                ->get();
+
+            $rows = $lines->groupBy(fn ($l) => $l->sale?->user_id . '|' . $l->product_id)
+                ->map(fn ($g) => [
+                    'cashier'  => $sales->firstWhere('user_id', $g->first()->sale?->user_id)?->user?->name ?? '—',
+                    'label'    => $g->first()->product?->name ?? 'Deleted product',
+                    'unit'     => $g->first()->product?->unit,
+                    'qty'      => (float) $g->sum('quantity'),
+                    'net'      => (float) $g->sum('subtotal'),
+                    'cost'     => (float) $g->sum('cost'),
+                    'invoices' => $g->pluck('sale_id')->unique()->count(),
+                ])
+                ->sortBy([['cashier', 'asc'], ['net', 'desc']])
+                ->values();
+        } elseif ($by === 'customer') {
+            $rows = $sales->groupBy(fn ($s) => $s->user_id . '|' . ($s->customer_id ?? 0))
+                ->map(fn ($g) => [
+                    'cashier'  => $g->first()->user?->name ?? '—',
+                    'label'    => $g->first()->customer?->name ?? 'Walk-in',
+                    'unit'     => null,
+                    'qty'      => null,
+                    'invoices' => $g->count(),
+                    'net'      => (float) $g->sum('total'),
+                    'cost'     => null,
+                ])
+                ->sortBy([['cashier', 'asc'], ['net', 'desc']])
+                ->values();
+        } else {
+            $rows = $sales->groupBy('user_id')
+                ->map(fn ($g) => [
+                    'cashier'  => $g->first()->user?->name ?? '—',
+                    'label'    => null,
+                    'unit'     => null,
+                    'qty'      => null,
+                    'invoices' => $g->count(),
+                    'net'      => (float) $g->sum('total'),
+                    'cash'     => (float) $g->where('payment_method', 'cash')->sum('total'),
+                    'card'     => (float) $g->where('payment_method', 'card')->sum('total'),
+                    'credit'   => (float) $g->sum('credit_amount'),
+                    'cost'     => null,
+                ])
+                ->sortByDesc('net')
+                ->values();
+        }
+
+        return view('reports.cashiers', [
+            'range'    => $range,
+            'by'       => $by,
+            'rows'     => $rows,
+            'totals'   => $totals,
+            'filters'  => $filters,
+            'cashiers' => $this->cashierOptions($branchId),
+            'counters' => \App\Models\Counter::whereBranch($branchId)->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    /**
+     * The cash book: every movement through cash and bank accounts, with a
+     * running balance, plus the day's hand-overs from the tills.
+     *
+     * Covers what the menu splits into "Cash Book", "Cash Book (Cashier Wise)",
+     * "Cash Bank Details", "Bank Balance Sheet" and "Cash HandOver Details" —
+     * they are all this ledger, filtered or grouped differently.
+     */
+    public function cashBook(Request $request)
+    {
+        $range    = ReportRange::fromRequest($request);
+        $branchId = CurrentBranch::id();
+        $view     = in_array($request->view, ['balances', 'handover'], true) ? $request->view : 'ledger';
+
+        $accounts = Account::where('status', 'active')
+            ->where(fn ($q) => $q->whereBranch($branchId)->orWhereNull('branch_id'))
+            ->orderBy('type')->orderBy('name')
+            ->get();
+
+        $accountId = $request->account_id ?: null;
+        $type      = in_array($request->type, ['cash', 'bank'], true) ? $request->type : null;
+
+        $scope = $accounts->when($type, fn ($c) => $c->where('type', $type))
+            ->when($accountId, fn ($c) => $c->where('id', (int) $accountId));
+
+        if ($view === 'handover') {
+            // What each till actually sent in at close — the cash side of the book,
+            // traced back to the shift it came from.
+            $sessions = \App\Models\CounterSession::with(['counter', 'closedBy', 'depositAccount'])
+                ->whereBranch($branchId)
+                ->where('status', 'closed')
+                ->whereBetween(DB::raw('DATE(closed_at)'), [$range->fromDate(), $range->toDate()])
+                ->orderByDesc('closed_at')
+                ->get();
+
+            return view('reports.cash_book', [
+                'range' => $range, 'view' => $view, 'accounts' => $accounts,
+                'accountId' => $accountId, 'type' => $type,
+                'sessions' => $sessions,
+                'totals' => [
+                    'counted'  => (float) $sessions->sum('closing_balance'),
+                    'sent'     => (float) $sessions->sum('deposit_amount'),
+                    'kept'     => (float) $sessions->sum('float_retained'),
+                    'variance' => (float) $sessions->sum('variance'),
+                ],
+                'entries' => collect(), 'opening' => 0.0, 'balances' => collect(),
+            ]);
+        }
+
+        if ($view === 'balances') {
+            // Where every account stood at the end of the period, and what moved.
+            $balances = $scope->map(function ($a) use ($range) {
+                $before = (float) AccountTransaction::where('account_id', $a->id)
+                    ->whereDate('occurred_at', '<', $range->fromDate())
+                    ->selectRaw("COALESCE(SUM(CASE WHEN direction='credit' THEN amount ELSE -amount END),0) t")->value('t');
+
+                $period = AccountTransaction::where('account_id', $a->id)
+                    ->whereBetween(DB::raw('DATE(occurred_at)'), [$range->fromDate(), $range->toDate()])
+                    ->selectRaw("
+                        COALESCE(SUM(CASE WHEN direction='credit' THEN amount ELSE 0 END),0) money_in,
+                        COALESCE(SUM(CASE WHEN direction='debit'  THEN amount ELSE 0 END),0) money_out
+                    ")->first();
+
+                return [
+                    'account'   => $a,
+                    'opening'   => $before,
+                    'money_in'  => (float) $period->money_in,
+                    'money_out' => (float) $period->money_out,
+                    'closing'   => $before + (float) $period->money_in - (float) $period->money_out,
+                ];
+            })->values();
+
+            return view('reports.cash_book', [
+                'range' => $range, 'view' => $view, 'accounts' => $accounts,
+                'accountId' => $accountId, 'type' => $type,
+                'balances' => $balances,
+                'totals' => [
+                    'opening'   => $balances->sum('opening'),
+                    'money_in'  => $balances->sum('money_in'),
+                    'money_out' => $balances->sum('money_out'),
+                    'closing'   => $balances->sum('closing'),
+                ],
+                'entries' => collect(), 'opening' => 0.0, 'sessions' => collect(),
+            ]);
+        }
+
+        // Ledger: the movements themselves, with a running balance carried in
+        // from whatever the accounts held before the period opened.
+        $ids = $scope->pluck('id');
+
+        $opening = (float) AccountTransaction::whereIn('account_id', $ids)
+            ->whereDate('occurred_at', '<', $range->fromDate())
+            ->selectRaw("COALESCE(SUM(CASE WHEN direction='credit' THEN amount ELSE -amount END),0) t")->value('t');
+
+        $entries = AccountTransaction::with(['account', 'counterparty', 'createdBy'])
+            ->whereIn('account_id', $ids)
+            ->whereBetween(DB::raw('DATE(occurred_at)'), [$range->fromDate(), $range->toDate()])
+            ->orderBy('occurred_at')->orderBy('id')
+            ->get();
+
+        return view('reports.cash_book', [
+            'range' => $range, 'view' => $view, 'accounts' => $accounts,
+            'accountId' => $accountId, 'type' => $type,
+            'entries' => $entries, 'opening' => $opening,
+            'totals' => [
+                'opening'   => $opening,
+                'money_in'  => (float) $entries->where('direction', 'credit')->sum('amount'),
+                'money_out' => (float) $entries->where('direction', 'debit')->sum('amount'),
+                'closing'   => $opening
+                    + (float) $entries->where('direction', 'credit')->sum('amount')
+                    - (float) $entries->where('direction', 'debit')->sum('amount'),
+            ],
+            'balances' => collect(), 'sessions' => collect(),
+        ]);
+    }
+
+    /** The filters every invoice-based report shares. */
+    private function invoiceScope($query, ?int $branchId, ReportRange $range, array $filters)
+    {
+        return $query->whereBranch($branchId)
+            ->whereBetween(DB::raw('DATE(created_at)'), [$range->fromDate(), $range->toDate()])
+            ->when($filters['user_id'] ?? null, fn ($q, $v) => $q->where('user_id', $v))
+            ->when($filters['counter_id'] ?? null, fn ($q, $v) => $q->where('counter_id', $v))
+            ->when($filters['payment_method'] ?? null, fn ($q, $v) => $q->where('payment_method', $v))
+            ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('status', $v));
+    }
+
+    /** Users who actually rang up a sale in this branch — not every account. */
+    private function cashierOptions(?int $branchId)
+    {
+        return \App\Models\User::whereIn(
+                'id',
+                Sale::whereBranch($branchId)->select('user_id')->distinct()
+            )->orderBy('name')->get(['id', 'name']);
+    }
+
     // ── HRM reports ───────────────────────────────────────────────────────
 
     public function hrmAttendance(Request $request)
@@ -643,6 +966,21 @@ class ReportController extends Controller
                     ])->all();
                 return ['Stock on hand', ['Product', 'Quantity'], $rows];
 
+            case 'invoices_details':
+            case 'invoices_summary':
+            case 'invoices_cancelled':
+                return $this->invoiceExport(substr($type, 9), $branchId, $from, $to, $money);
+
+            case 'cash_book_ledger':
+            case 'cash_book_balances':
+            case 'cash_book_handover':
+                return $this->cashBookExport(substr($type, 10), $money);
+
+            case 'cashiers_cashier':
+            case 'cashiers_customer':
+            case 'cashiers_item':
+                return $this->cashierExport(substr($type, 9), $money);
+
             case 'hrm_attendance':
                 $summary = $this->attendanceSummary($branchId, $from, $to);
                 $rows = $summary->map(fn ($r) => [
@@ -700,6 +1038,160 @@ class ReportController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * The invoice report in export form. Reads the same filters off the request
+     * as the screen does, so what downloads matches what was on screen rather
+     * than silently exporting everything.
+     */
+    private function invoiceExport(string $mode, ?int $branchId, string $from, string $to, callable $money): array
+    {
+        $request = request();
+        $range   = ReportRange::fromRequest($request);
+        $filters = [
+            'user_id'        => $request->user_id ?: null,
+            'counter_id'     => $request->counter_id ?: null,
+            'payment_method' => $request->payment_method ?: null,
+            'status'         => $request->status ?: null,
+        ];
+
+        if ($mode === 'cancelled') {
+            $returns = SaleReturn::with(['sale.customer', 'createdBy'])
+                ->whereHas('sale', fn ($q) => $this->invoiceScope($q, $branchId, $range, $filters))
+                ->whereBetween(DB::raw('DATE(created_at)'), [$range->fromDate(), $range->toDate()])
+                ->latest()->get();
+
+            $rows = $returns->map(fn ($r) => [
+                $r->created_at->format('Y-m-d H:i'), $r->credit_note_no,
+                $r->sale?->invoice_no ?? '—', $r->sale?->customer?->name ?? 'Walk-in',
+                $r->reason, $money($r->return_amount), $r->createdBy?->name ?? '—',
+            ])->all();
+            $rows[] = ['', '', '', '', 'Total refunded', $money($returns->sum('return_amount')), ''];
+
+            return ['Credit notes', ['Date', 'Credit note', 'Invoice', 'Customer', 'Reason', 'Refund (Rs.)', 'By'], $rows];
+        }
+
+        $sales = $this->invoiceScope(Sale::query(), $branchId, $range, $filters)
+            ->with(['customer', 'user', 'counter'])->orderBy('created_at')->get();
+
+        $disc = fn ($s) => (float) $s->discount_amount + (float) $s->coupon_discount;
+
+        if ($mode === 'summary') {
+            $rows = $sales->groupBy(fn ($s) => $s->created_at->toDateString())
+                ->map(fn ($day, $date) => [
+                    $date, $day->count(), $money($day->sum('subtotal')),
+                    $money($day->sum($disc)), $money($day->sum('tax_amount')),
+                    $money($day->sum('total')), $money($day->sum('paid_amount')),
+                ])->values()->all();
+            $rows[] = ['Total', $sales->count(), $money($sales->sum('subtotal')),
+                $money($sales->sum($disc)), $money($sales->sum('tax_amount')),
+                $money($sales->sum('total')), $money($sales->sum('paid_amount'))];
+
+            return ['Invoice summary', ['Date', 'Invoices', 'Gross', 'Discount', 'Tax', 'Net sales', 'Collected'], $rows];
+        }
+
+        $rows = $sales->map(fn ($s) => [
+            $s->created_at->format('Y-m-d H:i'), $s->invoice_no,
+            $s->customer?->name ?? 'Walk-in', $s->user?->name ?? '—', $s->counter?->name ?? '—',
+            ucfirst(str_replace('_', ' ', $s->payment_method)),
+            $money($s->subtotal), $money($disc($s)), $money($s->tax_amount),
+            $money($s->total), $money($s->paid_amount),
+            $money(max(0, (float) $s->total - (float) $s->paid_amount)), ucfirst($s->status),
+        ])->all();
+        $rows[] = ['Total', '', '', '', '', '', $money($sales->sum('subtotal')), $money($sales->sum($disc)),
+            $money($sales->sum('tax_amount')), $money($sales->sum('total')), $money($sales->sum('paid_amount')),
+            $money($sales->sum(fn ($s) => max(0, (float) $s->total - (float) $s->paid_amount))), ''];
+
+        return ['Invoice details',
+            ['Date', 'Invoice', 'Customer', 'Cashier', 'Counter', 'Payment', 'Gross', 'Discount', 'Tax', 'Net', 'Paid', 'Due', 'Status'],
+            $rows];
+    }
+
+    /** Cash book in export form, reusing the screen's own query. */
+    private function cashBookExport(string $view, callable $money): array
+    {
+        $data = $this->cashBook(request()->merge(['view' => $view]))->getData();
+        $t    = $data['totals'];
+
+        if ($view === 'handover') {
+            $rows = $data['sessions']->map(fn ($s) => [
+                $s->closed_at?->format('Y-m-d H:i'), $s->counter?->name ?? '—', $s->closedBy?->name ?? '—',
+                $money($s->expected_closing), $money($s->closing_balance), $money($s->variance),
+                $money($s->deposit_amount),
+                $s->deposit_denoms ? collect($s->deposit_denoms)->map(fn ($q, $d) => $q . ' x ' . number_format((int) $d))->implode(' · ') : '',
+                $s->depositAccount?->name ?? '—', $money($s->float_retained),
+            ])->all();
+            $rows[] = ['Total', '', '', '', $money($t['counted']), $money($t['variance']), $money($t['sent']), '', '', $money($t['kept'])];
+
+            return ['Till hand-overs',
+                ['Closed', 'Counter', 'Closed by', 'Expected', 'Counted', 'Variance', 'Sent', 'Notes sent', 'Into', 'Left as float'], $rows];
+        }
+
+        if ($view === 'balances') {
+            $rows = $data['balances']->map(fn ($b) => [
+                $b['account']->name, ucfirst($b['account']->type),
+                $money($b['opening']), $money($b['money_in']), $money($b['money_out']), $money($b['closing']),
+            ])->all();
+            $rows[] = ['Total', '', $money($t['opening']), $money($t['money_in']), $money($t['money_out']), $money($t['closing'])];
+
+            return ['Account balances', ['Account', 'Type', 'Opening', 'Money in', 'Money out', 'Closing'], $rows];
+        }
+
+        $running = (float) $data['opening'];
+        $rows    = [['', '', 'Brought forward', '', '', '', $money($running)]];
+
+        foreach ($data['entries'] as $e) {
+            $running += $e->direction === 'credit' ? (float) $e->amount : -(float) $e->amount;
+            $rows[] = [
+                $e->occurred_at?->format('Y-m-d H:i'), $e->account?->name ?? '—',
+                $e->label() . ($e->counterparty ? ' · ' . $e->counterparty->name : ''),
+                $e->reference ?: '',
+                $e->direction === 'credit' ? $money($e->amount) : '',
+                $e->direction === 'credit' ? '' : $money($e->amount),
+                $money($running),
+            ];
+        }
+        $rows[] = ['', '', 'Carried forward', '', $money($t['money_in']), $money($t['money_out']), $money($t['closing'])];
+
+        return ['Cash book', ['Date', 'Account', 'Description', 'Reference', 'In', 'Out', 'Balance'], $rows];
+    }
+
+    /**
+     * Cashier report in export form. Re-runs the screen's own grouping through
+     * the controller action rather than repeating it, so the two can't drift.
+     */
+    private function cashierExport(string $by, callable $money): array
+    {
+        $data = $this->cashiers(request()->merge(['by' => $by]))->getData();
+        $rows = $data['rows'];
+        $t    = $data['totals'];
+
+        if ($by === 'item') {
+            $out = $rows->map(fn ($r) => [
+                $r['cashier'], $r['label'], $this->trim($r['qty'], 3) . ' ' . $r['unit'],
+                $r['invoices'], $money($r['net']), $money($r['cost']), $money($r['net'] - $r['cost']),
+            ])->all();
+
+            return ['Cashier item sales',
+                ['Cashier', 'Item', 'Qty', 'Invoices', 'Net sales (Rs.)', 'Cost (Rs.)', 'Profit (Rs.)'], $out];
+        }
+
+        if ($by === 'customer') {
+            $out = $rows->map(fn ($r) => [$r['cashier'], $r['label'], $r['invoices'], $money($r['net'])])->all();
+            $out[] = ['Total', '', $t['invoices'], $money($t['net'])];
+
+            return ['Cashier customer summary', ['Cashier', 'Customer', 'Invoices', 'Net sales (Rs.)'], $out];
+        }
+
+        $out = $rows->map(fn ($r) => [
+            $r['cashier'], $r['invoices'], $money($r['net']),
+            $money($r['cash']), $money($r['card']), $money($r['credit']),
+        ])->all();
+        $out[] = ['Total', $t['invoices'], $money($t['net']), $money($t['cash']), $money($t['card']), $money($t['credit'])];
+
+        return ['Cashier sales summary',
+            ['Cashier', 'Invoices', 'Net sales (Rs.)', 'Cash (Rs.)', 'Card (Rs.)', 'On credit (Rs.)'], $out];
     }
 
     /** Trailing-zero-free number, for day/hour counts that are usually whole. */

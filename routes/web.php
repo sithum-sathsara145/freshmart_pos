@@ -232,6 +232,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/payments', [ReportController::class, 'payments'])->name('payments');
         Route::get('/expenses', [ReportController::class, 'expenses'])->name('expenses');
         Route::get('/user-reports', [ReportController::class, 'userReports'])->name('user_reports');
+        Route::get('/invoices', [ReportController::class, 'invoices'])->name('invoices');
+        Route::get('/cashiers', [ReportController::class, 'cashiers'])->name('cashiers');
+        Route::get('/cash-book', [ReportController::class, 'cashBook'])->name('cash_book');
         // HRM reports expose staff pay and attendance, so they need hrm.view on top
         // of reports.view — a stock manager can read reports but not payroll.
         Route::get('/hrm-attendance', [ReportController::class, 'hrmAttendance'])->middleware('permission:hrm.view')->name('hrm_attendance');

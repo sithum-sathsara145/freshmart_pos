@@ -21,4 +21,10 @@ class SaleReturn extends Model
     {
         return $this->hasMany(SaleReturnItem::class);
     }
+
+    /** Who issued the credit note — the column was always there, the relation wasn't. */
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

@@ -17,20 +17,70 @@
     </a>
 </form>
 
-{{-- Category breakdown --}}
+{{-- Details / by category / by date. The menu lists these as three reports;
+     they are the same expenses totalled differently. --}}
+<form method="GET" style="margin-bottom:14px">
+    @foreach(request()->except(['mode','page']) as $k => $v)
+        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
+    @endforeach
+    <div style="display:inline-flex;background:var(--surface);border:.5px solid var(--border);border-radius:7px;padding:2px">
+        @foreach(['details' => 'Details', 'category' => 'By category', 'date' => 'By date'] as $key => $label)
+        <button type="submit" name="mode" value="{{ $key }}"
+                style="height:26px;padding:0 11px;border:none;border-radius:5px;font-size:11.5px;cursor:pointer;
+                       background:{{ $mode === $key ? 'var(--primary-soft)' : 'transparent' }};
+                       color:{{ $mode === $key ? 'var(--primary-text)' : 'var(--text-3)' }}">{{ $label }}</button>
+        @endforeach
+    </div>
+</form>
+
+{{-- Category breakdown. The name comes off the eager-loaded relation: the query
+     groups by id, so the model itself has no name of its own. --}}
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:14px">
     @foreach($byCategory as $cat)
     <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:10px 12px">
-        <div style="font-size:10px;color:var(--text-3);margin-bottom:3px">{{ $cat->name }}</div>
+        <div style="font-size:10px;color:var(--text-3);margin-bottom:3px">{{ $cat->category?->name ?? 'Uncategorised' }}</div>
         <div style="font-size:16px;font-weight:500;color:var(--danger)">Rs. {{ number_format($cat->total) }}</div>
-        <div style="font-size:10px;color:var(--text-4);margin-top:2px">{{ $cat->count }} records</div>
+        <div style="font-size:10px;color:var(--text-4);margin-top:2px">{{ $cat->entries }} {{ Str::plural('record', $cat->entries) }}</div>
     </div>
     @endforeach
     <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;padding:10px 12px;border-color:var(--primary-border)">
         <div style="font-size:10px;color:var(--text-3);margin-bottom:3px">Total</div>
-        <div style="font-size:16px;font-weight:500;color:var(--danger)">Rs. {{ number_format($byCategory->sum('total')) }}</div>
+        <div style="font-size:16px;font-weight:500;color:var(--danger)">Rs. {{ number_format($total) }}</div>
     </div>
 </div>
+
+@if($mode !== 'details')
+<div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;overflow:hidden">
+<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="border-bottom:.5px solid var(--border)">
+        <th style="padding:9px 12px;text-align:left;color:var(--text-3);font-weight:500;font-size:11px">{{ $mode === 'category' ? 'Category' : 'Date' }}</th>
+        <th style="padding:9px 12px;text-align:right;color:var(--text-3);font-weight:500;font-size:11px">Entries</th>
+        <th style="padding:9px 12px;text-align:right;color:var(--text-3);font-weight:500;font-size:11px">Amount</th>
+        <th style="padding:9px 12px;text-align:right;color:var(--text-3);font-weight:500;font-size:11px">Share</th>
+    </tr></thead>
+    <tbody>
+    @forelse($mode === 'category' ? $byCategory : $byDate as $r)
+    <tr style="border-bottom:.5px solid var(--surface-3)">
+        <td style="padding:9px 12px;color:var(--text)">
+            {{ $mode === 'category' ? ($r->category?->name ?? 'Uncategorised') : \Carbon\Carbon::parse($r->expense_date)->format('D, d M Y') }}
+        </td>
+        <td style="padding:9px 12px;text-align:right;color:var(--text-3)">{{ $r->entries }}</td>
+        <td style="padding:9px 12px;text-align:right;color:var(--danger);font-weight:500">Rs. {{ number_format($r->total, 2) }}</td>
+        <td style="padding:9px 12px;text-align:right;color:var(--text-3)">{{ $total > 0 ? number_format($r->total / $total * 100, 1) : '0.0' }}%</td>
+    </tr>
+    @empty
+    <tr><td colspan="4" style="padding:28px;text-align:center;color:var(--text-4)">No expenses in this period.</td></tr>
+    @endforelse
+    </tbody>
+    <tfoot><tr style="border-top:.5px solid var(--border);background:var(--bg)">
+        <td style="padding:9px 12px;color:var(--text-2);font-weight:500">Total</td>
+        <td style="padding:9px 12px;text-align:right;color:var(--text-2);font-weight:500">{{ ($mode === 'category' ? $byCategory : $byDate)->sum('entries') }}</td>
+        <td style="padding:9px 12px;text-align:right;color:var(--danger);font-weight:600">Rs. {{ number_format($total, 2) }}</td>
+        <td style="padding:9px 12px;text-align:right;color:var(--text-3)">100%</td>
+    </tr></tfoot>
+</table>
+</div>
+@else
 
 <div style="background:var(--surface);border:.5px solid var(--border);border-radius:8px;overflow:hidden">
 <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -61,5 +111,6 @@
 </table>
 </div>
 <div style="margin-top:12px">{{ $expenses->links() }}</div>
+@endif
 </div>
 @endsection
