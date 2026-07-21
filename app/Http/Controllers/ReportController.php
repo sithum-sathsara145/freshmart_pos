@@ -85,7 +85,7 @@ class ReportController extends Controller
             ['title' => 'Gross profit',     'desc' => 'By item, category, supplier, location or invoice', 'icon' => 'ti-trending-up', 'color' => '#a5b4fc', 'url' => route('reports.gross_profit', $q)],
             ['title' => 'Net profit',       'desc' => 'Day by day, after cost and expenses', 'icon' => 'ti-report-money',    'color' => '#4ade80', 'url' => route('reports.net_profit', $q)],
             ['title' => 'Refunds',          'desc' => 'What came back, and the margin with it', 'icon' => 'ti-arrow-back-up', 'color' => '#f87171', 'url' => route('reports.refunds', $q)],
-            ['title' => 'Purchases',        'desc' => 'Buying, payables, top suppliers',     'icon' => 'ti-truck-delivery',  'color' => '#fbbf24', 'url' => null],
+            ['title' => 'Purchases',        'desc' => 'Goods received, returns, payables',   'icon' => 'ti-truck-delivery',  'color' => '#fbbf24', 'url' => auth()->user()->can('purchases.view') ? route('reports.purchases', $q) : null],
             ['title' => 'Stock movement',   'desc' => 'In / out, write-offs, stock value',   'icon' => 'ti-transfer',        'color' => '#2dd4bf', 'url' => null],
             ['title' => 'Stock summary',    'desc' => 'On-hand value by product',            'icon' => 'ti-boxes',           'color' => '#60a5fa', 'url' => route('reports.stock_summary', $q)],
             ['title' => 'Low stock alerts', 'desc' => 'Items at or below reorder level',     'icon' => 'ti-alert-triangle',  'color' => '#f87171', 'url' => route('reports.stock_alert', $q)],
@@ -644,6 +644,89 @@ class ReportController extends Controller
     }
 
     /**
+     * Buying: goods received, what was sent back, and what is still owed.
+     *
+     * A purchase in this system IS the goods-received note — stock and cost land
+     * when the delivery is recorded, and there is no separate ordered-but-not-yet-
+     * arrived document, so there is nothing to report as an outstanding order.
+     */
+    public function purchases(Request $request)
+    {
+        $range    = ReportRange::fromRequest($request);
+        $branchId = CurrentBranch::id();
+        $mode     = in_array($request->mode, ['summary', 'supplier', 'item', 'returns'], true) ? $request->mode : 'details';
+
+        $supplierId = $request->supplier_id ?: null;
+        $status     = $request->payment_status ?: null;
+
+        $base = fn () => Purchase::whereBranch($branchId)
+            ->whereBetween('purchase_date', [$range->fromDate(), $range->toDate()])
+            ->when($supplierId, fn ($q, $v) => $q->where('supplier_id', $v))
+            ->when($status, fn ($q, $v) => $q->where('payment_status', $v));
+
+        $suppliers = \App\Models\Supplier::orderBy('name')->get(['id', 'name']);
+
+        if ($mode === 'returns') {
+            $returns = \App\Models\PurchaseReturn::with(['purchase.supplier', 'supplier', 'createdBy'])
+                ->whereHas('purchase', fn ($q) => $q->whereBranch($branchId))
+                ->whereBetween(DB::raw('DATE(created_at)'), [$range->fromDate(), $range->toDate()])
+                ->when($supplierId, fn ($q, $v) => $q->where('supplier_id', $v))
+                ->latest()->get();
+
+            return view('reports.purchases', [
+                'range' => $range, 'mode' => $mode, 'rows' => $returns, 'suppliers' => $suppliers,
+                'supplierId' => $supplierId, 'status' => $status,
+                'totals' => ['count' => $returns->count(), 'total' => (float) $returns->sum('return_amount'),
+                             'paid' => 0.0, 'due' => 0.0],
+            ]);
+        }
+
+        $purchases = $base()->with(['supplier', 'user'])->orderBy('purchase_date')->get();
+
+        $totals = [
+            'count' => $purchases->count(),
+            'total' => (float) $purchases->sum('total'),
+            'paid'  => (float) $purchases->sum('paid_amount'),
+            'due'   => (float) $purchases->sum('balance_due'),
+        ];
+
+        $rows = match ($mode) {
+            'summary' => $purchases->groupBy(fn ($p) => (string) $p->purchase_date)
+                ->map(fn ($g, $d) => [
+                    'label' => $d, 'count' => $g->count(),
+                    'total' => (float) $g->sum('total'), 'paid' => (float) $g->sum('paid_amount'),
+                    'due'   => (float) $g->sum('balance_due'),
+                ])->values(),
+
+            'supplier' => $purchases->groupBy('supplier_id')
+                ->map(fn ($g) => [
+                    'label' => $g->first()->supplier?->name ?? 'Unknown supplier', 'count' => $g->count(),
+                    'total' => (float) $g->sum('total'), 'paid' => (float) $g->sum('paid_amount'),
+                    'due'   => (float) $g->sum('balance_due'),
+                ])->sortByDesc('total')->values(),
+
+            'item' => \App\Models\PurchaseItem::whereIn('purchase_id', $purchases->pluck('id'))
+                ->with('product:id,name,unit')->get()
+                ->groupBy(fn ($i) => $i->product_id ?? 'custom:' . $i->name)
+                ->map(fn ($g) => [
+                    'label' => $g->first()->product?->name ?? $g->first()->name ?? 'Custom item',
+                    'unit'  => $g->first()->product?->unit,
+                    'count' => $g->pluck('purchase_id')->unique()->count(),
+                    'qty'   => (float) $g->sum('quantity'),
+                    'total' => (float) $g->sum('subtotal'),
+                    'paid'  => 0.0, 'due' => 0.0,
+                ])->sortByDesc('total')->values(),
+
+            default => $purchases,
+        };
+
+        return view('reports.purchases', [
+            'range' => $range, 'mode' => $mode, 'rows' => $rows, 'totals' => $totals,
+            'suppliers' => $suppliers, 'supplierId' => $supplierId, 'status' => $status,
+        ]);
+    }
+
+    /**
      * Gross profit, grouped whichever way you need to look at it.
      *
      * The menu lists item, category, supplier, location and invoice versions as
@@ -1045,7 +1128,11 @@ class ReportController extends Controller
             'profit_loss'    => 'reports.profit',
             'product_sales'  => 'reports.profit',
             'net_profit'     => 'reports.profit',
-        ][$type] ?? (str_starts_with($type, 'gross_profit_') ? 'reports.profit' : null);
+        ][$type] ?? match (true) {
+            str_starts_with($type, 'gross_profit_') => 'reports.profit',
+            str_starts_with($type, 'purchases_')    => 'purchases.view',
+            default                                 => null,
+        };
 
         abort_if($extraPermission && ! auth()->user()->can($extraPermission), 403);
 
@@ -1227,6 +1314,13 @@ class ReportController extends Controller
                 return ['Net profit by date',
                     ['Date', 'Invoices', 'Sales', 'Returns', 'Net sales', 'Cost of goods', 'Gross profit', 'Expenses', 'Net profit', 'Margin'], $rows];
 
+            case 'purchases_details':
+            case 'purchases_summary':
+            case 'purchases_supplier':
+            case 'purchases_item':
+            case 'purchases_returns':
+                return $this->purchaseExport(substr($type, 10), $money);
+
             case 'cash_book_ledger':
             case 'cash_book_balances':
             case 'cash_book_handover':
@@ -1365,6 +1459,63 @@ class ReportController extends Controller
     }
 
     /** Cash book in export form, reusing the screen's own query. */
+    /**
+     * Purchase exports reuse the screen's own query, so whatever supplier or
+     * payment filter is showing is what gets exported.
+     */
+    private function purchaseExport(string $mode, callable $money): array
+    {
+        $data  = $this->purchases(request()->merge(['mode' => $mode]))->getData();
+        $rows  = $data['rows'];
+        $t     = $data['totals'];
+        $trim  = fn ($v) => rtrim(rtrim(number_format((float) $v, 3), '0'), '.');
+
+        if ($mode === 'details') {
+            $out = $rows->map(fn ($p) => [
+                $p->purchase_date, $p->bill_no, $p->supplier?->name ?? 'Unknown supplier',
+                $p->user?->name ?? '—', $p->due_date ?: '—',
+                $money($p->total), $money($p->paid_amount), $money($p->balance_due), ucfirst($p->payment_status),
+            ])->all();
+            $out[] = ['Total (' . $t['count'] . ')', '', '', '', '',
+                      $money($t['total']), $money($t['paid']), $money($t['due']), ''];
+
+            return ['Goods received (GRN)',
+                ['Date', 'Bill no', 'Supplier', 'Received by', 'Due', 'Total (Rs.)', 'Paid (Rs.)', 'Balance (Rs.)', 'Status'], $out];
+        }
+
+        if ($mode === 'returns') {
+            $out = $rows->map(fn ($r) => [
+                $r->created_at->format('Y-m-d'), $r->dr_note_no, $r->purchase?->bill_no ?? '—',
+                $r->supplier?->name ?? $r->purchase?->supplier?->name ?? '—',
+                $r->reason ?: '—', $r->credit_method ? ucfirst(str_replace('_', ' ', $r->credit_method)) : '—',
+                $r->createdBy?->name ?? '—', $money($r->return_amount),
+            ])->all();
+            $out[] = ['Total (' . $t['count'] . ')', '', '', '', '', '', '', $money($t['total'])];
+
+            return ['Purchase returns (Dr. notes)',
+                ['Date', 'Dr. note no', 'Against bill', 'Supplier', 'Reason', 'Credited as', 'Raised by', 'Amount (Rs.)'], $out];
+        }
+
+        $heading = ['summary' => 'Date', 'supplier' => 'Supplier', 'item' => 'Item'][$mode];
+
+        if ($mode === 'item') {
+            $out = $rows->map(fn ($r) => [
+                $r['label'], $r['count'], $trim($r['qty']) . ' ' . ($r['unit'] ?? ''), $money($r['total']),
+            ])->all();
+            $out[] = ['Total (' . $rows->count() . ')', $t['count'], '', $money($rows->sum('total'))];
+
+            return ['Purchases by item', [$heading, 'Deliveries', 'Qty received', 'Value (Rs.)'], $out];
+        }
+
+        $out = $rows->map(fn ($r) => [
+            $r['label'], $r['count'], $money($r['total']), $money($r['paid']), $money($r['due']),
+        ])->all();
+        $out[] = ['Total (' . $rows->count() . ')', $t['count'], $money($t['total']), $money($t['paid']), $money($t['due'])];
+
+        return ['Purchases ' . ($mode === 'summary' ? 'by date' : 'by supplier'),
+            [$heading, 'Deliveries', 'Total (Rs.)', 'Paid (Rs.)', 'Still owed (Rs.)'], $out];
+    }
+
     private function cashBookExport(string $view, callable $money): array
     {
         $data = $this->cashBook(request()->merge(['view' => $view]))->getData();

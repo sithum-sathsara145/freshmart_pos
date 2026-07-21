@@ -238,6 +238,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/gross-profit', [ReportController::class, 'grossProfit'])->middleware('permission:reports.profit')->name('gross_profit');
         Route::get('/refunds', [ReportController::class, 'refunds'])->name('refunds');
         Route::get('/net-profit', [ReportController::class, 'netProfit'])->middleware('permission:reports.profit')->name('net_profit');
+        // Buying prices are commercially sensitive, so this sits behind the same
+        // permission as the purchase records themselves, not plain reports.view.
+        Route::get('/purchases', [ReportController::class, 'purchases'])->middleware('permission:purchases.view')->name('purchases');
         // HRM reports expose staff pay and attendance, so they need hrm.view on top
         // of reports.view — a stock manager can read reports but not payroll.
         Route::get('/hrm-attendance', [ReportController::class, 'hrmAttendance'])->middleware('permission:hrm.view')->name('hrm_attendance');
